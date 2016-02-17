@@ -7,7 +7,18 @@ use url;
 
 #[derive(Debug)]
 pub enum Error {
+    ChannelReceive {
+        cause: std::sync::mpsc::RecvError,
+        description: &'static str,
+    },
+
     DatabaseExists(ErrorResponse),
+
+    #[doc(hidden)]
+    Io {
+        cause: std::io::Error,
+        description: &'static str,
+    },
 
     #[doc(hidden)]
     JsonDecode {
@@ -76,7 +87,9 @@ impl std::error::Error for Error {
     fn description(&self) -> &str {
         use Error::*;
         match self {
+            &ChannelReceive { description, .. } => description,
             &DatabaseExists(..) => "The database already exists",
+            &Io { description, .. } => description,
             &JsonDecode { .. } => "An error occurred while decoding JSON",
             &JsonEncode { .. } => "An error occurred while encoding JSON",
             &Transport { .. } => "An HTTP transport error occurred",
@@ -92,7 +105,9 @@ impl std::error::Error for Error {
     fn cause(&self) -> Option<&std::error::Error> {
         use Error::*;
         match self {
+            &ChannelReceive { ref cause, .. } => Some(cause),
             &DatabaseExists(..) => None,
+            &Io { ref cause, .. } => Some(cause),
             &JsonDecode { ref cause } => Some(cause),
             &JsonEncode { ref cause } => Some(cause),
             &Transport { ref kind } => kind.cause(),
@@ -109,7 +124,9 @@ impl std::fmt::Display for Error {
         use Error::*;
         let description = std::error::Error::description(self);
         match self {
+            &ChannelReceive { ref cause, description } => write!(f, "{}: {}", description, cause),
             &DatabaseExists(ref error_response) => write!(f, "{}: {}", description, error_response),
+            &Io { ref cause, description } => write!(f, "{}: {}", description, cause),
             &JsonDecode { ref cause } => write!(f, "{}: {}", description, cause),
             &JsonEncode { ref cause } => write!(f, "{}: {}", description, cause),
             &Transport { ref kind } => write!(f, "{}: {}", description, kind),

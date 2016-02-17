@@ -1,7 +1,9 @@
 extern crate hyper;
 extern crate mime;
+extern crate regex;
 extern crate serde;
 extern crate serde_json;
+extern crate tempdir;
 extern crate url;
 
 #[cfg(test)]
@@ -16,6 +18,7 @@ mod error;
 mod transport;
 
 pub mod action;
+pub mod testing;
 
 pub use client::{Client, IntoUrl};
 pub use database::Database;
