@@ -144,15 +144,22 @@ impl FakeServer {
 
 #[cfg(any(windows))]
 fn new_test_server_command(tmp_root: &tempdir::TempDir) -> std::process::Command {
+
     // Getting a one-shot CouchDB server running on Windows is tricky:
     // http://stackoverflow.com/questions/11812365/how-to-use-a-custom-couch-ini-on-windows
     //
     // TODO: Support CouchDB being installed in a non-default directory.
 
-    let mut c = std::process::Command::new("erl");
+    let couchdb_dir = "c:/program files (x86)/apache software foundation/couchdb";
+
+    let erl = format!("{}/bin/erl", couchdb_dir);
+    let default_ini = format!("{}/etc/couchdb/default.ini", couchdb_dir);
+    let local_ini = format!("{}/etc/couchdb/local.ini", couchdb_dir);
+
+    let mut c = std::process::Command::new(erl);
     c.arg("-couch_ini");
-    c.arg("c:/program files (x86)/apache software foundation/couchdb/etc/couchdb/default.ini");
-    c.arg("c:/program files (x86)/apache software foundation/couchdb/etc/couchdb/local.ini");
+    c.arg(default_ini);
+    c.arg(local_ini);
     c.arg("couchdb.conf");
     c.arg("-s");
     c.arg("couch");
