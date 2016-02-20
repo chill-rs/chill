@@ -9,6 +9,5 @@ fn make_server_and_client() -> (chill::testing::FakeServer, chill::Client) {
 #[test]
 fn create_database_ok() {
     let (_server, client) = make_server_and_client();
-    let db = client.select_database("foo");
-    db.create().run().unwrap();
+    client.create_database("foo").run().unwrap();
 }

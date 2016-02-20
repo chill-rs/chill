@@ -1,3 +1,4 @@
+use action;
 use Database;
 use DatabaseName;
 use Error;
@@ -19,6 +20,12 @@ impl Client {
     pub fn new<U: IntoUrl>(server_url: U) -> Result<Self, Error> {
         let server_url = try!(server_url.into_url().map_err(|e| Error::UrlParse { cause: e }));
         Ok(Client { transport: std::sync::Arc::new(try!(Transport::new(server_url))) })
+    }
+
+    pub fn create_database<'a, D>(&'a self, db_name: D) -> action::CreateDatabase<'a>
+        where D: Into<DatabaseName>
+    {
+        action::CreateDatabase::new(&self.transport, db_name.into())
     }
 
     pub fn select_database<D: Into<DatabaseName>>(&self, db_name: D) -> Database {
