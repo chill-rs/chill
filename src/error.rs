@@ -14,7 +14,12 @@ pub enum Error {
         description: &'static str,
     },
 
+    #[doc(hidden)]
+    ContentNotAnObject,
+
     DatabaseExists(ErrorResponse),
+
+    DocumentConflict(ErrorResponse),
 
     #[doc(hidden)]
     Io {
@@ -90,6 +95,16 @@ impl Error {
     }
 
     #[doc(hidden)]
+    pub fn document_conflict<R>(response: R) -> Self
+        where R: Response
+    {
+        match response.json_decode_content() {
+            Ok(x) => Error::DocumentConflict(x),
+            Err(x) => x,
+        }
+    }
+
+    #[doc(hidden)]
     pub fn unauthorized<R>(response: R) -> Self
         where R: Response
     {
@@ -105,7 +120,9 @@ impl std::error::Error for Error {
         use Error::*;
         match self {
             &ChannelReceive { description, .. } => description,
+            &ContentNotAnObject => "Document content is not a JSON object",
             &DatabaseExists(..) => "The database already exists",
+            &DocumentConflict(..) => "A conflicting document with the same id exists",
             &Io { description, .. } => description,
             &JsonDecode { .. } => "An error occurred while decoding JSON",
             &JsonEncode { .. } => "An error occurred while encoding JSON",
@@ -130,7 +147,9 @@ impl std::error::Error for Error {
         use Error::*;
         match self {
             &ChannelReceive { ref cause, .. } => Some(cause),
+            &ContentNotAnObject => None,
             &DatabaseExists(..) => None,
+            &DocumentConflict(..) => None,
             &Io { ref cause, .. } => Some(cause),
             &JsonDecode { ref cause } => Some(cause),
             &JsonEncode { ref cause } => Some(cause),
@@ -150,7 +169,11 @@ impl std::fmt::Display for Error {
         let description = std::error::Error::description(self);
         match self {
             &ChannelReceive { ref cause, description } => write!(f, "{}: {}", description, cause),
+            &ContentNotAnObject => write!(f, "{}", description),
             &DatabaseExists(ref error_response) => write!(f, "{}: {}", description, error_response),
+            &DocumentConflict(ref error_response) => {
+                write!(f, "{}: {}", description, error_response)
+            }
             &Io { ref cause, description } => write!(f, "{}: {}", description, cause),
             &JsonDecode { ref cause } => write!(f, "{}: {}", description, cause),
             &JsonEncode { ref cause } => write!(f, "{}: {}", description, cause),

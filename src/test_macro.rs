@@ -10,22 +10,42 @@ macro_rules! expect_eq_error_response {
 
 macro_rules! expect_error_database_exists {
     ($result:expr, $expected_error:expr, $expected_reason:expr) => {
-        match $result {
-            Err(Error::DatabaseExists(ref error_response)) => {
-                expect_eq_error_response!(*error_response, $expected_error, $expected_reason);
+        {
+            use Error;
+            match $result {
+                Err(Error::DatabaseExists(ref error_response)) => {
+                    expect_eq_error_response!(*error_response, $expected_error, $expected_reason);
+                }
+                _ => unexpected_result!($result),
             }
-            _ => unexpected_result!($result),
+        }
+    }
+}
+
+macro_rules! expect_error_document_conflict {
+    ($result:expr, $expected_error:expr, $expected_reason:expr) => {
+        {
+            use Error;
+            match $result {
+                Err(Error::DocumentConflict(ref error_response)) => {
+                    expect_eq_error_response!(*error_response, $expected_error, $expected_reason);
+                }
+                _ => unexpected_result!($result),
+            }
         }
     }
 }
 
 macro_rules! expect_error_unauthorized {
     ($result:expr, $expected_error:expr, $expected_reason:expr) => {
-        match $result {
-            Err(Error::Unauthorized(ref error_response)) => {
-                expect_eq_error_response!(*error_response, $expected_error, $expected_reason);
+        {
+            use Error;
+            match $result {
+                Err(Error::Unauthorized(ref error_response)) => {
+                    expect_eq_error_response!(*error_response, $expected_error, $expected_reason);
+                }
+                _ => unexpected_result!($result),
             }
-            _ => unexpected_result!($result),
         }
     }
 }

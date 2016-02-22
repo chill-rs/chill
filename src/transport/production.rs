@@ -1,10 +1,11 @@
 use Error;
 use error::TransportErrorKind;
 use hyper;
+use mime;
 use serde;
 use serde_json;
 use std;
-use super::{Action, RequestMaker, Response};
+use super::{Action, Request, RequestMaker, Response};
 use url;
 
 pub struct Transport {
@@ -74,24 +75,51 @@ impl<'a> RequestMaker for HyperRequestMaker<'a> {
         let mut url = self.transport.server_url.clone();
         url.path_mut().unwrap().extend(url_path_components);
 
-        HyperRequest { hyper_builder: self.transport.hyper_client.request(method, url) }
+        HyperRequest {
+            body: Vec::new(),
+            headers: hyper::header::Headers::new(),
+            method: method,
+            url: url,
+            transport: self.transport,
+        }
     }
 }
 
 struct HyperRequest<'a> {
-    hyper_builder: hyper::client::RequestBuilder<'a>,
+    transport: &'a Transport,
+    method: hyper::method::Method,
+    url: url::Url,
+    headers: hyper::header::Headers,
+    body: Vec<u8>,
 }
 
 impl<'a> HyperRequest<'a> {
     fn send(self) -> Result<HyperResponse, Error> {
 
-        let response = try!(self.hyper_builder
+        let response = try!(self.transport
+                                .hyper_client
+                                .request(self.method, self.url)
+                                .headers(self.headers)
+                                .body(&self.body[..])
                                 .send()
                                 .map_err(|e| {
                                     Error::Transport { kind: TransportErrorKind::Hyper(e) }
                                 }));
 
         Ok(HyperResponse { hyper_response: response })
+    }
+}
+
+impl<'a> Request for HyperRequest<'a> {
+    fn set_content_type_json(mut self) -> Self {
+        let mime = mime::Mime(mime::TopLevel::Application, mime::SubLevel::Json, vec![]);
+        self.headers.set(hyper::header::ContentType(mime));
+        self
+    }
+
+    fn set_body(mut self, body: Vec<u8>) -> Self {
+        self.body = body;
+        self
     }
 }
 
@@ -105,6 +133,7 @@ impl Response for HyperResponse {
     }
 
     fn json_decode_content<T: serde::Deserialize>(self) -> Result<T, Error> {
+        // FIXME: Return error if the Content-Type is not application/json.
         serde_json::from_reader(self.hyper_response).map_err(|e| Error::JsonDecode { cause: e })
     }
 }

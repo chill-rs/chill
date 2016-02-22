@@ -3,20 +3,16 @@ use hyper;
 use mime;
 use serde;
 use serde_json;
-use std;
-use super::{RequestMaker, Response};
+use super::{Request, RequestMaker, Response};
 
-#[cfg(test)]
 pub struct StubRequestMaker;
 
-#[cfg(test)]
 impl StubRequestMaker {
     pub fn new() -> Self {
         StubRequestMaker
     }
 }
 
-#[cfg(test)]
 impl RequestMaker for StubRequestMaker {
     type Request = StubRequest;
     fn make_request<P>(&self,
@@ -25,45 +21,58 @@ impl RequestMaker for StubRequestMaker {
                        -> Self::Request
         where P: Iterator<Item = String>
     {
-        StubRequest {
-            method: method,
-            url_path_components: url_path_components.collect(),
-        }
+        StubRequest::new(method, url_path_components.collect::<Vec<_>>())
     }
 }
 
-#[cfg(test)]
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct StubRequest {
     method: hyper::method::Method,
-    url_path_components: std::collections::HashSet<String>,
+    url_path_components: Vec<String>,
+    content_type: Option<mime::Mime>,
+    body: Option<Vec<u8>>,
 }
 
-#[cfg(test)]
 impl StubRequest {
-    pub fn new<P>(method: hyper::method::Method, url_path_components: P) -> Self
-        where P: Iterator<Item = String>
+    pub fn new<P, S>(method: hyper::method::Method, url_path_components: P) -> Self
+        where P: IntoIterator<Item = S>,
+              S: AsRef<str>
     {
         StubRequest {
+            body: None,
+            content_type: None,
             method: method,
-            url_path_components: url_path_components.collect(),
+            url_path_components: url_path_components.into_iter()
+                                                    .map(|x| x.as_ref().into())
+                                                    .collect(),
         }
     }
 }
 
-#[cfg(test)]
+impl Request for StubRequest {
+    fn set_content_type_json(mut self) -> Self {
+        self.content_type = Some(mime::Mime(mime::TopLevel::Application,
+                                            mime::SubLevel::Json,
+                                            vec![]));
+        self
+    }
+
+    fn set_body(mut self, body: Vec<u8>) -> Self {
+        self.body = Some(body);
+        self
+    }
+}
+
 struct StubResponseContent {
     content_type: mime::Mime,
     content: Vec<u8>,
 }
 
-#[cfg(test)]
 pub struct StubResponse {
     status_code: hyper::status::StatusCode,
     content: Option<StubResponseContent>,
 }
 
-#[cfg(test)]
 impl StubResponse {
     pub fn new(status_code: hyper::status::StatusCode) -> Self {
         StubResponse {
@@ -89,6 +98,13 @@ impl StubResponse {
         self
     }
 
+    pub fn build_json_content<F>(self, builder: F) -> Self
+        where F: FnOnce(serde_json::builder::ObjectBuilder) -> serde_json::builder::ObjectBuilder
+    {
+        let content = builder(serde_json::builder::ObjectBuilder::new()).unwrap();
+        self.set_json_content(&content)
+    }
+
     pub fn set_error_content<T, U>(self, error: T, reason: U) -> Self
         where T: AsRef<str>,
               U: AsRef<str>
@@ -102,7 +118,6 @@ impl StubResponse {
     }
 }
 
-#[cfg(test)]
 impl Response for StubResponse {
     fn status_code(&self) -> hyper::status::StatusCode {
         self.status_code

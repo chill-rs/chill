@@ -22,12 +22,17 @@ pub trait Action {
 }
 
 pub trait RequestMaker {
-    type Request;
+    type Request: Request;
     fn make_request<P>(&self,
                        method: hyper::method::Method,
                        url_path_components: P)
                        -> Self::Request
         where P: Iterator<Item = String>;
+}
+
+pub trait Request {
+    fn set_body(self, body: Vec<u8>) -> Self;
+    fn set_content_type_json(self) -> Self;
 }
 
 pub trait Response {

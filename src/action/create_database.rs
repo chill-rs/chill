@@ -38,11 +38,13 @@ impl<'a> Action for CreateDatabase<'a> {
     {
         let request = request_maker.make_request(hyper::method::Method::Put,
                                                  vec![self.db_name.clone()].into_iter());
-        Ok((request,
-            ActionState {
+
+        let state = ActionState {
             db_name: self.db_name,
             transport: self.transport.clone(),
-        }))
+        };
+
+        Ok((request, state))
     }
 
     fn handle_response<R>(response: R, state: Self::State) -> Result<Self::Output, Error>
@@ -62,7 +64,6 @@ impl<'a> Action for CreateDatabase<'a> {
 #[cfg(test)]
 mod tests {
 
-    use Error;
     use hyper;
     use std;
     use super::{ActionState, CreateDatabase};
@@ -70,10 +71,7 @@ mod tests {
 
     #[test]
     fn create_request() {
-        let expected_request = StubRequest::new(hyper::method::Method::Put,
-                                                vec!["foo"]
-                                                    .into_iter()
-                                                    .map(|x| x.to_owned()));
+        let expected_request = StubRequest::new(hyper::method::Method::Put, &["foo"]);
         let transport = std::sync::Arc::new(Transport::new_stub());
         let action = CreateDatabase::new(&transport, "foo".to_owned());
         let (got_request, _) = action.create_request(StubRequestMaker::new())
