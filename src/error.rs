@@ -4,6 +4,7 @@ use serde_json;
 use std;
 use transport::Response;
 use url;
+use uuid;
 
 #[derive(Debug)]
 pub enum Error {
@@ -29,6 +30,11 @@ pub enum Error {
     #[doc(hidden)]
     JsonEncode {
         cause: serde_json::Error,
+    },
+
+    #[doc(hidden)]
+    RevisionParse {
+        kind: RevisionParseErrorKind,
     },
 
     #[doc(hidden)]
@@ -103,6 +109,7 @@ impl std::error::Error for Error {
             &Io { description, .. } => description,
             &JsonDecode { .. } => "An error occurred while decoding JSON",
             &JsonEncode { .. } => "An error occurred while encoding JSON",
+            &RevisionParse { .. } => "The revision is badly formatted",
             &ServerResponse { ref status_code, .. } => {
                 match status_code.class() {
                     hyper::status::StatusClass::ClientError |
@@ -127,6 +134,7 @@ impl std::error::Error for Error {
             &Io { ref cause, .. } => Some(cause),
             &JsonDecode { ref cause } => Some(cause),
             &JsonEncode { ref cause } => Some(cause),
+            &RevisionParse { ref kind } => kind.cause(),
             &ServerResponse { .. } => None,
             &Transport { ref kind } => kind.cause(),
             &Unauthorized(..) => None,
@@ -146,6 +154,7 @@ impl std::fmt::Display for Error {
             &Io { ref cause, description } => write!(f, "{}: {}", description, cause),
             &JsonDecode { ref cause } => write!(f, "{}: {}", description, cause),
             &JsonEncode { ref cause } => write!(f, "{}: {}", description, cause),
+            &RevisionParse { ref kind } => write!(f, "{}: {}", description, kind),
             &ServerResponse { ref status_code, ref error_response } => {
                 try!(write!(f, "{} ({}", description, status_code));
                 try!(match status_code.canonical_reason() {
@@ -161,6 +170,44 @@ impl std::fmt::Display for Error {
             &Unauthorized(ref error_response) => write!(f, "{}: {}", description, error_response),
             &UrlNotSchemeRelative => write!(f, "{}", description),
             &UrlParse { ref cause } => write!(f, "{}: {}", description, cause),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum RevisionParseErrorKind {
+    DigestNotAllHex,
+    DigestParse(uuid::ParseError),
+    NumberParse(std::num::ParseIntError),
+    TooFewParts,
+    ZeroSequenceNumber,
+}
+
+impl RevisionParseErrorKind {
+    fn cause(&self) -> Option<&std::error::Error> {
+        use self::RevisionParseErrorKind::*;
+        match self {
+            &DigestNotAllHex => None,
+            &DigestParse(ref cause) => Some(cause),
+            &NumberParse(ref cause) => Some(cause),
+            &TooFewParts => None,
+            &ZeroSequenceNumber => None,
+        }
+    }
+}
+
+impl std::fmt::Display for RevisionParseErrorKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        use self::RevisionParseErrorKind::*;
+        match self {
+            &DigestNotAllHex => {
+                write!(f,
+                       "Digest part contains one or more non-hexadecimal characters")
+            }
+            &DigestParse(ref cause) => write!(f, "The digest part is invalid: {}", cause),
+            &NumberParse(ref cause) => write!(f, "The number part is invalid: {}", cause),
+            &TooFewParts => write!(f, "Too few parts, missing number part and/or digest part"),
+            &ZeroSequenceNumber => write!(f, "The number part is zero"),
         }
     }
 }

@@ -30,6 +30,16 @@ macro_rules! expect_error_unauthorized {
     }
 }
 
+// Panics if the given result is not a serde_json 'invalid value' error.
+macro_rules! expect_json_error_invalid_value {
+    ($result:ident) => {
+        match $result {
+            Err(serde_json::Error::SyntaxError(serde_json::ErrorCode::ExpectedSomeValue, ref _line, ref _column)) => (),
+            _ => unexpected_result!($result),
+        }
+    }
+}
+
 // Panics if the given result is not a serde_json 'missing field' error.
 //
 // NOTE: There's a error-reporting bug in serde_json that makes this check
