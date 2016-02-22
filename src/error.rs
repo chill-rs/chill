@@ -1,5 +1,5 @@
-use ErrorResponse;
 use hyper;
+use serde;
 use serde_json;
 use std;
 use transport::Response;
@@ -7,6 +7,7 @@ use url;
 
 #[derive(Debug)]
 pub enum Error {
+    #[doc(hidden)]
     ChannelReceive {
         cause: std::sync::mpsc::RecvError,
         description: &'static str,
@@ -31,16 +32,17 @@ pub enum Error {
     },
 
     #[doc(hidden)]
+    ServerResponse {
+        status_code: hyper::status::StatusCode,
+        error_response: Option<ErrorResponse>,
+    },
+
+    #[doc(hidden)]
     Transport {
         kind: TransportErrorKind,
     },
 
     Unauthorized(ErrorResponse),
-
-    #[doc(hidden)]
-    UnexpectedResponse {
-        status_code: hyper::status::StatusCode,
-    },
 
     #[doc(hidden)]
     UrlNotSchemeRelative,
@@ -51,36 +53,45 @@ pub enum Error {
     },
 }
 
-pub fn database_exists<R>(response: R) -> Error
-    where R: Response
-{
-    let error_response = match response.json_decode_content() {
-        Ok(x) => x,
-        Err(e) => {
-            return e;
+impl Error {
+    #[doc(hidden)]
+    pub fn server_response<R: Response>(response: R) -> Self {
+
+        let status_code = response.status_code();
+
+        let error_response = match response.json_decode_content() {
+            Ok(x) => Some(x),
+            Err(Error::JsonDecode { .. }) => None,
+            Err(e) => {
+                return e;
+            }
+        };
+
+        Error::ServerResponse {
+            status_code: status_code,
+            error_response: error_response,
         }
-    };
+    }
 
-    Error::DatabaseExists(error_response)
-}
-
-pub fn unauthorized<R>(response: R) -> Error
-    where R: Response
-{
-    let error_response = match response.json_decode_content() {
-        Ok(x) => x,
-        Err(e) => {
-            return e;
+    #[doc(hidden)]
+    pub fn database_exists<R>(response: R) -> Self
+        where R: Response
+    {
+        match response.json_decode_content() {
+            Ok(x) => Error::DatabaseExists(x),
+            Err(x) => x,
         }
-    };
+    }
 
-    Error::Unauthorized(error_response)
-}
-
-pub fn unexpected_response<R>(response: R) -> Error
-    where R: Response
-{
-    Error::UnexpectedResponse { status_code: response.status_code() }
+    #[doc(hidden)]
+    pub fn unauthorized<R>(response: R) -> Self
+        where R: Response
+    {
+        match response.json_decode_content() {
+            Ok(x) => Error::Unauthorized(x),
+            Err(x) => x,
+        }
+    }
 }
 
 impl std::error::Error for Error {
@@ -92,13 +103,19 @@ impl std::error::Error for Error {
             &Io { description, .. } => description,
             &JsonDecode { .. } => "An error occurred while decoding JSON",
             &JsonEncode { .. } => "An error occurred while encoding JSON",
+            &ServerResponse { ref status_code, .. } => {
+                match status_code.class() {
+                    hyper::status::StatusClass::ClientError |
+                    hyper::status::StatusClass::ServerError => {
+                        "The CouchDB server responded with an error"
+                    }
+                    _ => "The CouchDB server responded with an unexpected status",
+                }
+            }
             &Transport { .. } => "An HTTP transport error occurred",
             &Unauthorized(..) => "The CouchDB client has insufficient privilege",
-            &UnexpectedResponse { .. } => {
-                "The CouchDB server responded with an unexpected status code"
-            }
             &UrlNotSchemeRelative => "The URL is not scheme relative",
-            &UrlParse { .. } => "The URL is invalid",
+            &UrlParse { .. } => "The URL is badly formatted",
         }
     }
 
@@ -110,9 +127,9 @@ impl std::error::Error for Error {
             &Io { ref cause, .. } => Some(cause),
             &JsonDecode { ref cause } => Some(cause),
             &JsonEncode { ref cause } => Some(cause),
+            &ServerResponse { .. } => None,
             &Transport { ref kind } => kind.cause(),
             &Unauthorized(..) => None,
-            &UnexpectedResponse { .. } => None,
             &UrlNotSchemeRelative => None,
             &UrlParse { ref cause } => Some(cause),
         }
@@ -129,18 +146,19 @@ impl std::fmt::Display for Error {
             &Io { ref cause, description } => write!(f, "{}: {}", description, cause),
             &JsonDecode { ref cause } => write!(f, "{}: {}", description, cause),
             &JsonEncode { ref cause } => write!(f, "{}: {}", description, cause),
+            &ServerResponse { ref status_code, ref error_response } => {
+                try!(write!(f, "{} ({}", description, status_code));
+                try!(match status_code.canonical_reason() {
+                    None => write!(f, ")"),
+                    Some(reason) => write!(f, ": {})", reason),
+                });
+                if let &Some(ref error_response) = error_response {
+                    try!(write!(f, ": {}", error_response));
+                }
+                Ok(())
+            }
             &Transport { ref kind } => write!(f, "{}: {}", description, kind),
             &Unauthorized(ref error_response) => write!(f, "{}: {}", description, error_response),
-            &UnexpectedResponse { ref status_code } => {
-                write!(f,
-                       "{} ({}: {})",
-                       description,
-                       status_code,
-                       match status_code.canonical_reason() {
-                           None => "N/a",
-                           Some(reason) => reason,
-                       })
-            }
             &UrlNotSchemeRelative => write!(f, "{}", description),
             &UrlParse { ref cause } => write!(f, "{}: {}", description, cause),
         }
@@ -167,5 +185,178 @@ impl std::fmt::Display for TransportErrorKind {
         match self {
             &Hyper(ref cause) => cause.fmt(f),
         }
+    }
+}
+
+/// Error information returned from the CouchDB server when an error occurs
+/// while processing the client's request.
+#[derive(Clone, Debug, Hash, PartialEq, PartialOrd)]
+pub struct ErrorResponse {
+    error: String,
+    reason: String,
+}
+
+impl ErrorResponse {
+    #[doc(hidden)]
+    pub fn new<T, U>(error: T, reason: U) -> Self
+        where T: Into<String>,
+              U: Into<String>
+    {
+        ErrorResponse {
+            error: error.into(),
+            reason: reason.into(),
+        }
+    }
+
+    /// Returns the high-level name of the error—e.g., “file_exists”.
+    pub fn error(&self) -> &String {
+        &self.error
+    }
+
+    /// Returns the low-level description of the error—e.g., “The database could
+    /// not be created, the file already exists.”
+    pub fn reason(&self) -> &String {
+        &self.reason
+    }
+}
+
+impl std::fmt::Display for ErrorResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        write!(f, "{}: {}", self.error, self.reason)
+    }
+}
+
+impl serde::Deserialize for ErrorResponse {
+    fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
+        where D: serde::Deserializer
+    {
+        enum Field {
+            Error,
+            Reason,
+        }
+
+        impl serde::Deserialize for Field {
+            fn deserialize<D>(deserializer: &mut D) -> Result<Field, D::Error>
+                where D: serde::Deserializer
+            {
+                struct Visitor;
+
+                impl serde::de::Visitor for Visitor {
+                    type Value = Field;
+
+                    fn visit_str<E>(&mut self, value: &str) -> Result<Field, E>
+                        where E: serde::de::Error
+                    {
+                        match value {
+                            "error" => Ok(Field::Error),
+                            "reason" => Ok(Field::Reason),
+                            _ => Err(E::unknown_field(value)),
+                        }
+                    }
+                }
+
+                deserializer.visit(Visitor)
+            }
+        }
+
+        struct Visitor;
+
+        impl serde::de::Visitor for Visitor {
+            type Value = ErrorResponse;
+
+            fn visit_map<V>(&mut self, mut visitor: V) -> Result<Self::Value, V::Error>
+                where V: serde::de::MapVisitor
+            {
+                let mut error = None;
+                let mut reason = None;
+                loop {
+                    match try!(visitor.visit_key()) {
+                        Some(Field::Error) => {
+                            error = Some(try!(visitor.visit_value()));
+                        }
+                        Some(Field::Reason) => {
+                            reason = Some(try!(visitor.visit_value()));
+                        }
+                        None => {
+                            break;
+                        }
+                    }
+                }
+
+                try!(visitor.end());
+
+                let x = ErrorResponse {
+                    error: match error {
+                        Some(x) => x,
+                        None => try!(visitor.missing_field("error")),
+                    },
+                    reason: match reason {
+                        Some(x) => x,
+                        None => try!(visitor.missing_field("reason")),
+                    },
+                };
+
+                Ok(x)
+            }
+        }
+
+        static FIELDS: &'static [&'static str] = &["error", "reason"];
+        deserializer.visit_struct("ErrorResponse", FIELDS, Visitor)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use serde_json;
+    use super::ErrorResponse;
+
+    #[test]
+    fn error_response_display() {
+        let source = ErrorResponse {
+            error: "file_exists".to_string(),
+            reason: "The database could not be created, the file already exists.".to_string(),
+        };
+        let got = format!("{}", source);
+        let error_position = got.find("file_exists").unwrap();
+        let reason_position = got.find("The database could not be created, the file already \
+                                        exists.")
+                                 .unwrap();
+        assert!(error_position < reason_position);
+    }
+
+    #[test]
+    fn error_response_deserialize_ok_with_all_fields() {
+        let expected = ErrorResponse {
+            error: "foo".to_string(),
+            reason: "bar".to_string(),
+        };
+        let source = serde_json::builder::ObjectBuilder::new()
+                         .insert("error", "foo")
+                         .insert("reason", "bar")
+                         .unwrap();
+        let source = serde_json::to_string(&source).unwrap();
+        let got = serde_json::from_str(&source).unwrap();
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn error_response_deserialize_with_with_no_error_field() {
+        let source = serde_json::builder::ObjectBuilder::new()
+                         .insert("reason", "foo")
+                         .unwrap();
+        let source = serde_json::to_string(&source).unwrap();
+        let got = serde_json::from_str::<ErrorResponse>(&source);
+        expect_json_error_missing_field!(got, "error");
+    }
+
+    #[test]
+    fn error_response_deserialize_nok_with_no_reason_field() {
+        let source = serde_json::builder::ObjectBuilder::new()
+                         .insert("error", "foo")
+                         .unwrap();
+        let source = serde_json::to_string(&source).unwrap();
+        let got = serde_json::from_str::<ErrorResponse>(&source);
+        expect_json_error_missing_field!(got, "reason");
     }
 }

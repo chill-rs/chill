@@ -1,7 +1,6 @@
 use Database;
 use DatabaseName;
 use Error;
-use error;
 use hyper;
 use std;
 use transport::{Action, RequestMaker, Response, Transport};
@@ -53,9 +52,9 @@ impl<'a> Action for CreateDatabase<'a> {
 
         match response.status_code() {
             StatusCode::Created => Ok(Database::new(state.transport, state.db_name)),
-            StatusCode::PreconditionFailed => Err(error::database_exists(response)),
-            StatusCode::Unauthorized => Err(error::unauthorized(response)),
-            _ => Err(error::unexpected_response(response)),
+            StatusCode::PreconditionFailed => Err(Error::database_exists(response)),
+            StatusCode::Unauthorized => Err(Error::unauthorized(response)),
+            _ => Err(Error::server_response(response)),
         }
     }
 }
