@@ -1,4 +1,4 @@
-//! Things useful for testing a CouchDB application.
+//! Contains things that are useful for testing a CouchDB application.
 
 mod fake_server;
 

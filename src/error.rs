@@ -235,8 +235,8 @@ impl std::fmt::Display for TransportErrorKind {
     }
 }
 
-/// Error information returned from the CouchDB server when an error occurs
-/// while processing the client's request.
+/// Contains error information returned from the CouchDB server when an error
+/// occurs while processing the client's request.
 #[derive(Clone, Debug, Hash, PartialEq, PartialOrd)]
 pub struct ErrorResponse {
     error: String,
