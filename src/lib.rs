@@ -31,7 +31,7 @@ pub use client::{Client, IntoUrl};
 pub use database::Database;
 pub use database_name::DatabaseName;
 pub use design_document_name::DesignDocumentName;
-pub use document::Document;
+pub use document::{Document, DocumentMeta};
 pub use document_id::DocumentId;
 pub use error::{Error, ErrorResponse};
 pub use local_document_name::LocalDocumentName;

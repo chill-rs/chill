@@ -10,13 +10,14 @@ use transport::{Action, Request, RequestMaker, Response, Transport};
 use write_document_response::WriteDocumentResponse;
 
 struct ActionState {
-    db_name: DatabaseName,
     transport: std::sync::Arc<Transport>,
+    db_name: DatabaseName,
+    doc_content: serde_json::Value,
 }
 
 pub struct CreateDocument<'a, C: serde::Serialize + 'a> {
     transport: &'a std::sync::Arc<Transport>,
-    content: &'a C,
+    doc_content: &'a C,
     db_name: DatabaseName,
     doc_id: Option<DocumentId>,
 }
@@ -27,10 +28,10 @@ impl<'a, C> CreateDocument<'a, C>
     #[doc(hidden)]
     pub fn new(transport: &'a std::sync::Arc<Transport>,
                db_name: DatabaseName,
-               content: &'a C)
+               doc_content: &'a C)
                -> Self {
         CreateDocument {
-            content: content,
+            doc_content: doc_content,
             db_name: db_name,
             doc_id: None,
             transport: transport,
@@ -58,10 +59,13 @@ impl<'a, C> Action for CreateDocument<'a, C>
     fn create_request<R>(self, request_maker: R) -> Result<(R::Request, Self::State), Error>
         where R: RequestMaker
     {
-        let body = {
-            let mut body = serde_json::to_value(self.content);
+        let doc_content = {
+            let mut doc_content = serde_json::to_value(self.doc_content);
 
-            match body {
+            // Need to remove all meta JSON fields (e.g., "_id") in the
+            // handle_response method.
+
+            match doc_content {
                 serde_json::Value::Object(ref mut fields) => {
                     if let Some(doc_id) = self.doc_id {
                         fields.insert("_id".to_owned(), serde_json::to_value(&doc_id));
@@ -72,8 +76,11 @@ impl<'a, C> Action for CreateDocument<'a, C>
                 }
             };
 
-            try!(serde_json::to_vec(&body).map_err(|e| Error::JsonDecode { cause: e }))
+            doc_content
         };
+
+        let body = try!(serde_json::to_vec(&doc_content)
+                            .map_err(|e| Error::JsonDecode { cause: e }));
 
         let request = request_maker.make_request(hyper::method::Method::Post,
                                                  vec![self.db_name.clone()].into_iter())
@@ -81,8 +88,9 @@ impl<'a, C> Action for CreateDocument<'a, C>
                                    .set_body(body);
 
         let state = ActionState {
-            db_name: self.db_name,
             transport: self.transport.clone(),
+            db_name: self.db_name,
+            doc_content: doc_content,
         };
 
         Ok((request, state))
@@ -96,11 +104,22 @@ impl<'a, C> Action for CreateDocument<'a, C>
         match response.status_code() {
 
             StatusCode::Created => {
-                let content: WriteDocumentResponse = try!(response.json_decode_content());
+
+                let body: WriteDocumentResponse = try!(response.json_decode_content());
+
+                let mut doc_content = state.doc_content;
+
+                {
+                    debug_assert!(doc_content.is_object());
+                    let mut map = doc_content.as_object_mut().unwrap();
+                    map.remove("_id");
+                }
+
                 Ok(Document::new(state.transport,
                                  state.db_name,
-                                 content.doc_id,
-                                 content.revision))
+                                 body.doc_id,
+                                 body.revision,
+                                 doc_content))
             }
 
             StatusCode::Conflict => Err(Error::document_conflict(response)),
@@ -113,7 +132,10 @@ impl<'a, C> Action for CreateDocument<'a, C>
 #[cfg(test)]
 mod tests {
 
+    use DatabaseName;
+    use DocumentId;
     use hyper;
+    use Revision;
     use serde_json;
     use std;
     use super::{ActionState, CreateDocument};
@@ -167,18 +189,33 @@ mod tests {
         let response = StubResponse::new(hyper::status::StatusCode::Created)
                            .build_json_content(|builder| {
                                builder.insert("ok", true)
-                                      .insert("id", "foo")
+                                      .insert("id", "bar")
                                       .insert("rev", "1-1234567890abcdef1234567890abcdef")
                            });
 
         let state = ActionState {
-            db_name: "foo".into(),
             transport: std::sync::Arc::new(Transport::new_stub()),
+            db_name: "foo".into(),
+            doc_content: serde_json::builder::ObjectBuilder::new()
+                             .insert("field", 42)
+                             .insert("_id", "bar")
+                             .unwrap(),
         };
 
-        CreateDocument::<()>::handle_response(response, state).unwrap();
+        let got = CreateDocument::<()>::handle_response(response, state).unwrap();
 
-        // FIXME: Check that the returned document is valid.
+        assert_eq!(DatabaseName::from("foo"), *got.database_name());
+        assert_eq!(DocumentId::from("bar"), *got.id());
+        assert_eq!(Revision::parse("1-1234567890abcdef1234567890abcdef").unwrap(),
+                   *got.revision());
+
+        let expected_content = serde_json::builder::ObjectBuilder::new()
+                                   .insert("field", 42)
+                                   .unwrap();
+
+        let (_got_meta, got_content) = got.into_content().unwrap();
+
+        assert_eq!(expected_content, got_content);
     }
 
     #[test]
@@ -190,8 +227,9 @@ mod tests {
                            .set_error_content(error, reason);
 
         let state = ActionState {
-            db_name: "foo".into(),
             transport: std::sync::Arc::new(Transport::new_stub()),
+            db_name: "foo".into(),
+            doc_content: serde_json::builder::ObjectBuilder::new().unwrap(),
         };
 
         let got = CreateDocument::<()>::handle_response(response, state);
@@ -207,8 +245,9 @@ mod tests {
                            .set_error_content(error, reason);
 
         let state = ActionState {
-            db_name: "foo".into(),
             transport: std::sync::Arc::new(Transport::new_stub()),
+            db_name: "foo".into(),
+            doc_content: serde_json::builder::ObjectBuilder::new().unwrap(),
         };
 
         let got = CreateDocument::<()>::handle_response(response, state);

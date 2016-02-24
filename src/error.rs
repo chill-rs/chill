@@ -22,6 +22,9 @@ pub enum Error {
     DocumentConflict(ErrorResponse),
 
     #[doc(hidden)]
+    DocumentIsDeleted,
+
+    #[doc(hidden)]
     Io {
         cause: std::io::Error,
         description: &'static str,
@@ -123,6 +126,7 @@ impl std::error::Error for Error {
             &ContentNotAnObject => "Document content is not a JSON object",
             &DatabaseExists(..) => "The database already exists",
             &DocumentConflict(..) => "A conflicting document with the same id exists",
+            &DocumentIsDeleted => "The document is deleted",
             &Io { description, .. } => description,
             &JsonDecode { .. } => "An error occurred while decoding JSON",
             &JsonEncode { .. } => "An error occurred while encoding JSON",
@@ -150,6 +154,7 @@ impl std::error::Error for Error {
             &ContentNotAnObject => None,
             &DatabaseExists(..) => None,
             &DocumentConflict(..) => None,
+            &DocumentIsDeleted => None,
             &Io { ref cause, .. } => Some(cause),
             &JsonDecode { ref cause } => Some(cause),
             &JsonEncode { ref cause } => Some(cause),
@@ -174,6 +179,7 @@ impl std::fmt::Display for Error {
             &DocumentConflict(ref error_response) => {
                 write!(f, "{}: {}", description, error_response)
             }
+            &DocumentIsDeleted => write!(f, "{}", description),
             &Io { ref cause, description } => write!(f, "{}: {}", description, cause),
             &JsonDecode { ref cause } => write!(f, "{}: {}", description, cause),
             &JsonEncode { ref cause } => write!(f, "{}: {}", description, cause),
