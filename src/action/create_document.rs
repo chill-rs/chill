@@ -1,19 +1,15 @@
 use DatabaseName;
-use Document;
 use DocumentId;
 use Error;
 use hyper;
+use Revision;
 use serde;
 use serde_json;
 use std;
 use transport::{Action, Request, RequestMaker, Response, Transport};
 use write_document_response::WriteDocumentResponse;
 
-struct ActionState {
-    transport: std::sync::Arc<Transport>,
-    db_name: DatabaseName,
-    doc_content: serde_json::Value,
-}
+struct ActionState;
 
 pub struct CreateDocument<'a, C: serde::Serialize + 'a> {
     transport: &'a std::sync::Arc<Transport>,
@@ -45,7 +41,7 @@ impl<'a, C> CreateDocument<'a, C>
         self
     }
 
-    pub fn run(self) -> Result<Document, Error> {
+    pub fn run(self) -> Result<(DocumentId, Revision), Error> {
         self.transport.run_action(self)
     }
 }
@@ -53,7 +49,7 @@ impl<'a, C> CreateDocument<'a, C>
 impl<'a, C> Action for CreateDocument<'a, C>
     where C: serde::Serialize + 'a
 {
-    type Output = Document;
+    type Output = (DocumentId, Revision);
     type State = ActionState;
 
     fn create_request<R>(self, request_maker: R) -> Result<(R::Request, Self::State), Error>
@@ -87,16 +83,10 @@ impl<'a, C> Action for CreateDocument<'a, C>
                                    .set_content_type_json()
                                    .set_body(body);
 
-        let state = ActionState {
-            transport: self.transport.clone(),
-            db_name: self.db_name,
-            doc_content: doc_content,
-        };
-
-        Ok((request, state))
+        Ok((request, ActionState))
     }
 
-    fn handle_response<R>(response: R, state: Self::State) -> Result<Self::Output, Error>
+    fn handle_response<R>(response: R, _state: Self::State) -> Result<Self::Output, Error>
         where R: Response
     {
         use hyper::status::StatusCode;
@@ -104,22 +94,8 @@ impl<'a, C> Action for CreateDocument<'a, C>
         match response.status_code() {
 
             StatusCode::Created => {
-
                 let body: WriteDocumentResponse = try!(response.json_decode_content());
-
-                let mut doc_content = state.doc_content;
-
-                {
-                    debug_assert!(doc_content.is_object());
-                    let mut map = doc_content.as_object_mut().unwrap();
-                    map.remove("_id");
-                }
-
-                Ok(Document::new(state.transport,
-                                 state.db_name,
-                                 body.doc_id,
-                                 body.revision,
-                                 doc_content))
+                Ok((body.doc_id, body.revision))
             }
 
             StatusCode::Conflict => Err(Error::document_conflict(response)),
@@ -132,7 +108,6 @@ impl<'a, C> Action for CreateDocument<'a, C>
 #[cfg(test)]
 mod tests {
 
-    use DatabaseName;
     use DocumentId;
     use hyper;
     use Revision;
@@ -193,29 +168,14 @@ mod tests {
                                       .insert("rev", "1-1234567890abcdef1234567890abcdef")
                            });
 
-        let state = ActionState {
-            transport: std::sync::Arc::new(Transport::new_stub()),
-            db_name: "foo".into(),
-            doc_content: serde_json::builder::ObjectBuilder::new()
-                             .insert("field", 42)
-                             .insert("_id", "bar")
-                             .unwrap(),
-        };
+        let expected_doc_id = DocumentId::from("bar");
+        let expected_rev = Revision::parse("1-1234567890abcdef1234567890abcdef").unwrap();
 
-        let got = CreateDocument::<()>::handle_response(response, state).unwrap();
+        let (got_doc_id, got_rev) = CreateDocument::<()>::handle_response(response, ActionState)
+                                        .unwrap();
 
-        assert_eq!(DatabaseName::from("foo"), *got.database_name());
-        assert_eq!(DocumentId::from("bar"), *got.id());
-        assert_eq!(Revision::parse("1-1234567890abcdef1234567890abcdef").unwrap(),
-                   *got.revision());
-
-        let expected_content = serde_json::builder::ObjectBuilder::new()
-                                   .insert("field", 42)
-                                   .unwrap();
-
-        let (_got_meta, got_content) = got.into_content().unwrap();
-
-        assert_eq!(expected_content, got_content);
+        assert_eq!(expected_doc_id, got_doc_id);
+        assert_eq!(expected_rev, got_rev);
     }
 
     #[test]
@@ -226,13 +186,7 @@ mod tests {
         let response = StubResponse::new(hyper::status::StatusCode::Unauthorized)
                            .set_error_content(error, reason);
 
-        let state = ActionState {
-            transport: std::sync::Arc::new(Transport::new_stub()),
-            db_name: "foo".into(),
-            doc_content: serde_json::builder::ObjectBuilder::new().unwrap(),
-        };
-
-        let got = CreateDocument::<()>::handle_response(response, state);
+        let got = CreateDocument::<()>::handle_response(response, ActionState);
         expect_error_unauthorized!(got, error, reason);
     }
 
@@ -244,13 +198,7 @@ mod tests {
         let response = StubResponse::new(hyper::status::StatusCode::Conflict)
                            .set_error_content(error, reason);
 
-        let state = ActionState {
-            transport: std::sync::Arc::new(Transport::new_stub()),
-            db_name: "foo".into(),
-            doc_content: serde_json::builder::ObjectBuilder::new().unwrap(),
-        };
-
-        let got = CreateDocument::<()>::handle_response(response, state);
+        let got = CreateDocument::<()>::handle_response(response, ActionState);
         expect_error_document_conflict!(got, error, reason);
     }
 
