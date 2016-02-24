@@ -1,7 +1,6 @@
 use Error;
 use error::TransportErrorKind;
 use hyper;
-use mime;
 use serde;
 use serde_json;
 use std;
@@ -111,15 +110,12 @@ impl<'a> HyperRequest<'a> {
 }
 
 impl<'a> Request for HyperRequest<'a> {
-    fn set_content_type_json(mut self) -> Self {
-        let mime = mime::Mime(mime::TopLevel::Application, mime::SubLevel::Json, vec![]);
-        self.headers.set(hyper::header::ContentType(mime));
-        self
-    }
-
-    fn set_body(mut self, body: Vec<u8>) -> Self {
-        self.body = body;
-        self
+    fn set_json_body<B>(mut self, body: &B) -> Result<Self, Error>
+        where B: serde::Serialize
+    {
+        self.headers.set(hyper::header::ContentType(mime!(Application / Json)));
+        self.body = try!(serde_json::to_vec(body).map_err(|e| Error::JsonEncode { cause: e }));
+        Ok(self)
     }
 }
 
@@ -132,8 +128,8 @@ impl Response for HyperResponse {
         self.hyper_response.status
     }
 
-    fn json_decode_content<T: serde::Deserialize>(self) -> Result<T, Error> {
-        // FIXME: Return error if the Content-Type is not application/json.
+    fn json_decode_body<T: serde::Deserialize>(self) -> Result<T, Error> {
+        // FIXME: Return an error if the Content-Type is not application/json.
         serde_json::from_reader(self.hyper_response).map_err(|e| Error::JsonDecode { cause: e })
     }
 }

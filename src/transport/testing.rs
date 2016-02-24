@@ -49,17 +49,22 @@ impl StubRequest {
     }
 }
 
-impl Request for StubRequest {
-    fn set_content_type_json(mut self) -> Self {
-        self.content_type = Some(mime::Mime(mime::TopLevel::Application,
-                                            mime::SubLevel::Json,
-                                            vec![]));
-        self
+impl StubRequest {
+    pub fn build_json_object_body<F>(self, f: F) -> Result<Self, Error>
+        where F: FnOnce(serde_json::builder::ObjectBuilder) -> serde_json::builder::ObjectBuilder
+    {
+        self.set_json_body(&f(serde_json::builder::ObjectBuilder::new()).unwrap())
     }
+}
 
-    fn set_body(mut self, body: Vec<u8>) -> Self {
-        self.body = Some(body);
-        self
+impl Request for StubRequest {
+    fn set_json_body<B>(mut self, body: &B) -> Result<Self, Error>
+        where B: serde::Serialize
+    {
+        self.content_type = Some(mime!(Application / Json));
+        self.body = Some(try!(serde_json::to_vec(body)
+                                  .map_err(|e| Error::JsonEncode { cause: e })));
+        Ok(self)
     }
 }
 
@@ -123,7 +128,7 @@ impl Response for StubResponse {
         self.status_code
     }
 
-    fn json_decode_content<T: serde::Deserialize>(self) -> Result<T, Error> {
+    fn json_decode_body<T: serde::Deserialize>(self) -> Result<T, Error> {
 
         use mime::{Mime, SubLevel, TopLevel};
 

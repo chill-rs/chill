@@ -30,12 +30,11 @@ pub trait RequestMaker {
         where P: Iterator<Item = String>;
 }
 
-pub trait Request {
-    fn set_body(self, body: Vec<u8>) -> Self;
-    fn set_content_type_json(self) -> Self;
+pub trait Request: Sized {
+    fn set_json_body<B>(self, body: &B) -> Result<Self, Error> where B: serde::Serialize;
 }
 
 pub trait Response {
     fn status_code(&self) -> hyper::status::StatusCode;
-    fn json_decode_content<T: serde::Deserialize>(self) -> Result<T, Error>;
+    fn json_decode_body<T: serde::Deserialize>(self) -> Result<T, Error>;
 }

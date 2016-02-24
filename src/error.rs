@@ -73,7 +73,7 @@ impl Error {
 
         let status_code = response.status_code();
 
-        let error_response = match response.json_decode_content() {
+        let error_response = match response.json_decode_body() {
             Ok(x) => Some(x),
             Err(Error::JsonDecode { .. }) => None,
             Err(e) => {
@@ -91,7 +91,7 @@ impl Error {
     pub fn database_exists<R>(response: R) -> Self
         where R: Response
     {
-        match response.json_decode_content() {
+        match response.json_decode_body() {
             Ok(x) => Error::DatabaseExists(x),
             Err(x) => x,
         }
@@ -101,7 +101,7 @@ impl Error {
     pub fn document_conflict<R>(response: R) -> Self
         where R: Response
     {
-        match response.json_decode_content() {
+        match response.json_decode_body() {
             Ok(x) => Error::DocumentConflict(x),
             Err(x) => x,
         }
@@ -111,7 +111,7 @@ impl Error {
     pub fn unauthorized<R>(response: R) -> Self
         where R: Response
     {
-        match response.json_decode_content() {
+        match response.json_decode_body() {
             Ok(x) => Error::Unauthorized(x),
             Err(x) => x,
         }

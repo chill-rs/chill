@@ -1,4 +1,5 @@
 extern crate hyper;
+#[macro_use(mime, __mime__ident_or_ext)]
 extern crate mime;
 extern crate regex;
 extern crate serde;

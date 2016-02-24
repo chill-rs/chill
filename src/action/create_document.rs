@@ -75,13 +75,9 @@ impl<'a, C> Action for CreateDocument<'a, C>
             doc_content
         };
 
-        let body = try!(serde_json::to_vec(&doc_content)
-                            .map_err(|e| Error::JsonDecode { cause: e }));
-
-        let request = request_maker.make_request(hyper::method::Method::Post,
-                                                 vec![self.db_name.clone()].into_iter())
-                                   .set_content_type_json()
-                                   .set_body(body);
+        let request = try!(request_maker.make_request(hyper::method::Method::Post,
+                                                      vec![self.db_name.clone()].into_iter())
+                                        .set_json_body(&doc_content));
 
         Ok((request, ActionState))
     }
@@ -94,7 +90,7 @@ impl<'a, C> Action for CreateDocument<'a, C>
         match response.status_code() {
 
             StatusCode::Created => {
-                let body: WriteDocumentResponse = try!(response.json_decode_content());
+                let body: WriteDocumentResponse = try!(response.json_decode_body());
                 Ok((body.doc_id, body.revision))
             }
 
@@ -114,21 +110,21 @@ mod tests {
     use serde_json;
     use std;
     use super::{ActionState, CreateDocument};
-    use transport::{Action, Request, StubRequest, StubRequestMaker, StubResponse, Transport};
+    use transport::{Action, StubRequest, StubRequestMaker, StubResponse, Transport};
 
     #[test]
     fn create_request_without_doc_id() {
 
+        let expected_request = StubRequest::new(hyper::method::Method::Post, &["foo"])
+                                   .build_json_object_body(|x| x.insert("field", 42))
+                                   .unwrap();
+
+        let transport = std::sync::Arc::new(Transport::new_stub());
         let content = serde_json::builder::ObjectBuilder::new()
                           .insert("field", 42)
                           .unwrap();
-
-        let expected_request = StubRequest::new(hyper::method::Method::Post, &["foo"])
-                                   .set_content_type_json()
-                                   .set_body(serde_json::to_vec(&content).unwrap());
-
-        let transport = std::sync::Arc::new(Transport::new_stub());
         let action = CreateDocument::new(&transport, "foo".to_owned(), &content);
+
         let (got_request, _) = action.create_request(StubRequestMaker::new())
                                      .unwrap();
         assert_eq!(expected_request, got_request);
@@ -137,22 +133,20 @@ mod tests {
     #[test]
     fn create_request_with_doc_id() {
 
+        let expected_request = StubRequest::new(hyper::method::Method::Post, &["foo"])
+                                   .build_json_object_body(|x| {
+                                       x.insert("field", 42)
+                                        .insert("_id", "bar")
+                                   })
+                                   .unwrap();
+
+        let transport = std::sync::Arc::new(Transport::new_stub());
         let content = serde_json::builder::ObjectBuilder::new()
                           .insert("field", 42)
                           .unwrap();
-
-        let expected_body = serde_json::builder::ObjectBuilder::new()
-                                .insert("field", 42)
-                                .insert("_id", "bar")
-                                .unwrap();
-
-        let expected_request = StubRequest::new(hyper::method::Method::Post, &["foo"])
-                                   .set_content_type_json()
-                                   .set_body(serde_json::to_vec(&expected_body).unwrap());
-
-        let transport = std::sync::Arc::new(Transport::new_stub());
         let action = CreateDocument::new(&transport, "foo".to_owned(), &content)
                          .set_document_id("bar");
+
         let (got_request, _) = action.create_request(StubRequestMaker::new())
                                      .unwrap();
         assert_eq!(expected_request, got_request);
