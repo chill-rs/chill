@@ -10,18 +10,18 @@ fn make_server_and_client() -> (chill::testing::FakeServer, chill::Client) {
 #[test]
 fn create_database_ok() {
     let (_server, client) = make_server_and_client();
-    client.create_database("foo").run().unwrap();
-    // FIXME: Check that the returned database is valid.
+    client.create_database("foo", Default::default()).unwrap();
 }
 
 #[test]
 fn create_document_ok() {
 
     let (_server, client) = make_server_and_client();
-    let db = client.create_database("foo").run().unwrap();
+    client.create_database("foo", Default::default()).unwrap();
+    let db = client.select_database("foo");
 
     let content = serde_json::builder::ObjectBuilder::new().unwrap();
-    db.create_document(&content).run().unwrap();
+    let (_doc_id, _rev) = db.create_document(&content, Default::default()).unwrap();
 
-    // FIXME: Check that the returned document is valid.
+    // FIXME: Verify that the returned document id and revision are correct.
 }

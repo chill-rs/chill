@@ -1,4 +1,5 @@
 use hyper;
+use mime;
 use serde;
 use serde_json;
 use std;
@@ -41,6 +42,14 @@ pub enum Error {
     },
 
     #[doc(hidden)]
+    Mock {
+        extra_description: String,
+    },
+
+    #[doc(hidden)]
+    ResponseNotJson(Option<mime::Mime>),
+
+    #[doc(hidden)]
     RevisionParse {
         kind: RevisionParseErrorKind,
     },
@@ -69,11 +78,11 @@ pub enum Error {
 
 impl Error {
     #[doc(hidden)]
-    pub fn server_response<R: Response>(response: R) -> Self {
+    pub fn server_response(response: Response) -> Self {
 
         let status_code = response.status_code();
 
-        let error_response = match response.json_decode_body() {
+        let error_response = match response.decode_json_body() {
             Ok(x) => Some(x),
             Err(Error::JsonDecode { .. }) => None,
             Err(e) => {
@@ -88,30 +97,24 @@ impl Error {
     }
 
     #[doc(hidden)]
-    pub fn database_exists<R>(response: R) -> Self
-        where R: Response
-    {
-        match response.json_decode_body() {
+    pub fn database_exists(response: Response) -> Self {
+        match response.decode_json_body() {
             Ok(x) => Error::DatabaseExists(x),
             Err(x) => x,
         }
     }
 
     #[doc(hidden)]
-    pub fn document_conflict<R>(response: R) -> Self
-        where R: Response
-    {
-        match response.json_decode_body() {
+    pub fn document_conflict(response: Response) -> Self {
+        match response.decode_json_body() {
             Ok(x) => Error::DocumentConflict(x),
             Err(x) => x,
         }
     }
 
     #[doc(hidden)]
-    pub fn unauthorized<R>(response: R) -> Self
-        where R: Response
-    {
-        match response.json_decode_body() {
+    pub fn unauthorized(response: Response) -> Self {
+        match response.decode_json_body() {
             Ok(x) => Error::Unauthorized(x),
             Err(x) => x,
         }
@@ -130,6 +133,9 @@ impl std::error::Error for Error {
             &Io { description, .. } => description,
             &JsonDecode { .. } => "An error occurred while decoding JSON",
             &JsonEncode { .. } => "An error occurred while encoding JSON",
+            &Mock { .. } => "A error occurred while test-mocking",
+            &ResponseNotJson(Some(..)) => "The response has non-JSON content",
+            &ResponseNotJson(None) => "The response content has no type",
             &RevisionParse { .. } => "The revision is badly formatted",
             &ServerResponse { ref status_code, .. } => {
                 match status_code.class() {
@@ -158,6 +164,8 @@ impl std::error::Error for Error {
             &Io { ref cause, .. } => Some(cause),
             &JsonDecode { ref cause } => Some(cause),
             &JsonEncode { ref cause } => Some(cause),
+            &Mock { .. } => None,
+            &ResponseNotJson(..) => None,
             &RevisionParse { ref kind } => kind.cause(),
             &ServerResponse { .. } => None,
             &Transport { ref kind } => kind.cause(),
@@ -183,6 +191,11 @@ impl std::fmt::Display for Error {
             &Io { ref cause, description } => write!(f, "{}: {}", description, cause),
             &JsonDecode { ref cause } => write!(f, "{}: {}", description, cause),
             &JsonEncode { ref cause } => write!(f, "{}: {}", description, cause),
+            &Mock { ref extra_description } => write!(f, "{}: {}", description, extra_description),
+            &ResponseNotJson(Some(ref content_type)) => {
+                write!(f, "{}: Content type is {}", description, content_type)
+            }
+            &ResponseNotJson(None) => write!(f, "{}", description),
             &RevisionParse { ref kind } => write!(f, "{}: {}", description, kind),
             &ServerResponse { ref status_code, ref error_response } => {
                 try!(write!(f, "{} ({}", description, status_code));
@@ -244,6 +257,7 @@ impl std::fmt::Display for RevisionParseErrorKind {
 #[derive(Debug)]
 pub enum TransportErrorKind {
     Hyper(hyper::Error),
+    Io(std::io::Error),
 }
 
 impl TransportErrorKind {
@@ -251,6 +265,7 @@ impl TransportErrorKind {
         use self::TransportErrorKind::*;
         match self {
             &Hyper(ref cause) => Some(cause),
+            &Io(ref cause) => Some(cause),
         }
     }
 }
@@ -260,6 +275,7 @@ impl std::fmt::Display for TransportErrorKind {
         use self::TransportErrorKind::*;
         match self {
             &Hyper(ref cause) => cause.fmt(f),
+            &Io(ref cause) => cause.fmt(f),
         }
     }
 }

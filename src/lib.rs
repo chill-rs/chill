@@ -13,6 +13,8 @@ extern crate uuid;
 mod test_macro;
 
 mod client;
+mod create_database_options;
+mod create_document_options;
 mod database;
 mod database_name;
 mod design_document_name;
@@ -25,14 +27,14 @@ mod revision;
 mod transport;
 mod write_document_response;
 
-pub mod action;
 pub mod testing;
 
-pub use client::{Client, IntoUrl};
-pub use database::Database;
+pub use client::{BasicClient, Client, IntoUrl};
+pub use create_database_options::CreateDatabaseOptions;
+pub use create_document_options::CreateDocumentOptions;
+pub use database::{BasicDatabase, Database};
 pub use database_name::DatabaseName;
 pub use design_document_name::DesignDocumentName;
-pub use document::{Document, DocumentMeta};
 pub use document_id::DocumentId;
 pub use error::{Error, ErrorResponse};
 pub use local_document_name::LocalDocumentName;

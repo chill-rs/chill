@@ -1,145 +1,150 @@
 use Error;
 use hyper;
-use mime;
 use serde;
 use serde_json;
-use super::{Request, RequestMaker, Response};
+use std;
+use transport::{Request, RequestBuilder, Response, Transport};
 
-pub struct StubRequestMaker;
+// A mock transport allows us to test our CouchDB actions without the presence
+// of a CouchDB server. This is helpful because:
+//
+//   * We get good test coverage even on a machine that doesn't have CouchDB
+//     installed, and,
+//
+//   * We can test for different versions of CouchDB.
+//
+// The way it works is simple. A mock transport stores all incoming requests in
+// a vector. For each incoming request, the transport responds with a
+// pre-constructed response. Hence, the typical test looks something like the
+// following:
+//
+//   1. Construct all responses and add them to the mock transport.
+//
+//   2. Run the action being tested, which does the requesting and responding.
+//      If the action produces correct results then (presumably) the action is
+//      handling the response correctly.
+//
+//   3. Verify that the captured requests match the test's expectations.
+//
+// The three steps combine to ensure the action generates requests and handles
+// responses correctly.
+//
+pub struct MockTransport {
+    requests: std::cell::RefCell<Vec<Request>>,
+    responses: std::cell::RefCell<Vec<Response>>,
+}
 
-impl StubRequestMaker {
+impl MockTransport {
     pub fn new() -> Self {
-        StubRequestMaker
-    }
-}
-
-impl RequestMaker for StubRequestMaker {
-    type Request = StubRequest;
-    fn make_request<P>(&self,
-                       method: hyper::method::Method,
-                       url_path_components: P)
-                       -> Self::Request
-        where P: Iterator<Item = String>
-    {
-        StubRequest::new(method, url_path_components.collect::<Vec<_>>())
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub struct StubRequest {
-    method: hyper::method::Method,
-    url_path_components: Vec<String>,
-    content_type: Option<mime::Mime>,
-    body: Option<Vec<u8>>,
-}
-
-impl StubRequest {
-    pub fn new<P, S>(method: hyper::method::Method, url_path_components: P) -> Self
-        where P: IntoIterator<Item = S>,
-              S: AsRef<str>
-    {
-        StubRequest {
-            body: None,
-            content_type: None,
-            method: method,
-            url_path_components: url_path_components.into_iter()
-                                                    .map(|x| x.as_ref().into())
-                                                    .collect(),
+        MockTransport {
+            requests: std::cell::RefCell::new(Vec::new()),
+            responses: std::cell::RefCell::new(Vec::new()),
         }
     }
+
+    pub fn push_response(&self, response: Response) {
+        self.responses.borrow_mut().push(response)
+    }
+
+    pub fn extract_requests(&self) -> Vec<Request> {
+        use std::ops::DerefMut;
+        std::mem::replace(self.requests.borrow_mut().deref_mut(), Vec::new())
+    }
 }
 
-impl StubRequest {
-    pub fn build_json_object_body<F>(self, f: F) -> Result<Self, Error>
+impl Transport for MockTransport {
+    fn transport(&self, request: Request) -> Result<Response, Error> {
+
+        {
+            let mut v = self.requests.borrow_mut();
+            v.push(request);
+        }
+
+        let mut v = self.responses.borrow_mut();
+        Ok(v.pop().unwrap())
+    }
+}
+
+impl RequestBuilder {
+    pub fn with_json_body_builder<F>(self, f: F) -> Self
         where F: FnOnce(serde_json::builder::ObjectBuilder) -> serde_json::builder::ObjectBuilder
     {
-        self.set_json_body(&f(serde_json::builder::ObjectBuilder::new()).unwrap())
+        let builder = serde_json::builder::ObjectBuilder::new();
+        let body = f(builder).unwrap();
+        self.with_json_body(&body)
     }
 }
 
-impl Request for StubRequest {
-    fn set_json_body<B>(mut self, body: &B) -> Result<Self, Error>
-        where B: serde::Serialize
-    {
-        self.content_type = Some(mime!(Application / Json));
-        self.body = Some(try!(serde_json::to_vec(body)
-                                  .map_err(|e| Error::JsonEncode { cause: e })));
-        Ok(self)
-    }
+#[derive(Debug)]
+pub struct ResponseBuilder {
+    target_response: Response,
 }
 
-struct StubResponseContent {
-    content_type: mime::Mime,
-    content: Vec<u8>,
-}
-
-pub struct StubResponse {
-    status_code: hyper::status::StatusCode,
-    content: Option<StubResponseContent>,
-}
-
-impl StubResponse {
+impl ResponseBuilder {
     pub fn new(status_code: hyper::status::StatusCode) -> Self {
-        StubResponse {
-            content: None,
-            status_code: status_code,
+        ResponseBuilder {
+            target_response: Response {
+                status_code: status_code,
+                headers: hyper::header::Headers::new(),
+                body: Vec::new(),
+            },
         }
     }
 
-    pub fn set_json_content<T: serde::Serialize>(mut self, content: &T) -> Self {
+    pub fn unwrap(self) -> Response {
+        self.target_response
+    }
 
-        use mime::{Mime, SubLevel, TopLevel};
+    pub fn with_json_body<B: serde::Serialize>(mut self, body: &B) -> Self {
 
-        let mime = Mime(TopLevel::Application, SubLevel::Json, vec![]);
-        let content = serde_json::to_vec(content)
-                          .map_err(|e| Error::JsonEncode { cause: e })
-                          .unwrap();
+        let body = serde_json::to_vec(&body)
+                       .map_err(|e| Error::JsonEncode { cause: e })
+                       .unwrap();
 
-        self.content = Some(StubResponseContent {
-            content_type: mime,
-            content: content,
-        });
-
+        self.target_response.headers.set(hyper::header::ContentType(mime!(Application / Json)));
+        self.target_response.body = body;
         self
     }
 
-    pub fn build_json_content<F>(self, builder: F) -> Self
+    #[cfg(test)]
+    pub fn with_json_body_builder<F>(self, f: F) -> Self
         where F: FnOnce(serde_json::builder::ObjectBuilder) -> serde_json::builder::ObjectBuilder
     {
-        let content = builder(serde_json::builder::ObjectBuilder::new()).unwrap();
-        self.set_json_content(&content)
-    }
-
-    pub fn set_error_content<T, U>(self, error: T, reason: U) -> Self
-        where T: AsRef<str>,
-              U: AsRef<str>
-    {
-        let content = serde_json::builder::ObjectBuilder::new()
-                          .insert("error", error.as_ref())
-                          .insert("reason", reason.as_ref())
-                          .unwrap();
-
-        self.set_json_content(&content)
+        let builder = serde_json::builder::ObjectBuilder::new();
+        let body = f(builder).unwrap();
+        self.with_json_body(&body)
     }
 }
 
-impl Response for StubResponse {
-    fn status_code(&self) -> hyper::status::StatusCode {
-        self.status_code
-    }
+mod tests {
 
-    fn json_decode_body<T: serde::Deserialize>(self) -> Result<T, Error> {
+    use hyper;
+    use serde_json;
+    use super::ResponseBuilder;
+    use transport::Response;
 
-        use mime::{Mime, SubLevel, TopLevel};
+    #[test]
+    fn response_builder_with_json_body() {
 
-        let content = self.content.expect("Response content is empty");
+        let expected = Response {
+            status_code: hyper::Ok,
+            headers: {
+                let mut headers = hyper::header::Headers::new();
+                headers.set(hyper::header::ContentType(mime!(Application / Json)));
+                headers
+            },
+            body: serde_json::to_vec(&serde_json::builder::ObjectBuilder::new()
+                                          .insert("bar", 42)
+                                          .unwrap())
+                      .unwrap(),
+        };
 
-        if let Mime(TopLevel::Application, SubLevel::Json, _) = content.content_type {
-        } else {
-            panic!("Response content type is {}, not JSON",
-                   content.content_type);
-        }
+        let got = ResponseBuilder::new(hyper::Ok)
+                      .with_json_body(&serde_json::builder::ObjectBuilder::new()
+                                           .insert("bar", 42)
+                                           .unwrap())
+                      .unwrap();
 
-        serde_json::from_reader(&content.content[..]).map_err(|e| Error::JsonDecode { cause: e })
+        assert_eq!(expected, got);
     }
 }
