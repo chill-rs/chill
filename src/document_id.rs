@@ -87,8 +87,8 @@ impl serde::Serialize for DocumentId {
         where S: serde::Serializer
     {
         match self {
-            &DocumentId::Normal(ref name) => serializer.visit_str(name.as_ref()),
-            _ => serializer.visit_str(self.to_string().as_ref()),
+            &DocumentId::Normal(ref name) => serializer.serialize_str(name.as_ref()),
+            _ => serializer.serialize_str(self.to_string().as_ref()),
         }
     }
 }
@@ -115,7 +115,7 @@ impl serde::Deserialize for DocumentId {
             }
         }
 
-        deserializer.visit(Visitor)
+        deserializer.deserialize(Visitor)
     }
 }
 

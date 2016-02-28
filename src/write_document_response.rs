@@ -40,7 +40,7 @@ impl serde::Deserialize for WriteDocumentResponse {
                     }
                 }
 
-                deserializer.visit(Visitor)
+                deserializer.deserialize(Visitor)
             }
         }
 
@@ -92,7 +92,7 @@ impl serde::Deserialize for WriteDocumentResponse {
         }
 
         static FIELDS: &'static [&'static str] = &["id", "ok", "rev"];
-        deserializer.visit_struct("WriteDocumentResponse", FIELDS, Visitor)
+        deserializer.deserialize_struct("WriteDocumentResponse", FIELDS, Visitor)
     }
 }
 

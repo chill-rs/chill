@@ -347,7 +347,7 @@ impl serde::Deserialize for ErrorResponse {
                     }
                 }
 
-                deserializer.visit(Visitor)
+                deserializer.deserialize(Visitor)
             }
         }
 
@@ -393,7 +393,7 @@ impl serde::Deserialize for ErrorResponse {
         }
 
         static FIELDS: &'static [&'static str] = &["error", "reason"];
-        deserializer.visit_struct("ErrorResponse", FIELDS, Visitor)
+        deserializer.deserialize_struct("ErrorResponse", FIELDS, Visitor)
     }
 }
 
