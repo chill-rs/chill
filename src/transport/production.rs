@@ -46,7 +46,7 @@ impl std::fmt::Debug for HyperTransport {
 }
 
 impl Transport for HyperTransport {
-    fn transport(&self, request: Request) -> Result<Response, Error> {
+    fn send(&self, request: Request) -> Result<Response, Error> {
 
         let url = {
             let mut url = self.server_url.clone();

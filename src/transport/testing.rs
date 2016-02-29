@@ -29,6 +29,7 @@ use transport::{Request, RequestBuilder, Response, Transport};
 // The three steps combine to ensure the action generates requests and handles
 // responses correctly.
 //
+#[derive(Debug)]
 pub struct MockTransport {
     requests: std::cell::RefCell<Vec<Request>>,
     responses: std::cell::RefCell<Vec<Response>>,
@@ -53,7 +54,7 @@ impl MockTransport {
 }
 
 impl Transport for MockTransport {
-    fn transport(&self, request: Request) -> Result<Response, Error> {
+    fn send(&self, request: Request) -> Result<Response, Error> {
 
         {
             let mut v = self.requests.borrow_mut();

@@ -39,7 +39,7 @@ impl<T: Transport> BasicClient<T> {
                           .with_accept_json()
                           .unwrap();
 
-        let response = try!(self.transport.transport(request));
+        let response = try!(self.transport.send(request));
 
         match response.status_code() {
             StatusCode::Created => Ok(()),

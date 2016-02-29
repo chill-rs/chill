@@ -15,7 +15,7 @@ pub use self::production::HyperTransport;
 pub use self::testing::{MockTransport, ResponseBuilder};
 
 pub trait Transport {
-    fn transport(&self, request: Request) -> Result<Response, Error>;
+    fn send(&self, request: Request) -> Result<Response, Error>;
 }
 
 #[derive(Debug, PartialEq)]
