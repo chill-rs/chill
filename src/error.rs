@@ -46,9 +46,6 @@ pub enum Error {
         extra_description: String,
     },
 
-    #[doc(hidden)]
-    NoContentBecauseDeleted,
-
     NotFound(ErrorResponse),
 
     #[doc(hidden)]
@@ -147,7 +144,6 @@ impl std::error::Error for Error {
             &JsonDecode { .. } => "An error occurred while decoding JSON",
             &JsonEncode { .. } => "An error occurred while encoding JSON",
             &Mock { .. } => "A error occurred while test-mocking",
-            &NoContentBecauseDeleted => "The document is deleted and thus has no content",
             &NotFound(..) => "The resource cannot be found",
             &ResponseNotJson(Some(..)) => "The response has non-JSON content",
             &ResponseNotJson(None) => "The response content has no type",
@@ -180,7 +176,6 @@ impl std::error::Error for Error {
             &JsonDecode { ref cause } => Some(cause),
             &JsonEncode { ref cause } => Some(cause),
             &Mock { .. } => None,
-            &NoContentBecauseDeleted => None,
             &NotFound(..) => None,
             &ResponseNotJson(..) => None,
             &RevisionParse { ref kind } => kind.cause(),
@@ -209,7 +204,6 @@ impl std::fmt::Display for Error {
             &JsonDecode { ref cause } => write!(f, "{}: {}", description, cause),
             &JsonEncode { ref cause } => write!(f, "{}: {}", description, cause),
             &Mock { ref extra_description } => write!(f, "{}: {}", description, extra_description),
-            &NoContentBecauseDeleted => write!(f, "{}", description),
             &NotFound(ref error_response) => write!(f, "{}: {}", description, error_response),
             &ResponseNotJson(Some(ref content_type)) => {
                 write!(f, "{}: Content type is {}", description, content_type)

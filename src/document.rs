@@ -103,7 +103,7 @@ impl<T: Transport> BasicDocument<T> {
 
     pub fn get_content<C: serde::Deserialize>(&self) -> Result<C, Error> {
         match self {
-            &BasicDocument::Deleted { .. } => Err(Error::NoContentBecauseDeleted),
+            &BasicDocument::Deleted { .. } => Err(Error::DocumentIsDeleted),
             &BasicDocument::Exists { ref content, .. } => {
                 serde_json::from_value(content.clone()).map_err(|e| Error::JsonDecode { cause: e })
             }
@@ -112,7 +112,7 @@ impl<T: Transport> BasicDocument<T> {
 
     pub fn set_content<C: serde::Serialize>(&mut self, new_content: &C) -> Result<(), Error> {
         match self {
-            &mut BasicDocument::Deleted { .. } => Err(Error::NoContentBecauseDeleted),
+            &mut BasicDocument::Deleted { .. } => Err(Error::DocumentIsDeleted),
             &mut BasicDocument::Exists { ref mut content, .. } => {
                 *content = serde_json::to_value(new_content);
                 Ok(())
@@ -176,7 +176,7 @@ mod tests {
         };
 
         match doc.get_content::<serde_json::Value>() {
-            Err(Error::NoContentBecauseDeleted) => (),
+            Err(Error::DocumentIsDeleted) => (),
             x @ _ => unexpected_result!(x),
         }
     }
