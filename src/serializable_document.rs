@@ -1,15 +1,16 @@
+use Attachment;
+use AttachmentName;
 use DocumentId;
 use Revision;
 use serde;
 use serde_json;
-use attachment::Attachment;
 use std;
 
 #[derive(Debug, PartialEq)]
 pub struct SerializableDocument {
     pub id: DocumentId,
     pub revision: Revision,
-    pub attachments: std::collections::HashMap<String, Attachment>,
+    pub attachments: std::collections::HashMap<AttachmentName, Attachment>,
     pub deleted: bool,
     pub content: serde_json::Value,
 }

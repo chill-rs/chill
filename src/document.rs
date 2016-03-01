@@ -11,6 +11,7 @@ use transport::{HyperTransport, Transport};
 mod state {
 
     use Attachment;
+    use AttachmentName;
     use DatabaseName;
     use DocumentId;
     use Revision;
@@ -31,7 +32,7 @@ mod state {
     // exist for deleted documents.
     #[derive(Debug, Default)]
     pub struct Extra {
-        pub attachments: std::collections::HashMap<String, Attachment>,
+        pub attachments: std::collections::HashMap<AttachmentName, Attachment>,
     }
 }
 

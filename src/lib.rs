@@ -14,6 +14,7 @@ extern crate uuid;
 mod test_macro;
 
 mod attachment;
+mod attachment_name;
 mod client;
 mod create_database_options;
 mod create_document_options;
@@ -36,6 +37,7 @@ mod write_document_response;
 pub mod testing;
 
 pub use attachment::Attachment;
+pub use attachment_name::AttachmentName;
 pub use client::{BasicClient, Client, IntoUrl};
 pub use create_database_options::CreateDatabaseOptions;
 pub use create_document_options::CreateDocumentOptions;
