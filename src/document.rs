@@ -1,3 +1,5 @@
+use Attachment;
+use AttachmentName;
 use DatabaseName;
 use DocumentId;
 use Error;
@@ -8,32 +10,21 @@ use serializable_document::SerializableDocument;
 use std;
 use transport::{HyperTransport, Transport};
 
-mod state {
+// Base contains meta-information for all documents, including deleted
+// documents.
+#[derive(Debug)]
+pub struct DocumentBase<T: Transport> {
+    pub transport: std::sync::Arc<T>,
+    pub db_name: DatabaseName,
+    pub doc_id: DocumentId,
+    pub revision: Revision,
+}
 
-    use Attachment;
-    use AttachmentName;
-    use DatabaseName;
-    use DocumentId;
-    use Revision;
-    use std;
-    use transport::Transport;
-
-    // Base contains meta-information for all documents, including deleted
-    // documents.
-    #[derive(Debug)]
-    pub struct Base<T: Transport> {
-        pub transport: std::sync::Arc<T>,
-        pub db_name: DatabaseName,
-        pub doc_id: DocumentId,
-        pub revision: Revision,
-    }
-
-    // Extra contains meta-information for non-deleted documents that doesn't
-    // exist for deleted documents.
-    #[derive(Debug, Default)]
-    pub struct Extra {
-        pub attachments: std::collections::HashMap<AttachmentName, Attachment>,
-    }
+// Extra contains meta-information for non-deleted documents that doesn't
+// exist for deleted documents.
+#[derive(Debug, Default)]
+pub struct DocumentExtra {
+    pub attachments: std::collections::HashMap<AttachmentName, Attachment>,
 }
 
 pub type Document = BasicDocument<HyperTransport>;
@@ -42,13 +33,13 @@ pub type Document = BasicDocument<HyperTransport>;
 pub enum BasicDocument<T: Transport> {
     #[doc(hidden)]
     Deleted {
-        base: state::Base<T>,
+        base: DocumentBase<T>,
     },
 
     #[doc(hidden)]
     Exists {
-        base: state::Base<T>,
-        extra: state::Extra,
+        base: DocumentBase<T>,
+        extra: DocumentExtra,
         content: serde_json::Value,
     },
 }
@@ -60,7 +51,7 @@ impl<T: Transport> BasicDocument<T> {
                                       doc: SerializableDocument)
                                       -> Self {
 
-        let base = state::Base {
+        let base = DocumentBase {
             transport: transport.clone(),
             db_name: db_name.clone(),
             doc_id: doc.id,
@@ -72,7 +63,7 @@ impl<T: Transport> BasicDocument<T> {
             false => {
                 BasicDocument::Exists {
                     base: base,
-                    extra: state::Extra { attachments: doc.attachments },
+                    extra: DocumentExtra { attachments: doc.attachments },
                     content: doc.content,
                 }
             }
@@ -131,14 +122,14 @@ mod tests {
     use Revision;
     use serde_json;
     use std;
-    use super::{BasicDocument, state};
+    use super::{BasicDocument, DocumentBase, DocumentExtra};
     use transport::MockTransport;
 
-    fn new_mock_base<N, I>(db_name: N, doc_id: I, revision: Revision) -> state::Base<MockTransport>
+    fn new_mock_base<N, I>(db_name: N, doc_id: I, revision: Revision) -> DocumentBase<MockTransport>
         where N: Into<DatabaseName>,
               I: Into<DocumentId>
     {
-        state::Base {
+        DocumentBase {
             transport: std::sync::Arc::new(MockTransport::new()),
             db_name: db_name.into(),
             doc_id: doc_id.into(),
@@ -158,7 +149,7 @@ mod tests {
             base: new_mock_base("database_name",
                                 "document_id",
                                 "1-1234567890abcdef1234567890abcdef".parse().unwrap()),
-            extra: state::Extra { attachments: std::collections::HashMap::new() },
+            extra: DocumentExtra { attachments: std::collections::HashMap::new() },
             content: content.clone(),
         };
 
