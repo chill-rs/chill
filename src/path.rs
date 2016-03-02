@@ -1,8 +1,20 @@
-use DesignDocumentName;
-use LocalDocumentName;
-use NormalDocumentName;
 use serde;
 use std;
+
+// FIXME: Make AttachmentName a unique type.
+pub type AttachmentName = String;
+
+// FIXME: Make DatabaseName a unique type.
+pub type DatabaseName = String;
+
+// FIXME: Make DesignDocumentName a unique type.
+pub type DesignDocumentName = String;
+
+// FIXME: Make LocalDocumentName a unique type.
+pub type LocalDocumentName = String;
+
+// FIXME: Make NormalDocumentName a unique type.
+pub type NormalDocumentName = String;
 
 /// Uniquely identifies a document within a database.
 ///
@@ -126,91 +138,91 @@ mod tests {
     use super::DocumentId;
 
     #[test]
-    fn display_design() {
+    fn document_id_display_design() {
         let expected = "_design/foo";
         let got = format!("{}", DocumentId::Design("foo".into()));
         assert_eq!(expected, got);
     }
 
     #[test]
-    fn display_local() {
+    fn document_id_display_local() {
         let expected = "_local/foo";
         let got = format!("{}", DocumentId::Local("foo".into()));
         assert_eq!(expected, got);
     }
 
     #[test]
-    fn display_normal() {
+    fn document_id_display_normal() {
         let expected = "foo";
         let got = format!("{}", DocumentId::Normal("foo".into()));
         assert_eq!(expected, got);
     }
 
     #[test]
-    fn from_str_ref_design() {
+    fn document_id_from_str_ref_design() {
         let expected = DocumentId::Design("foo".into());
         let got = DocumentId::from("_design/foo");
         assert_eq!(expected, got);
     }
 
     #[test]
-    fn from_str_ref_local() {
+    fn document_id_from_str_ref_local() {
         let expected = DocumentId::Local("foo".into());
         let got = DocumentId::from("_local/foo");
         assert_eq!(expected, got);
     }
 
     #[test]
-    fn from_str_ref_normal() {
+    fn document_id_from_str_ref_normal() {
         let expected = DocumentId::Normal("foo".into());
         let got = DocumentId::from("foo");
         assert_eq!(expected, got);
     }
 
     #[test]
-    fn from_string_design() {
+    fn document_id_from_string_design() {
         let expected = DocumentId::Design("foo".into());
         let got = DocumentId::from("_design/foo".to_owned());
         assert_eq!(expected, got);
     }
 
     #[test]
-    fn from_string_local() {
+    fn document_id_from_string_local() {
         let expected = DocumentId::Local("foo".into());
         let got = DocumentId::from("_local/foo".to_owned());
         assert_eq!(expected, got);
     }
 
     #[test]
-    fn from_string_normal() {
+    fn document_id_from_string_normal() {
         let expected = DocumentId::Normal("foo".into());
         let got = DocumentId::from("foo".to_owned());
         assert_eq!(expected, got);
     }
 
     #[test]
-    fn string_from_design() {
+    fn document_id_string_from_design() {
         let expected = "_design/foo".to_owned();
         let got = String::from(DocumentId::Design("foo".into()));
         assert_eq!(expected, got);
     }
 
     #[test]
-    fn string_from_local() {
+    fn document_id_string_from_local() {
         let expected = "_local/foo".to_owned();
         let got = String::from(DocumentId::Local("foo".into()));
         assert_eq!(expected, got);
     }
 
     #[test]
-    fn string_from_normal() {
+    fn document_id_string_from_normal() {
         let expected = "foo".to_owned();
         let got = String::from(DocumentId::Normal("foo".into()));
         assert_eq!(expected, got);
     }
 
     #[test]
-    fn serialize_ok_design() {
+    fn document_id_serialize_ok_design() {
         let expected = serde_json::Value::String("_design/foo".to_owned());
         let source = DocumentId::Design("foo".into());
         let s = serde_json::to_string(&source).unwrap();
@@ -219,7 +231,7 @@ mod tests {
     }
 
     #[test]
-    fn serialize_ok_local() {
+    fn document_id_serialize_ok_local() {
         let expected = serde_json::Value::String("_local/foo".to_owned());
         let source = DocumentId::Local("foo".into());
         let s = serde_json::to_string(&source).unwrap();
@@ -228,7 +240,7 @@ mod tests {
     }
 
     #[test]
-    fn serialize_ok_normal() {
+    fn document_id_serialize_ok_normal() {
         let expected = serde_json::Value::String("foo".to_owned());
         let source = DocumentId::Normal("foo".into());
         let s = serde_json::to_string(&source).unwrap();
@@ -237,7 +249,7 @@ mod tests {
     }
 
     #[test]
-    fn deserialize_ok_design() {
+    fn document_id_deserialize_ok_design() {
         let expected = DocumentId::Design("foo".into());
         let source = serde_json::Value::String("_design/foo".to_owned());
         let s = serde_json::to_string(&source).unwrap();
@@ -246,7 +258,7 @@ mod tests {
     }
 
     #[test]
-    fn deserialize_ok_local() {
+    fn document_id_deserialize_ok_local() {
         let expected = DocumentId::Local("foo".into());
         let source = serde_json::Value::String("_local/foo".to_owned());
         let s = serde_json::to_string(&source).unwrap();
@@ -255,7 +267,7 @@ mod tests {
     }
 
     #[test]
-    fn deserialize_ok_normal() {
+    fn document_id_deserialize_ok_normal() {
         let expected = DocumentId::Normal("foo".into());
         let source = serde_json::Value::String("foo".to_owned());
         let s = serde_json::to_string(&source).unwrap();
