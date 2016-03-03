@@ -2,6 +2,7 @@ use BasicDocument;
 use CreateDocumentOptions;
 use DatabaseName;
 use DocumentId;
+use document::WriteDocumentResponse;
 use Error;
 use hyper;
 use ReadDocumentOptions;
@@ -10,7 +11,6 @@ use serde;
 use serde_json;
 use std;
 use transport::{HyperTransport, RequestBuilder, Transport};
-use write_document_response::WriteDocumentResponse;
 
 pub type Database = BasicDatabase<HyperTransport>;
 
