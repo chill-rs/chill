@@ -3,29 +3,13 @@ use base64;
 use DatabaseName;
 use DocumentId;
 use Error;
+use hyper;
 use mime;
 use Revision;
 use serde;
 use serde_json;
 use std;
-use transport::{HyperTransport, Transport};
-
-// Base contains meta-information for all documents, including deleted
-// documents.
-#[derive(Debug)]
-pub struct DocumentBase<T: Transport> {
-    pub transport: std::sync::Arc<T>,
-    pub db_name: DatabaseName,
-    pub doc_id: DocumentId,
-    pub revision: Revision,
-}
-
-// Extra contains meta-information for non-deleted documents that doesn't
-// exist for deleted documents.
-#[derive(Debug, Default)]
-pub struct DocumentExtra {
-    pub attachments: std::collections::HashMap<AttachmentName, Attachment>,
-}
+use transport::{HyperTransport, RequestBuilder, Transport};
 
 pub type Document = BasicDocument<HyperTransport>;
 
@@ -71,6 +55,54 @@ impl<T: Transport> BasicDocument<T> {
         }
     }
 
+    pub fn write(&self) -> Result<Revision, Error> {
+        use hyper::status::StatusCode;
+
+        match self {
+            &BasicDocument::Deleted { .. } => Err(Error::DocumentIsDeleted),
+
+            &BasicDocument::Exists { ref base, ref extra, ref content } => {
+
+                let body = {
+                    let mut body = content.clone();
+
+                    if let serde_json::Value::Object(ref mut fields) = body {
+                        if !extra.attachments.is_empty() {
+                            fields.insert("_attachments".to_string(),
+                                          serde_json::to_value(&extra.attachments));
+                        }
+                    } else {
+                        panic!("Invalid JSON type");
+                    }
+
+                    body
+                };
+
+                let request = RequestBuilder::new(hyper::method::Method::Put,
+                                                  vec![String::from(base.db_name.clone()),
+                                                       String::from(base.doc_id.clone())])
+                                  .with_accept_json()
+                                  .with_json_body(&body)
+                                  .with_revision_query(&base.revision)
+                                  .unwrap();
+
+                let response = try!(base.transport.send(request));
+
+                match response.status_code() {
+
+                    StatusCode::Created => {
+                        let body: WriteDocumentResponse = try!(response.decode_json_body());
+                        Ok(body.revision)
+                    }
+
+                    StatusCode::Conflict => Err(Error::document_conflict(response)),
+                    StatusCode::Unauthorized => Err(Error::unauthorized(response)),
+                    _ => Err(Error::server_response(response)),
+                }
+            }
+        }
+    }
+
     pub fn database_name(&self) -> &DatabaseName {
         match self {
             &BasicDocument::Deleted { ref base, .. } => &base.db_name,
@@ -113,6 +145,23 @@ impl<T: Transport> BasicDocument<T> {
     }
 }
 
+// Base contains meta-information for all documents, including deleted
+// documents.
+#[derive(Debug)]
+pub struct DocumentBase<T: Transport> {
+    transport: std::sync::Arc<T>,
+    db_name: DatabaseName,
+    doc_id: DocumentId,
+    revision: Revision,
+}
+
+// Extra contains meta-information for non-deleted documents that doesn't
+// exist for deleted documents.
+#[derive(Debug, Default)]
+pub struct DocumentExtra {
+    attachments: std::collections::HashMap<AttachmentName, Attachment>,
+}
+
 #[derive(Debug, PartialEq)]
 struct AttachmentEncodingInfo {
     encoded_length: u64,
@@ -130,6 +179,18 @@ impl serde::Deserialize for Attachment {
         where D: serde::Deserializer
     {
         Ok(Attachment::Saved(try!(SavedAttachment::deserialize(deserializer))))
+    }
+}
+
+impl serde::Serialize for Attachment {
+    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
+        where S: serde::Serializer
+    {
+        use serde::Serialize;
+        match self {
+            &Attachment::Saved(ref x) => x.serialize(serializer),
+            &Attachment::Unsaved(ref x) => x.serialize(serializer),
+        }
     }
 }
 
@@ -338,10 +399,58 @@ impl serde::Deserialize for SavedAttachment {
     }
 }
 
+impl serde::Serialize for SavedAttachment {
+    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
+        where S: serde::Serializer
+    {
+        struct Visitor;
+
+        impl serde::ser::MapVisitor for Visitor {
+            fn visit<S>(&mut self, serializer: &mut S) -> Result<Option<()>, S::Error>
+                where S: serde::Serializer
+            {
+                try!(serializer.serialize_struct_elt("stub", true));
+                Ok(None)
+            }
+        }
+
+        serializer.serialize_struct("SavedAttachment", Visitor)
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub struct UnsavedAttachment {
     content_type: mime::Mime,
     content: Vec<u8>,
+}
+
+impl serde::Serialize for UnsavedAttachment {
+    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
+        where S: serde::Serializer
+    {
+        struct Visitor<'a>(&'a UnsavedAttachment);
+
+        impl<'a> serde::ser::MapVisitor for Visitor<'a> {
+            fn visit<S>(&mut self, serializer: &mut S) -> Result<Option<()>, S::Error>
+                where S: serde::Serializer
+            {
+                // FIXME: Review this implementation.
+                //
+                // 1. Mime implements Serialize, but it doesn't compile.
+                // 2. Lots of unwraps due to base64 API.
+
+                let &mut Visitor(attachment) = self;
+                let content_type = attachment.content_type.clone();
+                try!(serializer.serialize_struct_elt("content_type", content_type.to_string()));
+                let content = String::from_utf8(base64::u8en(&attachment.content).unwrap())
+                                  .unwrap();
+                try!(serializer.serialize_struct_elt("content", content));
+                Ok(None)
+            }
+        }
+
+        serializer.serialize_struct("UnsavedAttachment", Visitor(self))
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -607,16 +716,35 @@ impl serde::Deserialize for WriteDocumentResponse {
 #[cfg(test)]
 mod tests {
 
+    use base64;
     use DatabaseName;
     use DocumentId;
     use Error;
+    use hyper;
     use Revision;
     use serde_json;
     use std;
     use super::{Attachment, AttachmentEncodingInfo, BasicDocument, DocumentBase, DocumentExtra,
                 SavedAttachment, SavedAttachmentContent, SerializableBase64Blob,
-                SerializableContentType, SerializableDocument, WriteDocumentResponse};
-    use transport::MockTransport;
+                SerializableContentType, SerializableDocument, UnsavedAttachment,
+                WriteDocumentResponse};
+    use transport::{MockTransport, Request, RequestBuilder, Response, ResponseBuilder};
+
+    impl BasicDocument<MockTransport> {
+        fn extract_requests(&self) -> Vec<Request> {
+            match self {
+                &BasicDocument::Deleted { ref base } => base.transport.extract_requests(),
+                &BasicDocument::Exists { ref base, .. } => base.transport.extract_requests(),
+            }
+        }
+
+        fn push_response(&self, response: Response) {
+            match self {
+                &BasicDocument::Deleted { ref base } => base.transport.push_response(response),
+                &BasicDocument::Exists { ref base, .. } => base.transport.push_response(response),
+            }
+        }
+    }
 
     fn new_mock_base<N, I>(db_name: N, doc_id: I, revision: Revision) -> DocumentBase<MockTransport>
         where N: Into<DatabaseName>,
@@ -684,6 +812,223 @@ mod tests {
     }
 
     #[test]
+    fn document_write_ok_basic() {
+
+        let original_revision: Revision = "1-1234567890abcdef1234567890abcdef".parse().unwrap();
+
+        let doc = BasicDocument::Exists {
+            base: new_mock_base("database_name", "document_id", original_revision.clone()),
+            extra: DocumentExtra { attachments: std::collections::HashMap::new() },
+            content: serde_json::builder::ObjectBuilder::new()
+                         .insert("field_1", 42)
+                         .insert("field_2", "hello")
+                         .unwrap(),
+        };
+
+        let new_revision: Revision = "2-fedcba0987654321fedcba0987654321".parse().unwrap();
+
+        doc.push_response(ResponseBuilder::new(hyper::status::StatusCode::Created)
+                              .with_json_body_builder(|x| {
+                                  x.insert("ok", true)
+                                   .insert("id", "document_id")
+                                   .insert("rev", new_revision.to_string())
+                              })
+                              .unwrap());
+
+        let expected = new_revision;
+        let got = doc.write().unwrap();
+        assert_eq!(expected, got);
+
+        let expected_requests = {
+            vec![RequestBuilder::new(hyper::method::Method::Put,
+                                     vec!["database_name".to_string(), "document_id".to_string()])
+                     .with_accept_json()
+                     .with_revision_query(&original_revision)
+                     .with_json_body_builder(|x| {
+                         x.insert("field_1", 42)
+                          .insert("field_2", "hello")
+                     })
+                     .unwrap()]
+        };
+
+        assert_eq!(expected_requests, doc.extract_requests());
+    }
+
+    #[test]
+    fn document_write_ok_with_saved_attachment() {
+
+        let original_revision: Revision = "42-1234567890abcdef1234567890abcdef".parse().unwrap();
+
+        let doc = BasicDocument::Exists {
+            base: new_mock_base("database_name", "document_id", original_revision.clone()),
+            extra: DocumentExtra {
+                attachments: {
+                    let mut map = std::collections::HashMap::new();
+                    let attachment = SavedAttachment {
+                        content_type: "text/plain".parse().unwrap(),
+                        digest: "md5-iMaiC8wqiFlD2NjLTemvCQ==".to_string(),
+                        sequence_number: 11,
+                        content: SavedAttachmentContent::LengthOnly(5),
+                        encoding_info: None,
+                    };
+                    map.insert("attachment_1".to_string(), Attachment::Saved(attachment));
+                    map
+                },
+            },
+            content: serde_json::builder::ObjectBuilder::new()
+                         .insert("field_1", 42)
+                         .insert("field_2", "hello")
+                         .unwrap(),
+        };
+
+        let new_revision: Revision = "43-fedcba0987654321fedcba0987654321".parse().unwrap();
+
+        doc.push_response(ResponseBuilder::new(hyper::status::StatusCode::Created)
+                              .with_json_body_builder(|x| {
+                                  x.insert("ok", true)
+                                   .insert("id", "document_id")
+                                   .insert("rev", new_revision.to_string())
+                              })
+                              .unwrap());
+
+        let expected = new_revision;
+        let got = doc.write().unwrap();
+        assert_eq!(expected, got);
+
+        let expected_requests = {
+            vec![RequestBuilder::new(hyper::method::Method::Put,
+                                     vec!["database_name".to_string(), "document_id".to_string()])
+                     .with_accept_json()
+                     .with_revision_query(&original_revision)
+                     .with_json_body_builder(|x| {
+                         x.insert_object("_attachments", |x| {
+                              x.insert_object("attachment_1", |x| x.insert("stub", true))
+                          })
+                          .insert("field_1", 42)
+                          .insert("field_2", "hello")
+                     })
+                     .unwrap()]
+        };
+
+        assert_eq!(expected_requests, doc.extract_requests());
+    }
+
+    #[test]
+    fn document_write_ok_with_unsaved_attachment() {
+
+        let original_revision: Revision = "42-1234567890abcdef1234567890abcdef".parse().unwrap();
+
+        let doc = BasicDocument::Exists {
+            base: new_mock_base("database_name", "document_id", original_revision.clone()),
+            extra: DocumentExtra {
+                attachments: {
+                    let mut map = std::collections::HashMap::new();
+                    let attachment = UnsavedAttachment {
+                        content_type: "text/plain".parse().unwrap(),
+                        content: "This is the attachment.".to_string().into_bytes(),
+                    };
+                    map.insert("attachment_1".to_string(), Attachment::Unsaved(attachment));
+                    map
+                },
+            },
+            content: serde_json::builder::ObjectBuilder::new()
+                         .insert("field_1", 42)
+                         .insert("field_2", "hello")
+                         .unwrap(),
+        };
+
+        let new_revision: Revision = "43-fedcba0987654321fedcba0987654321".parse().unwrap();
+
+        doc.push_response(ResponseBuilder::new(hyper::status::StatusCode::Created)
+                              .with_json_body_builder(|x| {
+                                  x.insert("ok", true)
+                                   .insert("id", "document_id")
+                                   .insert("rev", new_revision.to_string())
+                              })
+                              .unwrap());
+
+        let expected = new_revision;
+        let got = doc.write().unwrap();
+        assert_eq!(expected, got);
+
+        let expected_requests = {
+            vec![RequestBuilder::new(hyper::method::Method::Put,
+                                     vec!["database_name".to_string(), "document_id".to_string()])
+                     .with_accept_json()
+                     .with_revision_query(&original_revision)
+                     .with_json_body_builder(|x| {
+                         x.insert_object("_attachments", |x| {
+                              x.insert_object("attachment_1", |x| {
+                                  x.insert("content_type", "text/plain")
+                                   .insert("content",
+                                           base64::encode("This is the attachment.").unwrap())
+                              })
+                          })
+                          .insert("field_1", 42)
+                          .insert("field_2", "hello")
+                     })
+                     .unwrap()]
+        };
+
+        assert_eq!(expected_requests, doc.extract_requests());
+    }
+
+    #[test]
+    fn document_write_nok_document_conflict() {
+
+        let doc = BasicDocument::Exists {
+            base: new_mock_base("database_name",
+                                "document_id",
+                                "1-1234567890abcdef1234567890abcdef".parse().unwrap()),
+            extra: DocumentExtra { attachments: std::collections::HashMap::new() },
+            content: serde_json::builder::ObjectBuilder::new().unwrap(),
+        };
+
+        let error = "conflict";
+        let reason = "Document update conflict.";
+        doc.push_response(ResponseBuilder::new(hyper::status::StatusCode::Conflict)
+                              .with_json_body_builder(|x| {
+                                  x.insert("error", error)
+                                   .insert("reason", reason)
+                              })
+                              .unwrap());
+
+        match doc.write() {
+            Err(Error::DocumentConflict(ref error_response)) if error == error_response.error() &&
+                                                                reason ==
+                                                                error_response.reason() => (),
+            e @ _ => unexpected_result!(e),
+        }
+    }
+
+    #[test]
+    fn document_write_nok_unauthorized() {
+
+        let doc = BasicDocument::Exists {
+            base: new_mock_base("database_name",
+                                "document_id",
+                                "1-1234567890abcdef1234567890abcdef".parse().unwrap()),
+            extra: DocumentExtra { attachments: std::collections::HashMap::new() },
+            content: serde_json::builder::ObjectBuilder::new().unwrap(),
+        };
+
+        let error = "unauthorized";
+        let reason = "Authentication required.";
+        doc.push_response(ResponseBuilder::new(hyper::status::StatusCode::Unauthorized)
+                              .with_json_body_builder(|x| {
+                                  x.insert("error", error)
+                                   .insert("reason", reason)
+                              })
+                              .unwrap());
+
+        match doc.write() {
+            Err(Error::Unauthorized(ref error_response)) if error == error_response.error() &&
+                                                            reason == error_response.reason() => (),
+            e @ _ => unexpected_result!(e),
+        }
+    }
+
+    #[test]
     fn attachment_deserialize_ok() {
 
         let expected = Attachment::Saved(SavedAttachment {
@@ -704,6 +1049,51 @@ mod tests {
 
         let source = serde_json::to_string(&source).unwrap();
         let got = serde_json::from_str(&source).unwrap();
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn attachment_serialize_saved() {
+
+        let attachment = Attachment::Saved(SavedAttachment {
+            content_type: mime!(Text / Plain),
+            digest: "md5-iMaiC8wqiFlD2NjLTemvCQ==".to_string(),
+            sequence_number: 17,
+            content: SavedAttachmentContent::Bytes("This is the attachment."
+                                                       .to_string()
+                                                       .into_bytes()),
+            encoding_info: None,
+        });
+
+        let encoded = serde_json::to_string(&attachment).unwrap();
+
+        let expected = serde_json::builder::ObjectBuilder::new()
+                           .insert("stub", true)
+                           .unwrap();
+        let got = serde_json::from_str(&encoded).unwrap();
+
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn attachment_serialize_unsaved() {
+
+        let content = "This is the attachment.";
+
+        let attachment = Attachment::Unsaved(UnsavedAttachment {
+            content_type: mime!(Text / Plain),
+            content: content.to_string().into_bytes(),
+        });
+
+        let encoded = serde_json::to_string(&attachment).unwrap();
+
+        let expected = serde_json::builder::ObjectBuilder::new()
+                           .insert("content_type", "text/plain")
+                           .insert("content", base64::encode(content).unwrap())
+                           .unwrap();
+
+        let got = serde_json::from_str(&encoded).unwrap();
+
         assert_eq!(expected, got);
     }
 
@@ -828,6 +1218,51 @@ mod tests {
         let source = serde_json::to_string(&source).unwrap();
         let got = serde_json::from_str::<SavedAttachment>(&source);
         expect_json_error_missing_field!(got, "revpos");
+    }
+
+    #[test]
+    fn saved_attachment_serialize() {
+
+        let attachment = SavedAttachment {
+            content_type: mime!(Text / Plain),
+            digest: "md5-iMaiC8wqiFlD2NjLTemvCQ==".to_string(),
+            sequence_number: 17,
+            content: SavedAttachmentContent::Bytes("This is the attachment."
+                                                       .to_string()
+                                                       .into_bytes()),
+            encoding_info: None,
+        };
+
+        let encoded = serde_json::to_string(&attachment).unwrap();
+
+        let expected = serde_json::builder::ObjectBuilder::new()
+                           .insert("stub", true)
+                           .unwrap();
+        let got = serde_json::from_str(&encoded).unwrap();
+
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn unsaved_attachment_serialize() {
+
+        let content = "This is the attachment.";
+
+        let attachment = UnsavedAttachment {
+            content_type: mime!(Text / Plain),
+            content: content.to_string().into_bytes(),
+        };
+
+        let encoded = serde_json::to_string(&attachment).unwrap();
+
+        let expected = serde_json::builder::ObjectBuilder::new()
+                           .insert("content_type", "text/plain")
+                           .insert("content", base64::encode(content).unwrap())
+                           .unwrap();
+
+        let got = serde_json::from_str(&encoded).unwrap();
+
+        assert_eq!(expected, got);
     }
 
     #[test]

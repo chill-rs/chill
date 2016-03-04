@@ -126,3 +126,39 @@ fn read_document_nok_not_found() {
 // fn read_document_nok_unauthorized() {
 //     unimplemented!();
 // }
+
+#[test]
+fn write_document_ok() {
+
+    let (_server, client) = make_server_and_client();
+    client.create_database("baseball", Default::default()).unwrap();
+    let db = client.select_database("baseball");
+
+    let up_content = serde_json::builder::ObjectBuilder::new()
+                         .insert("name", "Babe Ruth")
+                         .insert("nickname", "The Bambino")
+                         .unwrap();
+    let (doc_id, _rev) = db.create_document(&up_content, Default::default()).unwrap();
+
+    let mut doc = db.read_document(doc_id.clone(), Default::default()).unwrap();
+
+    let up_content = match doc.get_content::<serde_json::Value>().unwrap() {
+        serde_json::Value::Object(mut fields) => {
+            fields.insert("birthday".to_string(),
+                          serde_json::Value::String("1895-02-06".to_string()));
+            serde_json::Value::Object(fields)
+        }
+        _ => {
+            panic!("Invalid JSON type");
+        }
+    };
+
+    doc.set_content(&up_content).unwrap();
+
+    let rev = doc.write().unwrap();
+
+    let doc = db.read_document(doc_id, Default::default()).unwrap();
+    let down_content: serde_json::Value = doc.get_content().unwrap();
+    assert_eq!(up_content, down_content);
+    assert_eq!(doc.revision(), &rev);
+}

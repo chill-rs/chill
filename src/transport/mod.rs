@@ -5,6 +5,7 @@ mod testing;
 use Error;
 use error::TransportErrorKind;
 use hyper;
+use Revision;
 use serde;
 use serde_json;
 use std;
@@ -67,6 +68,11 @@ impl RequestBuilder {
 
         self.target_request.headers.set(hyper::header::ContentType(mime!(Application / Json)));
         self.target_request.body = PrintableBytes(body);
+        self
+    }
+
+    pub fn with_revision_query(mut self, revision: &Revision) -> Self {
+        self.target_request.query.insert("rev".to_string(), revision.to_string());
         self
     }
 }
@@ -180,6 +186,28 @@ mod tests {
                       .with_json_body(&serde_json::builder::ObjectBuilder::new()
                                            .insert("bar", 42)
                                            .unwrap())
+                      .unwrap();
+
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn request_builder_with_revision_query() {
+
+        let expected = Request {
+            method: hyper::Get,
+            path: vec![],
+            query: vec![("rev".to_string(),
+                         "1-1234567890abcdef1234567890abcdef".to_string())]
+                       .into_iter()
+                       .collect(),
+            headers: hyper::header::Headers::new(),
+            body: PrintableBytes(Vec::new()),
+        };
+
+        let rev = "1-1234567890abcdef1234567890abcdef".parse().unwrap();
+        let got = RequestBuilder::new(hyper::Get, vec![])
+                      .with_revision_query(&rev)
                       .unwrap();
 
         assert_eq!(expected, got);

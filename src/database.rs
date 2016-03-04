@@ -232,19 +232,6 @@ mod tests {
                                                                 error_response.reason() => (),
             e @ _ => unexpected_result!(e),
         }
-
-        let expected_requests = {
-            vec![RequestBuilder::new(hyper::Post, vec![String::from("database_name")])
-                     .with_accept_json()
-                     .with_json_body_builder(|x| {
-                         x.insert("_id", "document_id")
-                          .insert("field_1", 42)
-                          .insert("field_2", 17)
-                     })
-                     .unwrap()]
-        };
-
-        assert_eq!(expected_requests, db.extract_requests());
     }
 
     #[test]
@@ -270,18 +257,6 @@ mod tests {
                                                             reason == error_response.reason() => (),
             e @ _ => unexpected_result!(e),
         }
-
-        let expected_requests = {
-            vec![RequestBuilder::new(hyper::Post, vec![String::from("database_name")])
-                     .with_accept_json()
-                     .with_json_body_builder(|x| {
-                         x.insert("field_1", 42)
-                          .insert("field_2", 17)
-                     })
-                     .unwrap()]
-        };
-
-        assert_eq!(expected_requests, db.extract_requests());
     }
 
     #[test]
@@ -316,7 +291,7 @@ mod tests {
         let db = new_mock_database("database_name");
         let error = "not_found";
         let reason = "missing";
-        db.push_response(ResponseBuilder::new(hyper::status::StatusCode::Unauthorized)
+        db.push_response(ResponseBuilder::new(hyper::status::StatusCode::NotFound)
                              .with_json_body_builder(|x| {
                                  x.insert("error", error)
                                   .insert("reason", reason)
@@ -324,20 +299,10 @@ mod tests {
                              .unwrap());
 
         match db.read_document("document_id", Default::default()) {
-            Err(Error::Unauthorized(ref error_response)) if error == error_response.error() &&
-                                                            reason == error_response.reason() => (),
+            Err(Error::NotFound(ref error_response)) if error == error_response.error() &&
+                                                        reason == error_response.reason() => (),
             e @ _ => unexpected_result!(e),
         }
-
-        let expected_requests = {
-            vec![RequestBuilder::new(hyper::Get,
-                                     vec![String::from("database_name"),
-                                          String::from("document_id")])
-                     .with_accept_json()
-                     .unwrap()]
-        };
-
-        assert_eq!(expected_requests, db.extract_requests());
     }
 
     #[test]
@@ -358,15 +323,5 @@ mod tests {
                                                             reason == error_response.reason() => (),
             e @ _ => unexpected_result!(e),
         }
-
-        let expected_requests = {
-            vec![RequestBuilder::new(hyper::Get,
-                                     vec![String::from("database_name"),
-                                          String::from("document_id")])
-                     .with_accept_json()
-                     .unwrap()]
-        };
-
-        assert_eq!(expected_requests, db.extract_requests());
     }
 }
