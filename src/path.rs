@@ -16,7 +16,7 @@ pub type LocalDocumentName = String;
 // FIXME: Make NormalDocumentName a unique type.
 pub type NormalDocumentName = String;
 
-/// Uniquely identifies a document within a database.
+/// A _document id_ uniquely identifies a document within a database.
 ///
 /// A **document id** pairs a document type and name. For example, given the
 /// HTTP request to `GET http://example.com:5984/db/_design/design-doc`, the

@@ -6,7 +6,7 @@ use hyper;
 use std;
 use transport::{HyperTransport, RequestBuilder, Transport};
 
-/// Converts its type into a URL.
+/// The `IntoUrl` trait applies to a type that is convertible into a URL.
 pub trait IntoUrl: hyper::client::IntoUrl {
 }
 

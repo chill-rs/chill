@@ -3,7 +3,7 @@ use serde;
 use std;
 use uuid;
 
-/// Specifies a document revision.
+/// A _revision_ identifies a version of a document.
 ///
 /// A document revision comprises a **sequence number** and an **MD5 digest**.
 /// The sequence number starts at `1` when the document is created and
