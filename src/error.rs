@@ -80,7 +80,7 @@ pub enum Error {
 
 impl Error {
     #[doc(hidden)]
-    pub fn server_response(response: Response) -> Self {
+    pub fn server_response<R: Response>(response: R) -> Self {
 
         let status_code = response.status_code();
 
@@ -99,7 +99,7 @@ impl Error {
     }
 
     #[doc(hidden)]
-    pub fn database_exists(response: Response) -> Self {
+    pub fn database_exists<R: Response>(response: R) -> Self {
         match response.decode_json_body() {
             Ok(x) => Error::DatabaseExists(x),
             Err(x) => x,
@@ -107,7 +107,7 @@ impl Error {
     }
 
     #[doc(hidden)]
-    pub fn document_conflict(response: Response) -> Self {
+    pub fn document_conflict<R: Response>(response: R) -> Self {
         match response.decode_json_body() {
             Ok(x) => Error::DocumentConflict(x),
             Err(x) => x,
@@ -115,7 +115,7 @@ impl Error {
     }
 
     #[doc(hidden)]
-    pub fn not_found(response: Response) -> Self {
+    pub fn not_found<R: Response>(response: R) -> Self {
         match response.decode_json_body() {
             Ok(x) => Error::NotFound(x),
             Err(x) => x,
@@ -123,7 +123,7 @@ impl Error {
     }
 
     #[doc(hidden)]
-    pub fn unauthorized(response: Response) -> Self {
+    pub fn unauthorized<R: Response>(response: R) -> Self {
         match response.decode_json_body() {
             Ok(x) => Error::Unauthorized(x),
             Err(x) => x,
@@ -270,7 +270,6 @@ impl std::fmt::Display for RevisionParseErrorKind {
 #[derive(Debug)]
 pub enum TransportErrorKind {
     Hyper(hyper::Error),
-    Io(std::io::Error),
 }
 
 impl TransportErrorKind {
@@ -278,7 +277,6 @@ impl TransportErrorKind {
         use self::TransportErrorKind::*;
         match self {
             &Hyper(ref cause) => Some(cause),
-            &Io(ref cause) => Some(cause),
         }
     }
 }
@@ -288,7 +286,6 @@ impl std::fmt::Display for TransportErrorKind {
         use self::TransportErrorKind::*;
         match self {
             &Hyper(ref cause) => cause.fmt(f),
-            &Io(ref cause) => cause.fmt(f),
         }
     }
 }

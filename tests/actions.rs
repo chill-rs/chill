@@ -17,10 +17,22 @@ fn make_server_and_client() -> (chill::testing::FakeServer, chill::Client) {
 }
 
 #[test]
-fn create_database_ok_with_default_options() {
+fn create_database_ok() {
     let (_server, client) = make_server_and_client();
     client.create_database("baseball", Default::default()).unwrap();
     // FIXME: Verify that the database was created.
+}
+
+#[test]
+fn create_database_nok_database_exists() {
+    let (_server, client) = make_server_and_client();
+    client.create_database("baseball", Default::default()).unwrap();
+    match client.create_database("baseball", Default::default()) {
+        Err(chill::Error::DatabaseExists(..)) => (),
+        x @ _ => {
+            panic!("Unexpected result: {:?}", x);
+        }
+    }
 }
 
 #[test]
@@ -34,6 +46,7 @@ fn create_document_ok_default_options() {
                          .insert("name", "Babe Ruth")
                          .insert("nickname", "The Bambino")
                          .unwrap();
+
     let (doc_id, _rev) = db.create_document(&up_content, Default::default()).unwrap();
 
     let doc = db.read_document(doc_id, Default::default()).unwrap();
@@ -52,6 +65,7 @@ fn create_document_ok_with_document_id() {
                          .insert("name", "Babe Ruth")
                          .insert("nickname", "The Bambino")
                          .unwrap();
+
     let (doc_id, _rev) = db.create_document(&up_content,
                                             chill::CreateDocumentOptions::new()
                                                 .with_document_id("babe_ruth"))
@@ -75,6 +89,7 @@ fn create_document_nok_document_conflict() {
                          .insert("name", "Babe Ruth")
                          .insert("nickname", "The Bambino")
                          .unwrap();
+
     let (doc_id, _rev) = db.create_document(&up_content, Default::default()).unwrap();
 
     match db.create_document(&up_content,
@@ -101,6 +116,7 @@ fn read_document_ok_default_options() {
                          .insert("name", "Babe Ruth")
                          .insert("nickname", "The Bambino")
                          .unwrap();
+
     let (doc_id, _rev) = db.create_document(&up_content, Default::default()).unwrap();
 
     let doc = db.read_document(doc_id, Default::default()).unwrap();
@@ -128,7 +144,7 @@ fn read_document_nok_not_found() {
 // }
 
 #[test]
-fn write_document_ok() {
+fn update_document_ok() {
 
     let (_server, client) = make_server_and_client();
     client.create_database("baseball", Default::default()).unwrap();
@@ -138,6 +154,7 @@ fn write_document_ok() {
                          .insert("name", "Babe Ruth")
                          .insert("nickname", "The Bambino")
                          .unwrap();
+
     let (doc_id, _rev) = db.create_document(&up_content, Default::default()).unwrap();
 
     let mut doc = db.read_document(doc_id.clone(), Default::default()).unwrap();
@@ -155,10 +172,10 @@ fn write_document_ok() {
 
     doc.set_content(&up_content).unwrap();
 
-    let rev = doc.write().unwrap();
+    let updated_rev = db.update_document(&doc, Default::default()).unwrap();
 
     let doc = db.read_document(doc_id, Default::default()).unwrap();
     let down_content: serde_json::Value = doc.get_content().unwrap();
     assert_eq!(up_content, down_content);
-    assert_eq!(doc.revision(), &rev);
+    assert_eq!(&updated_rev, doc.revision());
 }

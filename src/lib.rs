@@ -26,9 +26,10 @@ pub mod testing;
 
 pub use client::{BasicClient, Client, IntoUrl};
 pub use database::{BasicDatabase, Database};
-pub use document::{Attachment, BasicDocument, Document, SavedAttachment, UnsavedAttachment};
+pub use document::{Attachment, Document, SavedAttachment, UnsavedAttachment};
 pub use error::{Error, ErrorResponse};
-pub use option::{CreateDatabaseOptions, CreateDocumentOptions, ReadDocumentOptions};
+pub use option::{CreateDatabaseOptions, CreateDocumentOptions, ReadDocumentOptions,
+                 UpdateDocumentOptions};
 pub use path::{AttachmentName, DatabaseName, DesignDocumentName, DocumentId, LocalDocumentName,
                NormalDocumentName};
 pub use revision::Revision;

@@ -1,9 +1,9 @@
 use Error;
-use hyper;
+use Revision;
 use serde;
 use serde_json;
 use std;
-use transport::{Request, RequestBuilder, Response, Transport};
+use super::{Method, RequestAccept, RequestBody, RequestOptions, Response, StatusCode, Transport};
 
 // A mock transport allows us to test our CouchDB actions without the presence
 // of a CouchDB server. This is helpful because:
@@ -15,8 +15,7 @@ use transport::{Request, RequestBuilder, Response, Transport};
 //
 // The way it works is simple. A mock transport stores all incoming requests in
 // a vector. For each incoming request, the transport responds with a
-// pre-constructed response. Hence, the typical test looks something like the
-// following:
+// pre-constructed response. Hence, the typical test works like this:
 //
 //   1. Construct all responses and add them to the mock transport.
 //
@@ -28,11 +27,11 @@ use transport::{Request, RequestBuilder, Response, Transport};
 //
 // The three steps combine to ensure the action generates requests and handles
 // responses correctly.
-//
+
 #[derive(Debug)]
 pub struct MockTransport {
-    requests: std::cell::RefCell<Vec<Request>>,
-    responses: std::cell::RefCell<Vec<Response>>,
+    requests: std::cell::RefCell<Vec<MockRequest>>,
+    responses: std::cell::RefCell<Vec<MockResponse>>,
 }
 
 impl MockTransport {
@@ -43,109 +42,216 @@ impl MockTransport {
         }
     }
 
-    pub fn push_response(&self, response: Response) {
+    pub fn extract_requests(&self) -> Vec<MockRequest> {
+        use std::ops::DerefMut;
+        std::mem::replace(self.requests.borrow_mut().deref_mut(), Vec::new())
+    }
+
+    pub fn push_response(&self, response: MockResponse) {
         self.responses.borrow_mut().push(response)
     }
 
-    pub fn extract_requests(&self) -> Vec<Request> {
-        use std::ops::DerefMut;
-        std::mem::replace(self.requests.borrow_mut().deref_mut(), Vec::new())
+    fn request<'a, B>(&self,
+                      method: Method,
+                      path: &[&str],
+                      options: RequestOptions<'a, B>)
+                      -> Result<<Self as Transport>::Response, Error>
+        where B: serde::Serialize
+    {
+        self.requests.borrow_mut().push(MockRequest {
+            method: method,
+            path: path.iter().map(|x| x.to_string()).collect(),
+            accept: match options.accept {
+                None => None,
+                Some(RequestAccept::Json) => Some(MockRequestAccept::Json),
+            },
+            revision_query: options.revision_query.map(|revision| revision.clone()),
+            body: match options.body {
+                None => None,
+                Some(RequestBody::Json(body)) => {
+                    Some(MockRequestBody::Json(serde_json::to_value(body)))
+                }
+            },
+        });
+
+        Ok(self.responses.borrow_mut().pop().unwrap())
     }
 }
 
 impl Transport for MockTransport {
-    fn send(&self, request: Request) -> Result<Response, Error> {
+    type Response = MockResponse;
 
-        {
-            let mut v = self.requests.borrow_mut();
-            v.push(request);
-        }
-
-        let mut v = self.responses.borrow_mut();
-        Ok(v.pop().unwrap())
-    }
-}
-
-impl RequestBuilder {
-    pub fn with_json_body_builder<F>(self, f: F) -> Self
-        where F: FnOnce(serde_json::builder::ObjectBuilder) -> serde_json::builder::ObjectBuilder
+    fn get<'a, B>(&self,
+                  path: &[&str],
+                  options: RequestOptions<'a, B>)
+                  -> Result<Self::Response, Error>
+        where B: serde::Serialize
     {
-        let builder = serde_json::builder::ObjectBuilder::new();
-        let body = f(builder).unwrap();
-        self.with_json_body(&body)
+        self.request(Method::Get, path, options)
+    }
+
+    fn post<'a, B>(&self,
+                   path: &[&str],
+                   options: RequestOptions<'a, B>)
+                   -> Result<Self::Response, Error>
+        where B: serde::Serialize
+    {
+        self.request(Method::Post, path, options)
+    }
+
+    fn put<'a, B>(&self,
+                  path: &[&str],
+                  options: RequestOptions<'a, B>)
+                  -> Result<Self::Response, Error>
+        where B: serde::Serialize
+    {
+        self.request(Method::Put, path, options)
     }
 }
 
 #[derive(Debug)]
-pub struct ResponseBuilder {
-    target_response: Response,
+pub struct MockResponse {
+    status_code: StatusCode,
+    body: Option<MockResponseBody>,
 }
 
-impl ResponseBuilder {
-    pub fn new(status_code: hyper::status::StatusCode) -> Self {
-        ResponseBuilder {
-            target_response: Response {
-                status_code: status_code,
-                headers: hyper::header::Headers::new(),
-                body: Vec::new(),
+#[derive(Debug)]
+enum MockResponseBody {
+    Json(serde_json::Value),
+}
+
+impl MockResponse {
+    pub fn new(status_code: StatusCode) -> Self {
+        MockResponse {
+            status_code: status_code,
+            body: None,
+        }
+    }
+
+    pub fn with_json_body<B: serde::Serialize>(mut self, body: B) -> Self {
+        self.body = Some(MockResponseBody::Json(serde_json::to_value(&body)));
+        self
+    }
+
+    pub fn build_json_body<F>(self, f: F) -> Self
+        where F: FnOnce(serde_json::builder::ObjectBuilder) -> serde_json::builder::ObjectBuilder
+    {
+        self.with_json_body(f(serde_json::builder::ObjectBuilder::new()).unwrap())
+    }
+}
+
+impl Response for MockResponse {
+    fn status_code(&self) -> StatusCode {
+        self.status_code
+    }
+
+    fn decode_json_body<B: serde::Deserialize>(self) -> Result<B, Error> {
+        match self.body {
+            None => Err(Error::ResponseNotJson(None)),
+            Some(MockResponseBody::Json(body)) => {
+                serde_json::from_value(body).map_err(|e| Error::JsonDecode { cause: e })
+            }
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct MockRequest {
+    method: Method,
+    path: Vec<String>,
+    accept: Option<MockRequestAccept>,
+    revision_query: Option<Revision>,
+    body: Option<MockRequestBody>,
+}
+
+#[derive(Debug, PartialEq)]
+enum MockRequestAccept {
+    Json,
+}
+
+#[derive(Debug, PartialEq)]
+enum MockRequestBody {
+    Json(serde_json::Value),
+}
+
+#[derive(Debug)]
+pub struct MockRequestMatcher {
+    requests: Vec<MockRequest>,
+}
+
+impl MockRequestMatcher {
+    pub fn new() -> Self {
+        MockRequestMatcher { requests: Vec::new() }
+    }
+
+    pub fn get<F>(mut self, path: &[&str], request_builder: F) -> Self
+        where F: FnOnce(MockRequestBuilder) -> MockRequestBuilder
+    {
+        self.requests.push(request_builder(MockRequestBuilder::new(Method::Get, path)).unwrap());
+        self
+    }
+
+    pub fn post<F>(mut self, path: &[&str], request_builder: F) -> Self
+        where F: FnOnce(MockRequestBuilder) -> MockRequestBuilder
+    {
+        self.requests.push(request_builder(MockRequestBuilder::new(Method::Post, path)).unwrap());
+        self
+    }
+
+    pub fn put<F>(mut self, path: &[&str], request_builder: F) -> Self
+        where F: FnOnce(MockRequestBuilder) -> MockRequestBuilder
+    {
+        self.requests.push(request_builder(MockRequestBuilder::new(Method::Put, path)).unwrap());
+        self
+    }
+}
+
+impl PartialEq<Vec<MockRequest>> for MockRequestMatcher {
+    fn eq(&self, other: &Vec<MockRequest>) -> bool {
+        self.requests == *other
+    }
+}
+
+#[derive(Debug)]
+pub struct MockRequestBuilder {
+    target_request: MockRequest,
+}
+
+impl MockRequestBuilder {
+    fn new(method: Method, path: &[&str]) -> Self {
+        MockRequestBuilder {
+            target_request: MockRequest {
+                method: method,
+                path: path.iter().map(|x| x.to_string()).collect(),
+                accept: None,
+                revision_query: None,
+                body: None,
             },
         }
     }
 
-    pub fn unwrap(self) -> Response {
-        self.target_response
+    fn unwrap(self) -> MockRequest {
+        self.target_request
     }
 
-    pub fn with_json_body<B: serde::Serialize>(mut self, body: &B) -> Self {
-
-        let body = serde_json::to_vec(&body)
-                       .map_err(|e| Error::JsonEncode { cause: e })
-                       .unwrap();
-
-        self.target_response.headers.set(hyper::header::ContentType(mime!(Application / Json)));
-        self.target_response.body = body;
+    pub fn with_accept_json(mut self) -> Self {
+        self.target_request.accept = Some(MockRequestAccept::Json);
         self
     }
 
-    #[cfg(test)]
-    pub fn with_json_body_builder<F>(self, f: F) -> Self
+    pub fn with_revision_query(mut self, revision: &Revision) -> Self {
+        self.target_request.revision_query = Some(revision.clone());
+        self
+    }
+
+    pub fn with_json_body<B: serde::Serialize>(mut self, body: &B) -> Self {
+        self.target_request.body = Some(MockRequestBody::Json(serde_json::to_value(body)));
+        self
+    }
+
+    pub fn build_json_body<F>(self, f: F) -> Self
         where F: FnOnce(serde_json::builder::ObjectBuilder) -> serde_json::builder::ObjectBuilder
     {
-        let builder = serde_json::builder::ObjectBuilder::new();
-        let body = f(builder).unwrap();
-        self.with_json_body(&body)
-    }
-}
-
-mod tests {
-
-    use hyper;
-    use serde_json;
-    use super::ResponseBuilder;
-    use transport::Response;
-
-    #[test]
-    fn response_builder_with_json_body() {
-
-        let expected = Response {
-            status_code: hyper::Ok,
-            headers: {
-                let mut headers = hyper::header::Headers::new();
-                headers.set(hyper::header::ContentType(mime!(Application / Json)));
-                headers
-            },
-            body: serde_json::to_vec(&serde_json::builder::ObjectBuilder::new()
-                                          .insert("bar", 42)
-                                          .unwrap())
-                      .unwrap(),
-        };
-
-        let got = ResponseBuilder::new(hyper::Ok)
-                      .with_json_body(&serde_json::builder::ObjectBuilder::new()
-                                           .insert("bar", 42)
-                                           .unwrap())
-                      .unwrap();
-
-        assert_eq!(expected, got);
+        self.with_json_body(&f(serde_json::builder::ObjectBuilder::new()).unwrap())
     }
 }

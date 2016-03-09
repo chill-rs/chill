@@ -1,165 +1,173 @@
 use AttachmentName;
 use base64;
-use DatabaseName;
 use DocumentId;
 use Error;
-use hyper;
 use mime;
 use Revision;
 use serde;
 use serde_json;
 use std;
-use transport::{HyperTransport, RequestBuilder, Transport};
 
-pub type Document = BasicDocument<HyperTransport>;
-
-#[derive(Debug)]
-pub enum BasicDocument<T: Transport> {
-    #[doc(hidden)]
-    Deleted {
-        base: DocumentBase<T>,
-    },
-
-    #[doc(hidden)]
-    Exists {
-        base: DocumentBase<T>,
-        extra: DocumentExtra,
-        content: serde_json::Value,
-    },
+#[derive(Debug, PartialEq)]
+pub struct Document {
+    doc_id: DocumentId,
+    revision: Revision,
+    deleted: bool,
+    attachments: std::collections::HashMap<AttachmentName, Attachment>,
+    content: serde_json::Value,
 }
 
-impl<T: Transport> BasicDocument<T> {
-    #[doc(hidden)]
-    pub fn from_serializable_document(transport: &std::sync::Arc<T>,
-                                      db_name: &DatabaseName,
-                                      doc: SerializableDocument)
-                                      -> Self {
-
-        let base = DocumentBase {
-            transport: transport.clone(),
-            db_name: db_name.clone(),
-            doc_id: doc.id,
-            revision: doc.revision,
-        };
-
-        match doc.deleted {
-            true => BasicDocument::Deleted { base: base },
-            false => {
-                BasicDocument::Exists {
-                    base: base,
-                    extra: DocumentExtra { attachments: doc.attachments },
-                    content: doc.content,
-                }
-            }
-
-        }
-    }
-
-    pub fn write(&self) -> Result<Revision, Error> {
-        use hyper::status::StatusCode;
-
-        match self {
-            &BasicDocument::Deleted { .. } => Err(Error::DocumentIsDeleted),
-
-            &BasicDocument::Exists { ref base, ref extra, ref content } => {
-
-                let body = {
-                    let mut body = content.clone();
-
-                    if let serde_json::Value::Object(ref mut fields) = body {
-                        if !extra.attachments.is_empty() {
-                            fields.insert("_attachments".to_string(),
-                                          serde_json::to_value(&extra.attachments));
-                        }
-                    } else {
-                        panic!("Invalid JSON type");
-                    }
-
-                    body
-                };
-
-                let request = RequestBuilder::new(hyper::method::Method::Put,
-                                                  vec![String::from(base.db_name.clone()),
-                                                       String::from(base.doc_id.clone())])
-                                  .with_accept_json()
-                                  .with_json_body(&body)
-                                  .with_revision_query(&base.revision)
-                                  .unwrap();
-
-                let response = try!(base.transport.send(request));
-
-                match response.status_code() {
-
-                    StatusCode::Created => {
-                        let body: WriteDocumentResponse = try!(response.decode_json_body());
-                        Ok(body.revision)
-                    }
-
-                    StatusCode::Conflict => Err(Error::document_conflict(response)),
-                    StatusCode::Unauthorized => Err(Error::unauthorized(response)),
-                    _ => Err(Error::server_response(response)),
-                }
-            }
-        }
-    }
-
-    pub fn database_name(&self) -> &DatabaseName {
-        match self {
-            &BasicDocument::Deleted { ref base, .. } => &base.db_name,
-            &BasicDocument::Exists { ref base, .. } => &base.db_name,
-        }
-    }
-
+impl Document {
     pub fn id(&self) -> &DocumentId {
-        match self {
-            &BasicDocument::Deleted { ref base, .. } => &base.doc_id,
-            &BasicDocument::Exists { ref base, .. } => &base.doc_id,
-        }
+        &self.doc_id
     }
-
 
     pub fn revision(&self) -> &Revision {
-        match self {
-            &BasicDocument::Deleted { ref base, .. } => &base.revision,
-            &BasicDocument::Exists { ref base, .. } => &base.revision,
-        }
+        &self.revision
+    }
+
+    pub fn is_deleted(&self) -> bool {
+        self.deleted
     }
 
     pub fn get_content<C: serde::Deserialize>(&self) -> Result<C, Error> {
-        match self {
-            &BasicDocument::Deleted { .. } => Err(Error::DocumentIsDeleted),
-            &BasicDocument::Exists { ref content, .. } => {
-                serde_json::from_value(content.clone()).map_err(|e| Error::JsonDecode { cause: e })
-            }
-        }
+        serde_json::from_value(self.content.clone()).map_err(|e| Error::JsonDecode { cause: e })
     }
 
     pub fn set_content<C: serde::Serialize>(&mut self, new_content: &C) -> Result<(), Error> {
-        match self {
-            &mut BasicDocument::Deleted { .. } => Err(Error::DocumentIsDeleted),
-            &mut BasicDocument::Exists { ref mut content, .. } => {
-                *content = serde_json::to_value(new_content);
-                Ok(())
-            }
-        }
+        self.content = serde_json::to_value(new_content);
+        Ok(())
     }
 }
 
-// Base contains meta-information for all documents, including deleted
-// documents.
-#[derive(Debug)]
-pub struct DocumentBase<T: Transport> {
-    transport: std::sync::Arc<T>,
-    db_name: DatabaseName,
-    doc_id: DocumentId,
-    revision: Revision,
+impl serde::Serialize for Document {
+    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
+        where S: serde::Serializer
+    {
+        // FIXME: Eliminate all this cloning?
+        //
+        // Serde requires structure field names to have static lifetimes.
+        // However, our document content is dynamic. As a workaround, we construct a
+        // serde_json::Value instance containing both the document's content and
+        // its attachments.
+
+        let mut value = self.content.clone();
+
+        if let serde_json::Value::Object(ref mut fields) = value {
+            if !self.attachments.is_empty() {
+                let mut attachments = std::collections::BTreeMap::new();
+                for (name, attachment) in self.attachments.iter() {
+                    attachments.insert(String::from(name.clone()),
+                                       serde_json::to_value(attachment));
+                }
+                fields.insert("_attachments".to_string(),
+                              serde_json::Value::Object(attachments));
+            }
+        } else {
+            panic!("Document content is not a JSON object");
+        }
+
+        value.serialize(serializer)
+    }
 }
 
-// Extra contains meta-information for non-deleted documents that doesn't
-// exist for deleted documents.
-#[derive(Debug, Default)]
-pub struct DocumentExtra {
-    attachments: std::collections::HashMap<AttachmentName, Attachment>,
+impl serde::Deserialize for Document {
+    fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
+        where D: serde::Deserializer
+    {
+        enum Field {
+            Attachments,
+            Content(String),
+            Deleted,
+            Id,
+            Rev,
+        }
+
+        impl serde::Deserialize for Field {
+            fn deserialize<D>(deserializer: &mut D) -> Result<Field, D::Error>
+                where D: serde::Deserializer
+            {
+                struct Visitor;
+
+                impl serde::de::Visitor for Visitor {
+                    type Value = Field;
+
+                    fn visit_str<E>(&mut self, value: &str) -> Result<Field, E>
+                        where E: serde::de::Error
+                    {
+                        match value {
+                            "_deleted" => Ok(Field::Deleted),
+                            "_id" => Ok(Field::Id),
+                            "_rev" => Ok(Field::Rev),
+                            "_attachments" => Ok(Field::Attachments),
+                            _ => Ok(Field::Content(value.to_string())),
+                        }
+                    }
+                }
+
+                deserializer.deserialize(Visitor)
+            }
+        }
+
+        struct Visitor;
+
+        impl serde::de::Visitor for Visitor {
+            type Value = Document;
+
+            fn visit_map<V>(&mut self, mut visitor: V) -> Result<Self::Value, V::Error>
+                where V: serde::de::MapVisitor
+            {
+                let mut attachments = None;
+                let mut deleted = None;
+                let mut id = None;
+                let mut revision = None;
+                let mut content_builder = serde_json::builder::ObjectBuilder::new();
+
+                loop {
+                    match try!(visitor.visit_key()) {
+                        Some(Field::Attachments) => {
+                            attachments = Some(try!(visitor.visit_value()));
+                        }
+                        Some(Field::Content(name)) => {
+                            let value = Some(try!(visitor.visit_value::<serde_json::Value>()));
+                            content_builder = content_builder.insert(name, value);
+                        }
+                        Some(Field::Deleted) => {
+                            deleted = Some(try!(visitor.visit_value()));
+                        }
+                        Some(Field::Id) => {
+                            id = Some(try!(visitor.visit_value()));
+                        }
+                        Some(Field::Rev) => {
+                            revision = Some(try!(visitor.visit_value()));
+                        }
+                        None => {
+                            break;
+                        }
+                    }
+                }
+
+                try!(visitor.end());
+
+                Ok(Document {
+                    doc_id: match id {
+                        Some(x) => x,
+                        None => try!(visitor.missing_field("_id")),
+                    },
+                    revision: match revision {
+                        Some(x) => x,
+                        None => try!(visitor.missing_field("_rev")),
+                    },
+                    deleted: deleted.unwrap_or(false),
+                    attachments: attachments.unwrap_or(std::collections::HashMap::new()),
+                    content: content_builder.unwrap(),
+                })
+            }
+        }
+
+        static FIELDS: &'static [&'static str] = &["_attachments", "_deleted", "_id", "_rev"];
+        deserializer.deserialize_struct("Document", FIELDS, Visitor)
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -174,14 +182,6 @@ pub enum Attachment {
     Unsaved(UnsavedAttachment),
 }
 
-impl serde::Deserialize for Attachment {
-    fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
-        where D: serde::Deserializer
-    {
-        Ok(Attachment::Saved(try!(SavedAttachment::deserialize(deserializer))))
-    }
-}
-
 impl serde::Serialize for Attachment {
     fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
         where S: serde::Serializer
@@ -191,6 +191,14 @@ impl serde::Serialize for Attachment {
             &Attachment::Saved(ref x) => x.serialize(serializer),
             &Attachment::Unsaved(ref x) => x.serialize(serializer),
         }
+    }
+}
+
+impl serde::Deserialize for Attachment {
+    fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
+        where D: serde::Deserializer
+    {
+        Ok(Attachment::Saved(try!(SavedAttachment::deserialize(deserializer))))
     }
 }
 
@@ -233,6 +241,24 @@ impl SavedAttachment {
     }
 }
 
+impl serde::Serialize for SavedAttachment {
+    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
+        where S: serde::Serializer
+    {
+        struct Visitor;
+
+        impl serde::ser::MapVisitor for Visitor {
+            fn visit<S>(&mut self, serializer: &mut S) -> Result<Option<()>, S::Error>
+                where S: serde::Serializer
+            {
+                try!(serializer.serialize_struct_elt("stub", true));
+                Ok(None)
+            }
+        }
+
+        serializer.serialize_struct("SavedAttachment", Visitor)
+    }
+}
 impl serde::Deserialize for SavedAttachment {
     fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
         where D: serde::Deserializer
@@ -330,7 +356,7 @@ impl serde::Deserialize for SavedAttachment {
                 try!(visitor.end());
 
                 let content = match (data, length) {
-                    (Some(SerializableBase64Blob(data)), None) => {
+                    (Some(JsonDecodableBase64Blob(data)), None) => {
                         SavedAttachmentContent::Bytes(data)
                     }
                     (None, Some(length)) => SavedAttachmentContent::LengthOnly(length),
@@ -344,7 +370,7 @@ impl serde::Deserialize for SavedAttachment {
                     }
                 };
 
-                let SerializableContentType(content_type) = match content_type {
+                let JsonDecodableContentType(content_type) = match content_type {
                     Some(x) => x,
                     None => try!(visitor.missing_field("content_type")),
                 };
@@ -399,25 +425,6 @@ impl serde::Deserialize for SavedAttachment {
     }
 }
 
-impl serde::Serialize for SavedAttachment {
-    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
-        where S: serde::Serializer
-    {
-        struct Visitor;
-
-        impl serde::ser::MapVisitor for Visitor {
-            fn visit<S>(&mut self, serializer: &mut S) -> Result<Option<()>, S::Error>
-                where S: serde::Serializer
-            {
-                try!(serializer.serialize_struct_elt("stub", true));
-                Ok(None)
-            }
-        }
-
-        serializer.serialize_struct("SavedAttachment", Visitor)
-    }
-}
-
 #[derive(Debug, PartialEq)]
 pub struct UnsavedAttachment {
     content_type: mime::Mime,
@@ -434,17 +441,13 @@ impl serde::Serialize for UnsavedAttachment {
             fn visit<S>(&mut self, serializer: &mut S) -> Result<Option<()>, S::Error>
                 where S: serde::Serializer
             {
-                // FIXME: Review this implementation.
-                //
-                // 1. Mime implements Serialize, but it doesn't compile.
-                // 2. Lots of unwraps due to base64 API.
+                // FIXME: Review: Mime implements Serialize, but it doesn't compile.
 
                 let &mut Visitor(attachment) = self;
                 let content_type = attachment.content_type.clone();
                 try!(serializer.serialize_struct_elt("content_type", content_type.to_string()));
-                let content = String::from_utf8(base64::u8en(&attachment.content).unwrap())
-                                  .unwrap();
-                try!(serializer.serialize_struct_elt("content", content));
+                try!(serializer.serialize_struct_elt("content",
+                                                     &JsonEncodableBase64Blob(&attachment.content)));
                 Ok(None)
             }
         }
@@ -454,132 +457,28 @@ impl serde::Serialize for UnsavedAttachment {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct SerializableDocument {
-    pub id: DocumentId,
-    pub revision: Revision,
-    pub attachments: std::collections::HashMap<AttachmentName, Attachment>,
-    pub deleted: bool,
-    pub content: serde_json::Value,
-}
+struct JsonEncodableBase64Blob<'a>(&'a Vec<u8>);
 
-impl serde::Deserialize for SerializableDocument {
-    fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
-        where D: serde::Deserializer
+impl<'a> serde::Serialize for JsonEncodableBase64Blob<'a> {
+    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
+        where S: serde::Serializer
     {
-        enum Field {
-            Attachments,
-            Content(String),
-            Deleted,
-            Id,
-            Rev,
-        }
-
-        impl serde::Deserialize for Field {
-            fn deserialize<D>(deserializer: &mut D) -> Result<Field, D::Error>
-                where D: serde::Deserializer
-            {
-                struct Visitor;
-
-                impl serde::de::Visitor for Visitor {
-                    type Value = Field;
-
-                    fn visit_str<E>(&mut self, value: &str) -> Result<Field, E>
-                        where E: serde::de::Error
-                    {
-                        match value {
-                            "_deleted" => Ok(Field::Deleted),
-                            "_id" => Ok(Field::Id),
-                            "_rev" => Ok(Field::Rev),
-                            "_attachments" => Ok(Field::Attachments),
-                            _ => Ok(Field::Content(value.to_string())),
-                        }
-                    }
-                }
-
-                deserializer.deserialize(Visitor)
-            }
-        }
-
-        struct Visitor;
-
-        impl serde::de::Visitor for Visitor {
-            type Value = SerializableDocument;
-
-            fn visit_map<V>(&mut self, mut visitor: V) -> Result<Self::Value, V::Error>
-                where V: serde::de::MapVisitor
-            {
-                let mut attachments = None;
-                let mut deleted = None;
-                let mut id = None;
-                let mut revision = None;
-                let mut content_builder = serde_json::builder::ObjectBuilder::new();
-
-                loop {
-                    match try!(visitor.visit_key()) {
-                        Some(Field::Attachments) => {
-                            attachments = Some(try!(visitor.visit_value()));
-                        }
-                        Some(Field::Content(name)) => {
-                            let value = Some(try!(visitor.visit_value::<serde_json::Value>()));
-                            content_builder = content_builder.insert(name, value);
-                        }
-                        Some(Field::Deleted) => {
-                            deleted = Some(try!(visitor.visit_value()));
-                        }
-                        Some(Field::Id) => {
-                            id = Some(try!(visitor.visit_value()));
-                        }
-                        Some(Field::Rev) => {
-                            revision = Some(try!(visitor.visit_value()));
-                        }
-                        None => {
-                            break;
-                        }
-                    }
-                }
-
-                try!(visitor.end());
-
-                let attachments = attachments.unwrap_or(std::collections::HashMap::new());
-                let deleted = deleted.unwrap_or(false);
-
-                let id = match id {
-                    Some(x) => x,
-                    None => try!(visitor.missing_field("_id")),
-                };
-
-                let revision = match revision {
-                    Some(x) => x,
-                    None => try!(visitor.missing_field("_rev")),
-                };
-
-
-                Ok(SerializableDocument {
-                    attachments: attachments,
-                    deleted: deleted,
-                    id: id,
-                    revision: revision,
-                    content: content_builder.unwrap(),
-                })
-            }
-        }
-
-        static FIELDS: &'static [&'static str] = &["_attachments", "_deleted", "_id", "_rev"];
-        deserializer.deserialize_struct("SerializableDocument", FIELDS, Visitor)
+        let &JsonEncodableBase64Blob(bytes) = self;
+        String::from_utf8(base64::u8en(bytes).unwrap()).unwrap().serialize(serializer)
     }
 }
 
 #[derive(Debug, PartialEq)]
-struct SerializableBase64Blob(Vec<u8>);
+struct JsonDecodableBase64Blob(Vec<u8>);
 
-impl serde::Deserialize for SerializableBase64Blob {
+impl serde::Deserialize for JsonDecodableBase64Blob {
     fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
         where D: serde::Deserializer
     {
         struct Visitor;
 
         impl serde::de::Visitor for Visitor {
-            type Value = SerializableBase64Blob;
+            type Value = JsonDecodableBase64Blob;
 
             fn visit_str<E>(&mut self, value: &str) -> Result<Self::Value, E>
                 where E: serde::de::Error
@@ -587,7 +486,7 @@ impl serde::Deserialize for SerializableBase64Blob {
                 use std::error::Error;
                 let blob = try!(base64::u8de(value.as_bytes())
                                     .map_err(|e| E::invalid_value(e.description())));
-                Ok(SerializableBase64Blob(blob))
+                Ok(JsonDecodableBase64Blob(blob))
             }
         }
 
@@ -596,22 +495,22 @@ impl serde::Deserialize for SerializableBase64Blob {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct SerializableContentType(pub mime::Mime);
+pub struct JsonDecodableContentType(pub mime::Mime);
 
-impl serde::Deserialize for SerializableContentType {
+impl serde::Deserialize for JsonDecodableContentType {
     fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
         where D: serde::Deserializer
     {
         struct Visitor;
 
         impl serde::de::Visitor for Visitor {
-            type Value = SerializableContentType;
+            type Value = JsonDecodableContentType;
 
             fn visit_str<E>(&mut self, v: &str) -> Result<Self::Value, E>
                 where E: serde::de::Error
             {
                 let m = try!(v.parse().map_err(|_| E::invalid_value("Bad MIME string")));
-                Ok(SerializableContentType(m))
+                Ok(JsonDecodableContentType(m))
             }
         }
 
@@ -619,144 +518,55 @@ impl serde::Deserialize for SerializableContentType {
     }
 }
 
-#[derive(Debug, PartialEq)]
-pub struct WriteDocumentResponse {
-    pub ok: bool,
-    pub doc_id: DocumentId,
-    pub revision: Revision,
-}
+#[cfg(test)]
+#[derive(Debug)]
+pub struct DocumentBuilder(Document);
 
-impl serde::Deserialize for WriteDocumentResponse {
-    fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
-        where D: serde::Deserializer
+#[cfg(test)]
+impl DocumentBuilder {
+    pub fn new<D: Into<DocumentId>>(doc_id: D, revision: Revision) -> Self {
+        DocumentBuilder(Document {
+            doc_id: doc_id.into(),
+            revision: revision,
+            deleted: false,
+            attachments: std::collections::HashMap::new(),
+            content: serde_json::builder::ObjectBuilder::new().unwrap(),
+        })
+    }
+
+    pub fn unwrap(self) -> Document {
+        let DocumentBuilder(doc) = self;
+        doc
+    }
+
+    pub fn with_content<C: serde::Serialize>(mut self, new_content: &C) -> Self {
+        {
+            let DocumentBuilder(ref mut doc) = self;
+            doc.content = serde_json::to_value(new_content);
+        }
+        self
+    }
+
+    pub fn build_content<F>(self, f: F) -> Self
+        where F: FnOnce(serde_json::builder::ObjectBuilder) -> serde_json::builder::ObjectBuilder
     {
-        enum Field {
-            Id,
-            Ok,
-            Rev,
-        }
-
-        impl serde::Deserialize for Field {
-            fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
-                where D: serde::Deserializer
-            {
-                struct Visitor;
-
-                impl serde::de::Visitor for Visitor {
-                    type Value = Field;
-
-                    fn visit_str<E>(&mut self, value: &str) -> Result<Self::Value, E>
-                        where E: serde::de::Error
-                    {
-                        match value {
-                            "id" => Ok(Field::Id),
-                            "ok" => Ok(Field::Ok),
-                            "rev" => Ok(Field::Rev),
-                            _ => Err(E::unknown_field(value)),
-                        }
-                    }
-                }
-
-                deserializer.deserialize(Visitor)
-            }
-        }
-
-        struct Visitor;
-
-        impl serde::de::Visitor for Visitor {
-            type Value = WriteDocumentResponse;
-
-            fn visit_map<V>(&mut self, mut visitor: V) -> Result<Self::Value, V::Error>
-                where V: serde::de::MapVisitor
-            {
-                let mut id = None;
-                let mut ok = None;
-                let mut rev = None;
-                loop {
-                    match try!(visitor.visit_key()) {
-                        Some(Field::Id) => {
-                            id = Some(try!(visitor.visit_value()));
-                        }
-                        Some(Field::Ok) => {
-                            ok = Some(try!(visitor.visit_value()));
-                        }
-                        Some(Field::Rev) => {
-                            rev = Some(try!(visitor.visit_value()));
-                        }
-                        None => {
-                            break;
-                        }
-                    }
-                }
-
-                try!(visitor.end());
-
-                Ok(WriteDocumentResponse {
-                    doc_id: match id {
-                        Some(x) => x,
-                        None => try!(visitor.missing_field("id")),
-                    },
-                    ok: match ok {
-                        Some(x) => x,
-                        None => try!(visitor.missing_field("ok")),
-                    },
-                    revision: match rev {
-                        Some(x) => x,
-                        None => try!(visitor.missing_field("rev")),
-                    },
-                })
-            }
-        }
-
-        static FIELDS: &'static [&'static str] = &["id", "ok", "rev"];
-        deserializer.deserialize_struct("WriteDocumentResponse", FIELDS, Visitor)
+        self.with_content(&f(serde_json::builder::ObjectBuilder::new()).unwrap())
     }
 }
 
 #[cfg(test)]
 mod tests {
 
+    use AttachmentName;
     use base64;
-    use DatabaseName;
     use DocumentId;
     use Error;
-    use hyper;
     use Revision;
     use serde_json;
     use std;
-    use super::{Attachment, AttachmentEncodingInfo, BasicDocument, DocumentBase, DocumentExtra,
-                SavedAttachment, SavedAttachmentContent, SerializableBase64Blob,
-                SerializableContentType, SerializableDocument, UnsavedAttachment,
-                WriteDocumentResponse};
-    use transport::{MockTransport, Request, RequestBuilder, Response, ResponseBuilder};
-
-    impl BasicDocument<MockTransport> {
-        fn extract_requests(&self) -> Vec<Request> {
-            match self {
-                &BasicDocument::Deleted { ref base } => base.transport.extract_requests(),
-                &BasicDocument::Exists { ref base, .. } => base.transport.extract_requests(),
-            }
-        }
-
-        fn push_response(&self, response: Response) {
-            match self {
-                &BasicDocument::Deleted { ref base } => base.transport.push_response(response),
-                &BasicDocument::Exists { ref base, .. } => base.transport.push_response(response),
-            }
-        }
-    }
-
-    fn new_mock_base<N, I>(db_name: N, doc_id: I, revision: Revision) -> DocumentBase<MockTransport>
-        where N: Into<DatabaseName>,
-              I: Into<DocumentId>
-    {
-        DocumentBase {
-            transport: std::sync::Arc::new(MockTransport::new()),
-            db_name: db_name.into(),
-            doc_id: doc_id.into(),
-            revision: revision,
-        }
-    }
+    use super::{Attachment, AttachmentEncodingInfo, Document, JsonDecodableBase64Blob,
+                JsonDecodableContentType, JsonEncodableBase64Blob, SavedAttachment,
+                SavedAttachmentContent, UnsavedAttachment};
 
     #[test]
     fn document_get_content_ok() {
@@ -766,11 +576,11 @@ mod tests {
                           .insert("field_2", "foo")
                           .unwrap();
 
-        let doc = BasicDocument::Exists {
-            base: new_mock_base("database_name",
-                                "document_id",
-                                "1-1234567890abcdef1234567890abcdef".parse().unwrap()),
-            extra: DocumentExtra { attachments: std::collections::HashMap::new() },
+        let doc = Document {
+            doc_id: DocumentId::from("document_id"),
+            revision: "1-1234567890abcdef1234567890abcdef".parse().unwrap(),
+            deleted: false,
+            attachments: std::collections::HashMap::new(),
             content: content.clone(),
         };
 
@@ -780,28 +590,31 @@ mod tests {
     }
 
     #[test]
-    fn document_get_content_nok_document_is_deleted() {
+    fn document_get_content_ok_document_is_deleted() {
 
-        let doc = BasicDocument::Deleted {
-            base: new_mock_base("database_name",
-                                "document_id",
-                                "1-1234567890abcdef1234567890abcdef".parse().unwrap()),
+        let content = serde_json::builder::ObjectBuilder::new().unwrap();
+
+        let doc = Document {
+            doc_id: DocumentId::from("document_id"),
+            revision: "1-1234567890abcdef1234567890abcdef".parse().unwrap(),
+            deleted: true,
+            attachments: std::collections::HashMap::new(),
+            content: content.clone(),
         };
 
-        match doc.get_content::<serde_json::Value>() {
-            Err(Error::DocumentIsDeleted) => (),
-            x @ _ => unexpected_result!(x),
-        }
+        let expected = content;
+        let got = doc.get_content().unwrap();
+        assert_eq!(expected, got);
     }
 
     #[test]
     fn document_get_content_nok_decode_error() {
 
-        let doc = BasicDocument::Exists {
-            base: new_mock_base("database_name",
-                                "document_id",
-                                "1-1234567890abcdef1234567890abcdef".parse().unwrap()),
-            extra: Default::default(),
+        let doc = Document {
+            doc_id: DocumentId::from("document_id"),
+            revision: "1-1234567890abcdef1234567890abcdef".parse().unwrap(),
+            deleted: false,
+            attachments: std::collections::HashMap::new(),
             content: serde_json::builder::ObjectBuilder::new().unwrap(),
         };
 
@@ -811,245 +624,220 @@ mod tests {
         }
     }
 
+    // FIXME: Implement this test.
+    // #[test]
+    // fn document_set_content_ok() {
+    //     unimplemented!();
+    // }
+
+    // FIXME: Implement this test.
+    // #[test]
+    // fn document_set_content_ok_document_is_deleted() {
+    //     unimplemented!();
+    // }
+
     #[test]
-    fn document_write_ok_basic() {
+    fn document_serialize_empty() {
 
-        let original_revision: Revision = "1-1234567890abcdef1234567890abcdef".parse().unwrap();
-
-        let doc = BasicDocument::Exists {
-            base: new_mock_base("database_name", "document_id", original_revision.clone()),
-            extra: DocumentExtra { attachments: std::collections::HashMap::new() },
-            content: serde_json::builder::ObjectBuilder::new()
-                         .insert("field_1", 42)
-                         .insert("field_2", "hello")
-                         .unwrap(),
+        let document = Document {
+            doc_id: DocumentId::from("document_id"),
+            revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
+            deleted: true, // This value should have no effect.
+            attachments: std::collections::HashMap::new(),
+            content: serde_json::builder::ObjectBuilder::new().unwrap(),
         };
 
-        let new_revision: Revision = "2-fedcba0987654321fedcba0987654321".parse().unwrap();
-
-        doc.push_response(ResponseBuilder::new(hyper::status::StatusCode::Created)
-                              .with_json_body_builder(|x| {
-                                  x.insert("ok", true)
-                                   .insert("id", "document_id")
-                                   .insert("rev", new_revision.to_string())
-                              })
-                              .unwrap());
-
-        let expected = new_revision;
-        let got = doc.write().unwrap();
+        let encoded = serde_json::to_string(&document).unwrap();
+        let expected = serde_json::builder::ObjectBuilder::new().unwrap();
+        let got = serde_json::from_str(&encoded).unwrap();
         assert_eq!(expected, got);
-
-        let expected_requests = {
-            vec![RequestBuilder::new(hyper::method::Method::Put,
-                                     vec!["database_name".to_string(), "document_id".to_string()])
-                     .with_accept_json()
-                     .with_revision_query(&original_revision)
-                     .with_json_body_builder(|x| {
-                         x.insert("field_1", 42)
-                          .insert("field_2", "hello")
-                     })
-                     .unwrap()]
-        };
-
-        assert_eq!(expected_requests, doc.extract_requests());
     }
 
     #[test]
-    fn document_write_ok_with_saved_attachment() {
+    fn document_serialize_with_content_and_attachments() {
 
-        let original_revision: Revision = "42-1234567890abcdef1234567890abcdef".parse().unwrap();
-
-        let doc = BasicDocument::Exists {
-            base: new_mock_base("database_name", "document_id", original_revision.clone()),
-            extra: DocumentExtra {
-                attachments: {
-                    let mut map = std::collections::HashMap::new();
-                    let attachment = SavedAttachment {
-                        content_type: "text/plain".parse().unwrap(),
-                        digest: "md5-iMaiC8wqiFlD2NjLTemvCQ==".to_string(),
-                        sequence_number: 11,
-                        content: SavedAttachmentContent::LengthOnly(5),
+        let document = Document {
+            doc_id: DocumentId::from("document_id"),
+            revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
+            deleted: true, // This value should have no effect.
+            attachments: {
+                let mut m = std::collections::HashMap::new();
+                m.insert(AttachmentName::from("attachment_1"), {
+                    Attachment::Saved(SavedAttachment {
+                        content_type: mime!(Text / Plain),
+                        digest: "md5-XNdWXQ0FO9vPx7skS0GuYA==".to_string(),
+                        sequence_number: 17,
+                        content: SavedAttachmentContent::Bytes({
+                            "Blah blah blah".to_string().into_bytes()
+                        }),
                         encoding_info: None,
-                    };
-                    map.insert("attachment_1".to_string(), Attachment::Saved(attachment));
-                    map
-                },
+                    })
+                });
+                m.insert(AttachmentName::from("attachment_2"), {
+                    Attachment::Unsaved(UnsavedAttachment {
+                        content_type: mime!(Text / Html),
+                        content: "<p>Yak yak yak</p>".to_string().into_bytes(),
+                    })
+                });
+                m
             },
             content: serde_json::builder::ObjectBuilder::new()
-                         .insert("field_1", 42)
+                         .insert("field_1", 17)
                          .insert("field_2", "hello")
                          .unwrap(),
         };
 
-        let new_revision: Revision = "43-fedcba0987654321fedcba0987654321".parse().unwrap();
+        let encoded = serde_json::to_string(&document).unwrap();
 
-        doc.push_response(ResponseBuilder::new(hyper::status::StatusCode::Created)
-                              .with_json_body_builder(|x| {
-                                  x.insert("ok", true)
-                                   .insert("id", "document_id")
-                                   .insert("rev", new_revision.to_string())
-                              })
-                              .unwrap());
+        let expected = serde_json::builder::ObjectBuilder::new()
+                           .insert("field_1", 17)
+                           .insert("field_2", "hello")
+                           .insert_object("_attachments", |x| {
+                               x.insert_object("attachment_1", |x| x.insert("stub", true))
+                                .insert_object("attachment_2", |x| {
+                                    x.insert("content_type", "text/html")
+                                     .insert("content",
+                                             base64::encode("<p>Yak yak yak</p>").unwrap())
+                                })
+                           })
+                           .unwrap();
 
-        let expected = new_revision;
-        let got = doc.write().unwrap();
+        let got = serde_json::from_str(&encoded).unwrap();
         assert_eq!(expected, got);
-
-        let expected_requests = {
-            vec![RequestBuilder::new(hyper::method::Method::Put,
-                                     vec!["database_name".to_string(), "document_id".to_string()])
-                     .with_accept_json()
-                     .with_revision_query(&original_revision)
-                     .with_json_body_builder(|x| {
-                         x.insert_object("_attachments", |x| {
-                              x.insert_object("attachment_1", |x| x.insert("stub", true))
-                          })
-                          .insert("field_1", 42)
-                          .insert("field_2", "hello")
-                     })
-                     .unwrap()]
-        };
-
-        assert_eq!(expected_requests, doc.extract_requests());
     }
 
     #[test]
-    fn document_write_ok_with_unsaved_attachment() {
+    fn document_deserialize_ok_as_minimum() {
 
-        let original_revision: Revision = "42-1234567890abcdef1234567890abcdef".parse().unwrap();
-
-        let doc = BasicDocument::Exists {
-            base: new_mock_base("database_name", "document_id", original_revision.clone()),
-            extra: DocumentExtra {
-                attachments: {
-                    let mut map = std::collections::HashMap::new();
-                    let attachment = UnsavedAttachment {
-                        content_type: "text/plain".parse().unwrap(),
-                        content: "This is the attachment.".to_string().into_bytes(),
-                    };
-                    map.insert("attachment_1".to_string(), Attachment::Unsaved(attachment));
-                    map
-                },
-            },
-            content: serde_json::builder::ObjectBuilder::new()
-                         .insert("field_1", 42)
-                         .insert("field_2", "hello")
-                         .unwrap(),
-        };
-
-        let new_revision: Revision = "43-fedcba0987654321fedcba0987654321".parse().unwrap();
-
-        doc.push_response(ResponseBuilder::new(hyper::status::StatusCode::Created)
-                              .with_json_body_builder(|x| {
-                                  x.insert("ok", true)
-                                   .insert("id", "document_id")
-                                   .insert("rev", new_revision.to_string())
-                              })
-                              .unwrap());
-
-        let expected = new_revision;
-        let got = doc.write().unwrap();
-        assert_eq!(expected, got);
-
-        let expected_requests = {
-            vec![RequestBuilder::new(hyper::method::Method::Put,
-                                     vec!["database_name".to_string(), "document_id".to_string()])
-                     .with_accept_json()
-                     .with_revision_query(&original_revision)
-                     .with_json_body_builder(|x| {
-                         x.insert_object("_attachments", |x| {
-                              x.insert_object("attachment_1", |x| {
-                                  x.insert("content_type", "text/plain")
-                                   .insert("content",
-                                           base64::encode("This is the attachment.").unwrap())
-                              })
-                          })
-                          .insert("field_1", 42)
-                          .insert("field_2", "hello")
-                     })
-                     .unwrap()]
-        };
-
-        assert_eq!(expected_requests, doc.extract_requests());
-    }
-
-    #[test]
-    fn document_write_nok_document_conflict() {
-
-        let doc = BasicDocument::Exists {
-            base: new_mock_base("database_name",
-                                "document_id",
-                                "1-1234567890abcdef1234567890abcdef".parse().unwrap()),
-            extra: DocumentExtra { attachments: std::collections::HashMap::new() },
+        let expected = Document {
+            doc_id: DocumentId::from("document_id"),
+            revision: "42-1234567890abcdef1234567890abcdef".parse().unwrap(),
+            deleted: false,
+            attachments: std::collections::HashMap::new(),
             content: serde_json::builder::ObjectBuilder::new().unwrap(),
         };
-
-        let error = "conflict";
-        let reason = "Document update conflict.";
-        doc.push_response(ResponseBuilder::new(hyper::status::StatusCode::Conflict)
-                              .with_json_body_builder(|x| {
-                                  x.insert("error", error)
-                                   .insert("reason", reason)
-                              })
-                              .unwrap());
-
-        match doc.write() {
-            Err(Error::DocumentConflict(ref error_response)) if error == error_response.error() &&
-                                                                reason ==
-                                                                error_response.reason() => (),
-            e @ _ => unexpected_result!(e),
-        }
-    }
-
-    #[test]
-    fn document_write_nok_unauthorized() {
-
-        let doc = BasicDocument::Exists {
-            base: new_mock_base("database_name",
-                                "document_id",
-                                "1-1234567890abcdef1234567890abcdef".parse().unwrap()),
-            extra: DocumentExtra { attachments: std::collections::HashMap::new() },
-            content: serde_json::builder::ObjectBuilder::new().unwrap(),
-        };
-
-        let error = "unauthorized";
-        let reason = "Authentication required.";
-        doc.push_response(ResponseBuilder::new(hyper::status::StatusCode::Unauthorized)
-                              .with_json_body_builder(|x| {
-                                  x.insert("error", error)
-                                   .insert("reason", reason)
-                              })
-                              .unwrap());
-
-        match doc.write() {
-            Err(Error::Unauthorized(ref error_response)) if error == error_response.error() &&
-                                                            reason == error_response.reason() => (),
-            e @ _ => unexpected_result!(e),
-        }
-    }
-
-    #[test]
-    fn attachment_deserialize_ok() {
-
-        let expected = Attachment::Saved(SavedAttachment {
-            content_type: "text/plain".parse().unwrap(),
-            digest: "md5-iMaiC8wqiFlD2NjLTemvCQ==".to_string(),
-            sequence_number: 11,
-            content: SavedAttachmentContent::LengthOnly(5),
-            encoding_info: None,
-        });
 
         let source = serde_json::builder::ObjectBuilder::new()
-                         .insert("content_type", "text/plain")
-                         .insert("digest", "md5-iMaiC8wqiFlD2NjLTemvCQ==")
-                         .insert("length", 5)
-                         .insert("revpos", 11)
-                         .insert("stub", true)
+                         .insert("_id", "document_id")
+                         .insert("_rev", "42-1234567890abcdef1234567890abcdef")
                          .unwrap();
 
         let source = serde_json::to_string(&source).unwrap();
         let got = serde_json::from_str(&source).unwrap();
         assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn document_deserialize_ok_as_deleted() {
+
+        let expected = Document {
+            doc_id: DocumentId::from("document_id"),
+            revision: "42-1234567890abcdef1234567890abcdef".parse().unwrap(),
+            deleted: true,
+            attachments: std::collections::HashMap::new(),
+            content: serde_json::builder::ObjectBuilder::new().unwrap(),
+        };
+
+        let source = serde_json::builder::ObjectBuilder::new()
+                         .insert("_id", "document_id")
+                         .insert("_rev", "42-1234567890abcdef1234567890abcdef")
+                         .insert("_deleted", true)
+                         .unwrap();
+
+        let source = serde_json::to_string(&source).unwrap();
+        let got = serde_json::from_str(&source).unwrap();
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn document_deserialize_ok_with_content() {
+
+        let expected = Document {
+            doc_id: DocumentId::from("document_id"),
+            revision: "42-1234567890abcdef1234567890abcdef".parse().unwrap(),
+            deleted: false,
+            attachments: std::collections::HashMap::new(),
+            content: serde_json::builder::ObjectBuilder::new()
+                         .insert("field_1", 42)
+                         .insert("field_2", 17)
+                         .unwrap(),
+        };
+
+        let source = serde_json::builder::ObjectBuilder::new()
+                         .insert("_id", "document_id")
+                         .insert("_rev", "42-1234567890abcdef1234567890abcdef")
+                         .insert("field_1", 42)
+                         .insert("field_2", 17)
+                         .unwrap();
+
+        let source = serde_json::to_string(&source).unwrap();
+        let got = serde_json::from_str(&source).unwrap();
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn document_deserialize_ok_with_attachments() {
+
+        let expected = Document {
+            doc_id: DocumentId::from("document_id"),
+            revision: "42-1234567890abcdef1234567890abcdef".parse().unwrap(),
+            deleted: false,
+            attachments: {
+                let mut map = std::collections::HashMap::new();
+                map.insert(String::from("attachment_1"),
+                           Attachment::Saved(SavedAttachment {
+                               content_type: mime!(Application / WwwFormUrlEncoded),
+                               digest: "md5-XNdWXQ0FO9vPx7skS0GuYA==".to_string(),
+                               sequence_number: 23,
+                               content: SavedAttachmentContent::LengthOnly(517),
+                               encoding_info: None,
+                           }));
+                map
+            },
+            content: serde_json::builder::ObjectBuilder::new().unwrap(),
+        };
+
+        let source = serde_json::builder::ObjectBuilder::new()
+                         .insert("_id", "document_id")
+                         .insert("_rev", "42-1234567890abcdef1234567890abcdef")
+                         .insert_object("_attachments", |x| {
+                             x.insert_object("attachment_1", |x| {
+                                 x.insert("content_type", "application/x-www-form-urlencoded")
+                                  .insert("length", 517)
+                                  .insert("stub", true)
+                                  .insert("digest", "md5-XNdWXQ0FO9vPx7skS0GuYA==")
+                                  .insert("revpos", 23)
+                             })
+                         })
+                         .unwrap();
+
+        let source = serde_json::to_string(&source).unwrap();
+        let got = serde_json::from_str(&source).unwrap();
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn document_deserialize_nok_missing_id() {
+
+        let source = serde_json::builder::ObjectBuilder::new()
+                         .insert("_rev", "42-1234567890abcdef1234567890abcdef")
+                         .unwrap();
+
+        let source = serde_json::to_string(&source).unwrap();
+        let got = serde_json::from_str::<Document>(&source);
+        expect_json_error_missing_field!(got, "_id");
+    }
+
+    #[test]
+    fn document_deserialize_nok_missing_rev() {
+
+        let source = serde_json::builder::ObjectBuilder::new()
+                         .insert("_id", "document_id")
+                         .unwrap();
+
+        let source = serde_json::to_string(&source).unwrap();
+        let got = serde_json::from_str::<Document>(&source);
+        expect_json_error_missing_field!(got, "_rev");
     }
 
     #[test]
@@ -1092,6 +880,53 @@ mod tests {
                            .insert("content", base64::encode(content).unwrap())
                            .unwrap();
 
+        let got = serde_json::from_str(&encoded).unwrap();
+
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn attachment_deserialize_ok() {
+
+        let expected = Attachment::Saved(SavedAttachment {
+            content_type: "text/plain".parse().unwrap(),
+            digest: "md5-iMaiC8wqiFlD2NjLTemvCQ==".to_string(),
+            sequence_number: 11,
+            content: SavedAttachmentContent::LengthOnly(5),
+            encoding_info: None,
+        });
+
+        let source = serde_json::builder::ObjectBuilder::new()
+                         .insert("content_type", "text/plain")
+                         .insert("digest", "md5-iMaiC8wqiFlD2NjLTemvCQ==")
+                         .insert("length", 5)
+                         .insert("revpos", 11)
+                         .insert("stub", true)
+                         .unwrap();
+
+        let source = serde_json::to_string(&source).unwrap();
+        let got = serde_json::from_str(&source).unwrap();
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn saved_attachment_serialize() {
+
+        let attachment = SavedAttachment {
+            content_type: mime!(Text / Plain),
+            digest: "md5-iMaiC8wqiFlD2NjLTemvCQ==".to_string(),
+            sequence_number: 17,
+            content: SavedAttachmentContent::Bytes("This is the attachment."
+                                                       .to_string()
+                                                       .into_bytes()),
+            encoding_info: None,
+        };
+
+        let encoded = serde_json::to_string(&attachment).unwrap();
+
+        let expected = serde_json::builder::ObjectBuilder::new()
+                           .insert("stub", true)
+                           .unwrap();
         let got = serde_json::from_str(&encoded).unwrap();
 
         assert_eq!(expected, got);
@@ -1221,29 +1056,6 @@ mod tests {
     }
 
     #[test]
-    fn saved_attachment_serialize() {
-
-        let attachment = SavedAttachment {
-            content_type: mime!(Text / Plain),
-            digest: "md5-iMaiC8wqiFlD2NjLTemvCQ==".to_string(),
-            sequence_number: 17,
-            content: SavedAttachmentContent::Bytes("This is the attachment."
-                                                       .to_string()
-                                                       .into_bytes()),
-            encoding_info: None,
-        };
-
-        let encoded = serde_json::to_string(&attachment).unwrap();
-
-        let expected = serde_json::builder::ObjectBuilder::new()
-                           .insert("stub", true)
-                           .unwrap();
-        let got = serde_json::from_str(&encoded).unwrap();
-
-        assert_eq!(expected, got);
-    }
-
-    #[test]
     fn unsaved_attachment_serialize() {
 
         let content = "This is the attachment.";
@@ -1266,142 +1078,15 @@ mod tests {
     }
 
     #[test]
-    fn serializable_document_deserialize_ok_as_minimum() {
-
-        let expected = SerializableDocument {
-            id: DocumentId::from("document_id"),
-            revision: "42-1234567890abcdef1234567890abcdef".parse().unwrap(),
-            attachments: std::collections::HashMap::new(),
-            deleted: false,
-            content: serde_json::builder::ObjectBuilder::new().unwrap(),
-        };
-
-        let source = serde_json::builder::ObjectBuilder::new()
-                         .insert("_id", "document_id")
-                         .insert("_rev", "42-1234567890abcdef1234567890abcdef")
-                         .unwrap();
-
-        let source = serde_json::to_string(&source).unwrap();
-        let got = serde_json::from_str(&source).unwrap();
-        assert_eq!(expected, got);
+    fn json_base64_blob_serialize() {
+        let bytes = "Blah blah blah".to_string().into_bytes();
+        let encoded = serde_json::to_string(&JsonEncodableBase64Blob(&bytes)).unwrap();
+        assert_eq!(r#""QmxhaCBibGFoIGJsYWg=""#, encoded);
     }
 
     #[test]
-    fn serializable_document_deserialize_ok_as_deleted() {
-
-        let expected = SerializableDocument {
-            id: DocumentId::from("document_id"),
-            revision: "42-1234567890abcdef1234567890abcdef".parse().unwrap(),
-            attachments: std::collections::HashMap::new(),
-            deleted: true,
-            content: serde_json::builder::ObjectBuilder::new().unwrap(),
-        };
-
-        let source = serde_json::builder::ObjectBuilder::new()
-                         .insert("_id", "document_id")
-                         .insert("_rev", "42-1234567890abcdef1234567890abcdef")
-                         .insert("_deleted", true)
-                         .unwrap();
-
-        let source = serde_json::to_string(&source).unwrap();
-        let got = serde_json::from_str(&source).unwrap();
-        assert_eq!(expected, got);
-    }
-
-    #[test]
-    fn serializable_document_deserialize_ok_with_content() {
-
-        let expected = SerializableDocument {
-            id: DocumentId::from("document_id"),
-            revision: "42-1234567890abcdef1234567890abcdef".parse().unwrap(),
-            attachments: std::collections::HashMap::new(),
-            deleted: false,
-            content: serde_json::builder::ObjectBuilder::new()
-                         .insert("field_1", 42)
-                         .insert("field_2", 17)
-                         .unwrap(),
-        };
-
-        let source = serde_json::builder::ObjectBuilder::new()
-                         .insert("_id", "document_id")
-                         .insert("_rev", "42-1234567890abcdef1234567890abcdef")
-                         .insert("field_1", 42)
-                         .insert("field_2", 17)
-                         .unwrap();
-
-        let source = serde_json::to_string(&source).unwrap();
-        let got = serde_json::from_str(&source).unwrap();
-        assert_eq!(expected, got);
-    }
-
-    #[test]
-    fn serializable_document_deserialize_ok_with_attachments() {
-
-        let expected = SerializableDocument {
-            id: DocumentId::from("document_id"),
-            revision: "42-1234567890abcdef1234567890abcdef".parse().unwrap(),
-            attachments: {
-                let mut map = std::collections::HashMap::new();
-                map.insert(String::from("attachment_1"),
-                           Attachment::Saved(SavedAttachment {
-                               content_type: mime!(Application / WwwFormUrlEncoded),
-                               digest: "md5-XNdWXQ0FO9vPx7skS0GuYA==".to_string(),
-                               sequence_number: 23,
-                               content: SavedAttachmentContent::LengthOnly(517),
-                               encoding_info: None,
-                           }));
-                map
-            },
-            deleted: false,
-            content: serde_json::builder::ObjectBuilder::new().unwrap(),
-        };
-
-        let source = serde_json::builder::ObjectBuilder::new()
-                         .insert("_id", "document_id")
-                         .insert("_rev", "42-1234567890abcdef1234567890abcdef")
-                         .insert_object("_attachments", |x| {
-                             x.insert_object("attachment_1", |x| {
-                                 x.insert("content_type", "application/x-www-form-urlencoded")
-                                  .insert("length", 517)
-                                  .insert("stub", true)
-                                  .insert("digest", "md5-XNdWXQ0FO9vPx7skS0GuYA==")
-                                  .insert("revpos", 23)
-                             })
-                         })
-                         .unwrap();
-
-        let source = serde_json::to_string(&source).unwrap();
-        let got = serde_json::from_str(&source).unwrap();
-        assert_eq!(expected, got);
-    }
-
-    #[test]
-    fn serializable_document_deserialize_nok_missing_id() {
-
-        let source = serde_json::builder::ObjectBuilder::new()
-                         .insert("_rev", "42-1234567890abcdef1234567890abcdef")
-                         .unwrap();
-
-        let source = serde_json::to_string(&source).unwrap();
-        let got = serde_json::from_str::<SerializableDocument>(&source);
-        expect_json_error_missing_field!(got, "_id");
-    }
-
-    #[test]
-    fn serializable_document_deserialize_nok_missing_rev() {
-
-        let source = serde_json::builder::ObjectBuilder::new()
-                         .insert("_id", "document_id")
-                         .unwrap();
-
-        let source = serde_json::to_string(&source).unwrap();
-        let got = serde_json::from_str::<SerializableDocument>(&source);
-        expect_json_error_missing_field!(got, "_rev");
-    }
-
-    #[test]
-    fn serializable_base64_blob_deserialize_ok() {
-        let expected = SerializableBase64Blob("hello".to_owned().into_bytes());
+    fn json_base64_blob_deserialize_ok() {
+        let expected = JsonDecodableBase64Blob("hello".to_owned().into_bytes());
         let source = serde_json::Value::String("aGVsbG8=".to_string());
         let source = serde_json::to_string(&source).unwrap();
         let got = serde_json::from_str(&source).unwrap();
@@ -1409,17 +1094,17 @@ mod tests {
     }
 
     #[test]
-    fn serializable_base64_blob_deserialize_nok_bad_base64() {
+    fn json_base64_blob_deserialize_nok_bad_base64() {
         let source = serde_json::Value::String("% percent signs are invalid in base64 %"
                                                    .to_string());
         let source = serde_json::to_string(&source).unwrap();
-        let got = serde_json::from_str::<SerializableBase64Blob>(&source);
+        let got = serde_json::from_str::<JsonDecodableBase64Blob>(&source);
         expect_json_error_invalid_value!(got);
     }
 
     #[test]
-    fn serializable_content_type_deserialize_ok() {
-        let expected = SerializableContentType(mime!(Application / Json));
+    fn json_content_type_deserialize_ok() {
+        let expected = JsonDecodableContentType(mime!(Application / Json));
         let source = serde_json::Value::String("application/json".to_string());
         let source = serde_json::to_string(&source).unwrap();
         let got = serde_json::from_str(&source).unwrap();
@@ -1427,60 +1112,10 @@ mod tests {
     }
 
     #[test]
-    fn serializable_content_type_deserialize_nok_bad_mime() {
+    fn json_content_type_deserialize_nok_bad_mime() {
         let source = serde_json::Value::String("bad mime".to_string());
         let source = serde_json::to_string(&source).unwrap();
-        let got = serde_json::from_str::<SerializableContentType>(&source);
+        let got = serde_json::from_str::<JsonDecodableContentType>(&source);
         expect_json_error_invalid_value!(got);
-    }
-
-    #[test]
-    fn write_document_response_deserialize_ok_with_all_fields() {
-        let expected = WriteDocumentResponse {
-            doc_id: "foo".into(),
-            ok: true,
-            revision: "1-12345678123456781234567812345678".parse().unwrap(),
-        };
-        let source = serde_json::builder::ObjectBuilder::new()
-                         .insert("id", "foo")
-                         .insert("ok", true)
-                         .insert("rev", "1-12345678123456781234567812345678")
-                         .unwrap();
-        let source = serde_json::to_string(&source).unwrap();
-        let got = serde_json::from_str(&source).unwrap();
-        assert_eq!(expected, got);
-    }
-
-    #[test]
-    fn write_document_response_deserialize_nok_missing_id_field() {
-        let source = serde_json::builder::ObjectBuilder::new()
-                         .insert("ok", true)
-                         .insert("rev", "1-12345678123456781234567812345678")
-                         .unwrap();
-        let source = serde_json::to_string(&source).unwrap();
-        let got = serde_json::from_str::<WriteDocumentResponse>(&source);
-        expect_json_error_missing_field!(got, "id");
-    }
-
-    #[test]
-    fn write_document_response_deserialize_nok_missing_ok_field() {
-        let source = serde_json::builder::ObjectBuilder::new()
-                         .insert("id", "foo")
-                         .insert("rev", "1-12345678123456781234567812345678")
-                         .unwrap();
-        let source = serde_json::to_string(&source).unwrap();
-        let got = serde_json::from_str::<WriteDocumentResponse>(&source);
-        expect_json_error_missing_field!(got, "ok");
-    }
-
-    #[test]
-    fn write_document_response_deserialize_nok_missing_rev_field() {
-        let source = serde_json::builder::ObjectBuilder::new()
-                         .insert("id", "foo")
-                         .insert("ok", true)
-                         .unwrap();
-        let source = serde_json::to_string(&source).unwrap();
-        let got = serde_json::from_str::<WriteDocumentResponse>(&source);
-        expect_json_error_missing_field!(got, "rev");
     }
 }

@@ -26,6 +26,9 @@ impl CreateDocumentOptions {
 #[derive(Debug, Default, PartialEq)]
 pub struct ReadDocumentOptions;
 
+#[derive(Debug, Default, PartialEq)]
+pub struct UpdateDocumentOptions;
+
 #[cfg(test)]
 mod tests {
 

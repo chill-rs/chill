@@ -1,21 +1,20 @@
-use BasicDocument;
 use CreateDocumentOptions;
 use DatabaseName;
+use Document;
 use DocumentId;
-use document::WriteDocumentResponse;
 use Error;
-use hyper;
 use ReadDocumentOptions;
 use Revision;
 use serde;
 use serde_json;
 use std;
-use transport::{HyperTransport, RequestBuilder, Transport};
+use transport::{HyperTransport, RequestOptions, Response, StatusCode, Transport};
+use UpdateDocumentOptions;
 
 pub type Database = BasicDatabase<HyperTransport>;
 
 #[derive(Debug)]
-pub struct BasicDatabase<T> {
+pub struct BasicDatabase<T: Transport> {
     transport: std::sync::Arc<T>,
     db_name: DatabaseName,
 }
@@ -41,7 +40,7 @@ impl<T: Transport> BasicDatabase<T> {
     {
         use hyper::status::StatusCode;
 
-        let doc = {
+        let body = {
             let mut doc = serde_json::to_value(content);
 
             match doc {
@@ -58,13 +57,11 @@ impl<T: Transport> BasicDatabase<T> {
             doc
         };
 
-        let request = RequestBuilder::new(hyper::method::Method::Post,
-                                          vec![String::from(self.db_name.clone())])
-                          .with_accept_json()
-                          .with_json_body(&doc)
-                          .unwrap();
-
-        let response = try!(self.transport.send(request));
+        let response = try!(self.transport
+                                .post(&[&self.db_name],
+                                      RequestOptions::new()
+                                          .with_accept_json()
+                                          .with_json_body(&body)));
 
         match response.status_code() {
             StatusCode::Created => {
@@ -81,33 +78,145 @@ impl<T: Transport> BasicDatabase<T> {
     pub fn read_document<D>(&self,
                             doc_id: D,
                             _options: ReadDocumentOptions)
-                            -> Result<BasicDocument<T>, Error>
+                            -> Result<Document, Error>
         where D: Into<DocumentId>
     {
-        use hyper::status::StatusCode;
+        // FIXME: Eliminate this temporary.
+        let doc_id = String::from(doc_id.into());
 
-        let request = RequestBuilder::new(hyper::Get,
-                                          vec![String::from(self.db_name.clone()),
-                                               String::from(doc_id.into())])
-                          .with_accept_json()
-                          .unwrap();
-
-        let response = try!(self.transport.send(request));
+        let response = try!(self.transport
+                                .get(&[&self.db_name, &doc_id],
+                                     RequestOptions::new().with_accept_json()));
 
         match response.status_code() {
-
-            StatusCode::Ok => {
-                let doc = try!(response.decode_json_body());
-                let doc = BasicDocument::from_serializable_document(&self.transport,
-                                                                    &self.db_name,
-                                                                    doc);
-                Ok(doc)
-            }
-
+            StatusCode::Ok => response.decode_json_body(),
             StatusCode::NotFound => Err(Error::not_found(response)),
             StatusCode::Unauthorized => Err(Error::unauthorized(response)),
             _ => Err(Error::server_response(response)),
         }
+    }
+
+    pub fn update_document(&self,
+                           doc: &Document,
+                           _options: UpdateDocumentOptions)
+                           -> Result<Revision, Error> {
+
+        // FIXME: Eliminate this temporary.
+        let doc_id = String::from(doc.id().clone());
+
+        // FIXME: Serialize the document.
+        let response = try!(self.transport
+                                .put(&[&self.db_name, &doc_id],
+                                     RequestOptions::new()
+                                         .with_accept_json()
+                                         .with_revision_query(&doc.revision())
+                                         .with_json_body(doc)));
+
+        match response.status_code() {
+
+            StatusCode::Created => {
+                let body: WriteDocumentResponse = try!(response.decode_json_body());
+                Ok(body.revision)
+            }
+
+            StatusCode::Conflict => Err(Error::document_conflict(response)),
+            StatusCode::Unauthorized => Err(Error::unauthorized(response)),
+            _ => Err(Error::server_response(response)),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct WriteDocumentResponse {
+    ok: bool,
+    doc_id: DocumentId,
+    revision: Revision,
+}
+
+impl serde::Deserialize for WriteDocumentResponse {
+    fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
+        where D: serde::Deserializer
+    {
+        enum Field {
+            Id,
+            Ok,
+            Rev,
+        }
+
+        impl serde::Deserialize for Field {
+            fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
+                where D: serde::Deserializer
+            {
+                struct Visitor;
+
+                impl serde::de::Visitor for Visitor {
+                    type Value = Field;
+
+                    fn visit_str<E>(&mut self, value: &str) -> Result<Self::Value, E>
+                        where E: serde::de::Error
+                    {
+                        match value {
+                            "id" => Ok(Field::Id),
+                            "ok" => Ok(Field::Ok),
+                            "rev" => Ok(Field::Rev),
+                            _ => Err(E::unknown_field(value)),
+                        }
+                    }
+                }
+
+                deserializer.deserialize(Visitor)
+            }
+        }
+
+        struct Visitor;
+
+        impl serde::de::Visitor for Visitor {
+            type Value = WriteDocumentResponse;
+
+            fn visit_map<V>(&mut self, mut visitor: V) -> Result<Self::Value, V::Error>
+                where V: serde::de::MapVisitor
+            {
+                let mut id = None;
+                let mut ok = None;
+                let mut rev = None;
+                loop {
+                    match try!(visitor.visit_key()) {
+                        Some(Field::Id) => {
+                            id = Some(try!(visitor.visit_value()));
+                        }
+                        Some(Field::Ok) => {
+                            ok = Some(try!(visitor.visit_value()));
+                        }
+                        Some(Field::Rev) => {
+                            rev = Some(try!(visitor.visit_value()));
+                        }
+                        None => {
+                            break;
+                        }
+                    }
+                }
+
+                try!(visitor.end());
+
+                Ok(WriteDocumentResponse {
+                    doc_id: match id {
+                        Some(x) => x,
+                        None => try!(visitor.missing_field("id")),
+                    },
+                    ok: match ok {
+                        Some(x) => x,
+                        None => try!(visitor.missing_field("ok")),
+                    },
+                    revision: match rev {
+                        Some(x) => x,
+                        None => try!(visitor.missing_field("rev")),
+                    },
+                })
+            }
+        }
+
+        static FIELDS: &'static [&'static str] = &["id", "ok", "rev"];
+        deserializer.deserialize_struct("WriteDocumentResponse", FIELDS, Visitor)
     }
 }
 
@@ -116,95 +225,89 @@ mod tests {
 
     use CreateDocumentOptions;
     use DatabaseName;
+    use DocumentId;
+    use document::DocumentBuilder;
     use Error;
-    use hyper;
+    use Revision;
     use serde_json;
     use std;
-    use super::BasicDatabase;
-    use transport::{MockTransport, Request, RequestBuilder, Response, ResponseBuilder};
+    use super::{BasicDatabase, WriteDocumentResponse};
+    use transport::{MockRequestMatcher, MockResponse, MockTransport, StatusCode};
 
-    type MockDatabase = BasicDatabase<MockTransport>;
-
-    impl MockDatabase {
-        fn extract_requests(&self) -> Vec<Request> {
-            self.transport.extract_requests()
+    fn new_mock_database<D: Into<DatabaseName>>(db_name: D) -> BasicDatabase<MockTransport> {
+        BasicDatabase {
+            transport: std::sync::Arc::new(MockTransport::new()),
+            db_name: db_name.into(),
         }
-
-        fn push_response(&self, response: Response) {
-            self.transport.push_response(response)
-        }
-    }
-
-    fn new_mock_database<D: Into<DatabaseName>>(db_name: D) -> MockDatabase {
-        let transport = std::sync::Arc::new(MockTransport::new());
-        MockDatabase::new(transport, db_name.into())
     }
 
     #[test]
-    fn create_document_ok_basic() {
+    fn create_document_ok_with_default_options() {
 
         let db = new_mock_database("database_name");
-        db.push_response(ResponseBuilder::new(hyper::status::StatusCode::Created)
-                             .with_json_body_builder(|x| {
-                                 x.insert("ok", true)
-                                  .insert("id", "17a0e088c69e0a99be6d6159b4000563")
-                                  .insert("rev", "1-967a00dff5e02add41819138abb3284d")
-                             })
-                             .unwrap());
+        db.transport.push_response(MockResponse::new(StatusCode::Created).build_json_body(|x| {
+            x.insert("ok", true)
+             .insert("id", "17a0e088c69e0a99be6d6159b4000563")
+             .insert("rev", "1-967a00dff5e02add41819138abb3284d")
+        }));
 
         let doc_content = serde_json::builder::ObjectBuilder::new()
                               .insert("field_1", 42)
-                              .insert("field_2", 17)
+                              .insert("field_2", "hello")
                               .unwrap();
 
-        db.create_document(&doc_content, Default::default()).unwrap();
+        let (doc_id, revision) = db.create_document(&doc_content, Default::default())
+                                   .unwrap();
 
-        let expected_requests = {
-            vec![RequestBuilder::new(hyper::Post, vec![String::from("database_name")])
-                     .with_accept_json()
-                     .with_json_body_builder(|x| {
-                         x.insert("field_1", 42)
-                          .insert("field_2", 17)
-                     })
-                     .unwrap()]
-        };
+        assert_eq!(DocumentId::from("17a0e088c69e0a99be6d6159b4000563"), doc_id);
+        assert_eq!(Revision::parse("1-967a00dff5e02add41819138abb3284d").unwrap(),
+                   revision);
 
-        assert_eq!(expected_requests, db.extract_requests());
+        let expected = MockRequestMatcher::new().post(&["database_name"], |x| {
+            x.with_accept_json()
+             .build_json_body(|x| {
+                 x.insert("field_1", 42)
+                  .insert("field_2", "hello")
+             })
+        });
+        assert_eq!(expected, db.transport.extract_requests());
     }
 
     #[test]
     fn create_document_ok_with_document_id() {
 
         let db = new_mock_database("database_name");
-        db.push_response(ResponseBuilder::new(hyper::status::StatusCode::Created)
-                             .with_json_body_builder(|x| {
-                                 x.insert("ok", true)
-                                  .insert("id", "document_id")
-                                  .insert("rev", "1-967a00dff5e02add41819138abb3284d")
-                             })
-                             .unwrap());
+        db.transport.push_response(MockResponse::new(StatusCode::Created).build_json_body(|x| {
+            x.insert("ok", true)
+             .insert("id", "document_id")
+             .insert("rev", "1-967a00dff5e02add41819138abb3284d")
+        }));
 
         let doc_content = serde_json::builder::ObjectBuilder::new()
                               .insert("field_1", 42)
-                              .insert("field_2", 17)
+                              .insert("field_2", "hello")
                               .unwrap();
 
-        db.create_document(&doc_content,
-                           CreateDocumentOptions::new().with_document_id("document_id"))
-          .unwrap();
+        let (doc_id, revision) = db.create_document(&doc_content,
+                                                    CreateDocumentOptions::new()
+                                                        .with_document_id("document_id"))
+                                   .unwrap();
 
-        let expected_requests = {
-            vec![RequestBuilder::new(hyper::Post, vec![String::from("database_name")])
-                     .with_accept_json()
-                     .with_json_body_builder(|x| {
-                         x.insert("_id", "document_id")
-                          .insert("field_1", 42)
-                          .insert("field_2", 17)
-                     })
-                     .unwrap()]
+        assert_eq!(DocumentId::from("document_id"), doc_id);
+        assert_eq!(Revision::parse("1-967a00dff5e02add41819138abb3284d").unwrap(),
+                   revision);
+
+        let expected = {
+            MockRequestMatcher::new().post(&["database_name"], |x| {
+                x.with_accept_json()
+                 .build_json_body(|x| {
+                     x.insert("_id", "document_id")
+                      .insert("field_1", 42)
+                      .insert("field_2", "hello")
+                 })
+            })
         };
-
-        assert_eq!(expected_requests, db.extract_requests());
+        assert_eq!(expected, db.transport.extract_requests());
     }
 
     #[test]
@@ -213,24 +316,19 @@ mod tests {
         let db = new_mock_database("database_name");
         let error = "conflict";
         let reason = "Document update conflict.";
-        db.push_response(ResponseBuilder::new(hyper::status::StatusCode::Conflict)
-                             .with_json_body_builder(|x| {
-                                 x.insert("error", error)
-                                  .insert("reason", reason)
-                             })
-                             .unwrap());
+        db.transport.push_response(MockResponse::new(StatusCode::Conflict).build_json_body(|x| {
+            x.insert("error", error)
+             .insert("reason", reason)
+        }));
 
-        let doc_content = serde_json::builder::ObjectBuilder::new()
-                              .insert("field_1", 42)
-                              .insert("field_2", 17)
-                              .unwrap();
+        let doc_content = serde_json::builder::ObjectBuilder::new().unwrap();
 
         match db.create_document(&doc_content,
                                  CreateDocumentOptions::new().with_document_id("document_id")) {
             Err(Error::DocumentConflict(ref error_response)) if error == error_response.error() &&
                                                                 reason ==
                                                                 error_response.reason() => (),
-            e @ _ => unexpected_result!(e),
+            x @ _ => unexpected_result!(x),
         }
     }
 
@@ -240,49 +338,49 @@ mod tests {
         let db = new_mock_database("database_name");
         let error = "unauthorized";
         let reason = "Authentication required.";
-        db.push_response(ResponseBuilder::new(hyper::status::StatusCode::Unauthorized)
-                             .with_json_body_builder(|x| {
-                                 x.insert("error", error)
-                                  .insert("reason", reason)
-                             })
-                             .unwrap());
+        db.transport
+          .push_response(MockResponse::new(StatusCode::Unauthorized).build_json_body(|x| {
+              x.insert("error", error)
+               .insert("reason", reason)
+          }));
 
-        let doc_content = serde_json::builder::ObjectBuilder::new()
-                              .insert("field_1", 42)
-                              .insert("field_2", 17)
-                              .unwrap();
+        let doc_content = serde_json::builder::ObjectBuilder::new().unwrap();
 
         match db.create_document(&doc_content, Default::default()) {
             Err(Error::Unauthorized(ref error_response)) if error == error_response.error() &&
                                                             reason == error_response.reason() => (),
-            e @ _ => unexpected_result!(e),
+            x @ _ => unexpected_result!(x),
         }
     }
 
     #[test]
-    fn read_document_ok_basic() {
+    fn read_document_ok_with_default_options() {
 
         let db = new_mock_database("database_name");
-        db.push_response(ResponseBuilder::new(hyper::status::StatusCode::Ok)
-                             .with_json_body_builder(|x| {
-                                 x.insert("_id", "document_id")
-                                  .insert("_rev", "1-967a00dff5e02add41819138abb3284d")
-                                  .insert("field_1", 42)
-                                  .insert("field_2", "foo")
-                             })
-                             .unwrap());
+        db.transport.push_response(MockResponse::new(StatusCode::Ok).build_json_body(|x| {
+            x.insert("_id", "document_id")
+             .insert("_rev", "1-967a00dff5e02add41819138abb3284d")
+             .insert("field_1", 42)
+             .insert("field_2", "hello")
+        }));
 
-        db.read_document("document_id", Default::default()).unwrap();
+        let expected = DocumentBuilder::new("document_id",
+                                            Revision::parse("1-967a00dff5e02add41819138abb3284d")
+                                                .unwrap())
+                           .build_content(|x| {
+                               x.insert("field_1", 42)
+                                .insert("field_2", "hello")
+                           })
+                           .unwrap();
 
-        let expected_requests = {
-            vec![RequestBuilder::new(hyper::Get,
-                                     vec![String::from("database_name"),
-                                          String::from("document_id")])
-                     .with_accept_json()
-                     .unwrap()]
+        let doc = db.read_document("document_id", Default::default()).unwrap();
+        assert_eq!(expected, doc);
+
+        let expected = {
+            MockRequestMatcher::new()
+                .get(&["database_name", "document_id"], |x| x.with_accept_json())
         };
-
-        assert_eq!(expected_requests, db.extract_requests());
+        assert_eq!(expected, db.transport.extract_requests());
     }
 
     #[test]
@@ -291,17 +389,15 @@ mod tests {
         let db = new_mock_database("database_name");
         let error = "not_found";
         let reason = "missing";
-        db.push_response(ResponseBuilder::new(hyper::status::StatusCode::NotFound)
-                             .with_json_body_builder(|x| {
-                                 x.insert("error", error)
-                                  .insert("reason", reason)
-                             })
-                             .unwrap());
+        db.transport.push_response(MockResponse::new(StatusCode::NotFound).build_json_body(|x| {
+            x.insert("error", error)
+             .insert("reason", reason)
+        }));
 
         match db.read_document("document_id", Default::default()) {
             Err(Error::NotFound(ref error_response)) if error == error_response.error() &&
                                                         reason == error_response.reason() => (),
-            e @ _ => unexpected_result!(e),
+            x @ _ => unexpected_result!(x),
         }
     }
 
@@ -311,17 +407,154 @@ mod tests {
         let db = new_mock_database("database_name");
         let error = "unauthorized";
         let reason = "Authentication required.";
-        db.push_response(ResponseBuilder::new(hyper::status::StatusCode::Unauthorized)
-                             .with_json_body_builder(|x| {
-                                 x.insert("error", error)
-                                  .insert("reason", reason)
-                             })
-                             .unwrap());
+        db.transport
+          .push_response(MockResponse::new(StatusCode::Unauthorized).build_json_body(|x| {
+              x.insert("error", error)
+               .insert("reason", reason)
+          }));
 
         match db.read_document("document_id", Default::default()) {
             Err(Error::Unauthorized(ref error_response)) if error == error_response.error() &&
                                                             reason == error_response.reason() => (),
-            e @ _ => unexpected_result!(e),
+            x @ _ => unexpected_result!(x),
         }
+    }
+
+    #[test]
+    fn update_document_ok_basic() {
+
+        let db = new_mock_database("database_name");
+
+        let original_revision: Revision = "1-1234567890abcdef1234567890abcdef".parse().unwrap();
+
+        let doc = DocumentBuilder::new("document_id", original_revision.clone())
+                      .build_content(|x| {
+                          x.insert("field_1", 42)
+                           .insert("field_2", "hello")
+                      })
+                      .unwrap();
+
+        let new_revision: Revision = "2-fedcba0987654321fedcba0987654321".parse().unwrap();
+
+        db.transport.push_response(MockResponse::new(StatusCode::Created).build_json_body(|x| {
+            x.insert("ok", true)
+             .insert("id", "document_id")
+             .insert("rev", new_revision.to_string())
+        }));
+
+        let got = db.update_document(&doc, Default::default()).unwrap();
+        assert_eq!(new_revision, got);
+
+        let expected = {
+            MockRequestMatcher::new().put(&["database_name", "document_id"], |x| {
+                x.with_accept_json()
+                 .with_revision_query(&original_revision)
+                 .build_json_body(|x| {
+                     x.insert("field_1", 42)
+                      .insert("field_2", "hello")
+                 })
+            })
+        };
+
+        assert_eq!(expected, db.transport.extract_requests());
+    }
+
+    #[test]
+    fn update_document_nok_document_conflict() {
+
+        let db = new_mock_database("database_name");
+        let error = "conflict";
+        let reason = "Document update conflict.";
+        db.transport
+          .push_response(MockResponse::new(StatusCode::Conflict).build_json_body(|x| {
+              x.insert("error", error)
+               .insert("reason", reason)
+          }));
+
+        let doc = DocumentBuilder::new("document_id",
+                                       Revision::parse("42-1234567890abcdef1234567890abcdef")
+                                           .unwrap())
+                      .unwrap();
+
+        match db.update_document(&doc, Default::default()) {
+            Err(Error::DocumentConflict(ref error_response)) if error == error_response.error() &&
+                                                                reason ==
+                                                                error_response.reason() => (),
+            x @ _ => unexpected_result!(x),
+        }
+    }
+
+    #[test]
+    fn update_document_nok_unauthorized() {
+
+        let db = new_mock_database("database_name");
+        let error = "unauthorized";
+        let reason = "Authentication required.";
+        db.transport
+          .push_response(MockResponse::new(StatusCode::Unauthorized).build_json_body(|x| {
+              x.insert("error", error)
+               .insert("reason", reason)
+          }));
+
+        let doc = DocumentBuilder::new("document_id",
+                                       Revision::parse("42-1234567890abcdef1234567890abcdef")
+                                           .unwrap())
+                      .unwrap();
+
+        match db.update_document(&doc, Default::default()) {
+            Err(Error::Unauthorized(ref error_response)) if error == error_response.error() &&
+                                                            reason == error_response.reason() => (),
+            x @ _ => unexpected_result!(x),
+        }
+    }
+
+    #[test]
+    fn write_document_response_deserialize_ok_with_all_fields() {
+        let expected = WriteDocumentResponse {
+            doc_id: "foo".into(),
+            ok: true,
+            revision: "1-12345678123456781234567812345678".parse().unwrap(),
+        };
+        let source = serde_json::builder::ObjectBuilder::new()
+                         .insert("id", "foo")
+                         .insert("ok", true)
+                         .insert("rev", "1-12345678123456781234567812345678")
+                         .unwrap();
+        let source = serde_json::to_string(&source).unwrap();
+        let got = serde_json::from_str(&source).unwrap();
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn write_document_response_deserialize_nok_missing_id_field() {
+        let source = serde_json::builder::ObjectBuilder::new()
+                         .insert("ok", true)
+                         .insert("rev", "1-12345678123456781234567812345678")
+                         .unwrap();
+        let source = serde_json::to_string(&source).unwrap();
+        let got = serde_json::from_str::<WriteDocumentResponse>(&source);
+        expect_json_error_missing_field!(got, "id");
+    }
+
+    #[test]
+    fn write_document_response_deserialize_nok_missing_ok_field() {
+        let source = serde_json::builder::ObjectBuilder::new()
+                         .insert("id", "foo")
+                         .insert("rev", "1-12345678123456781234567812345678")
+                         .unwrap();
+        let source = serde_json::to_string(&source).unwrap();
+        let got = serde_json::from_str::<WriteDocumentResponse>(&source);
+        expect_json_error_missing_field!(got, "ok");
+    }
+
+    #[test]
+    fn write_document_response_deserialize_nok_missing_rev_field() {
+        let source = serde_json::builder::ObjectBuilder::new()
+                         .insert("id", "foo")
+                         .insert("ok", true)
+                         .unwrap();
+        let source = serde_json::to_string(&source).unwrap();
+        let got = serde_json::from_str::<WriteDocumentResponse>(&source);
+        expect_json_error_missing_field!(got, "rev");
     }
 }

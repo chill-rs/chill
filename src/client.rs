@@ -1,10 +1,10 @@
+use BasicDatabase;
 use CreateDatabaseOptions;
 use DatabaseName;
-use database::BasicDatabase;
 use Error;
 use hyper;
 use std;
-use transport::{HyperTransport, RequestBuilder, Transport};
+use transport::{HyperTransport, RequestOptions, Response, StatusCode, Transport};
 
 /// The `IntoUrl` trait applies to a type that is convertible into a URL.
 pub trait IntoUrl: hyper::client::IntoUrl {
@@ -33,13 +33,11 @@ impl<T: Transport> BasicClient<T> {
                               -> Result<(), Error>
         where D: Into<DatabaseName>
     {
-        use hyper::status::StatusCode;
+        // FIXME: Eliminate this temporary.
+        let db_name = String::from(db_name.into());
 
-        let request = RequestBuilder::new(hyper::method::Method::Put, vec![db_name.into()])
-                          .with_accept_json()
-                          .unwrap();
-
-        let response = try!(self.transport.send(request));
+        let response = try!(self.transport
+                                .put(&[&db_name], RequestOptions::new().with_accept_json()));
 
         match response.status_code() {
             StatusCode::Created => Ok(()),
@@ -59,43 +57,26 @@ mod tests {
 
     use DatabaseName;
     use Error;
-    use hyper;
     use std;
     use super::BasicClient;
-    use transport::{Request, RequestBuilder, Response, ResponseBuilder, MockTransport};
+    use transport::{MockRequestMatcher, MockResponse, MockTransport, StatusCode};
 
-    type MockClient = BasicClient<MockTransport>;
-
-    impl MockClient {
-        fn extract_requests(&self) -> Vec<Request> {
-            self.transport.extract_requests()
-        }
-
-        fn push_response(&self, response: Response) {
-            self.transport.push_response(response)
-        }
-    }
-
-    fn new_mock_client() -> MockClient {
-        MockClient { transport: std::sync::Arc::new(MockTransport::new()) }
+    fn new_mock_client() -> BasicClient<MockTransport> {
+        BasicClient { transport: std::sync::Arc::new(MockTransport::new()) }
     }
 
     #[test]
     fn create_database_ok() {
 
         let client = new_mock_client();
-        client.push_response(ResponseBuilder::new(hyper::status::StatusCode::Created).unwrap());
+        client.transport.push_response(MockResponse::new(StatusCode::Created)
+                                           .build_json_body(|x| x.insert("ok", true)));
 
         client.create_database("database_name", Default::default()).unwrap();
 
-        let expected_requests = {
-            vec![RequestBuilder::new(hyper::method::Method::Put,
-                                     vec![String::from("database_name")])
-                     .with_accept_json()
-                     .unwrap()]
-        };
+        let expected = MockRequestMatcher::new().put(&["database_name"], |x| x.with_accept_json());
+        assert_eq!(expected, client.transport.extract_requests());
 
-        assert_eq!(expected_requests, client.extract_requests());
     }
 
     #[test]
@@ -104,29 +85,19 @@ mod tests {
         let client = new_mock_client();
         let error = "file_exists";
         let reason = "The database could not be created, the file already exists.";
-        client.push_response(ResponseBuilder::new(hyper::status::StatusCode::PreconditionFailed)
-                                 .with_json_body_builder(|x| {
-                                     x.insert("error", error)
-                                      .insert("reason", reason)
-                                 })
-                                 .unwrap());
+        client.transport.push_response(MockResponse::new(StatusCode::PreconditionFailed)
+                                           .build_json_body(|x| {
+                                               x.insert("error", error)
+                                                .insert("reason", reason)
+                                           }));
 
         match client.create_database("database_name", Default::default()) {
             Err(Error::DatabaseExists(ref error_response)) if error == error_response.error() &&
                                                               reason == error_response.reason() => {
                 ()
             }
-            e @ _ => unexpected_result!(e),
+            x @ _ => unexpected_result!(x),
         }
-
-        let expected_requests = {
-            vec![RequestBuilder::new(hyper::method::Method::Put,
-                                     vec![String::from("database_name")])
-                     .with_accept_json()
-                     .unwrap()]
-        };
-
-        assert_eq!(expected_requests, client.extract_requests());
     }
 
     #[test]
@@ -135,33 +106,28 @@ mod tests {
         let client = new_mock_client();
         let error = "unauthorized";
         let reason = "Authentication required.";
-        client.push_response(ResponseBuilder::new(hyper::status::StatusCode::Unauthorized)
-                                 .with_json_body_builder(|x| {
-                                     x.insert("error", error)
-                                      .insert("reason", reason)
-                                 })
-                                 .unwrap());
+        client.transport
+              .push_response(MockResponse::new(StatusCode::Unauthorized).build_json_body(|x| {
+                  x.insert("error", error)
+                   .insert("reason", reason)
+              }));
 
         match client.create_database("database_name", Default::default()) {
             Err(Error::Unauthorized(ref error_response)) if error == error_response.error() &&
                                                             reason == error_response.reason() => (),
-            e @ _ => unexpected_result!(e),
+            x @ _ => unexpected_result!(x),
         }
-
-        let expected_requests = {
-            vec![RequestBuilder::new(hyper::method::Method::Put,
-                                     vec![String::from("database_name")])
-                     .with_accept_json()
-                     .unwrap()]
-        };
-
-        assert_eq!(expected_requests, client.extract_requests());
     }
 
     #[test]
     fn select_database() {
-        let client = new_mock_client();
-        let db = client.select_database("database_name");
+        let db = {
+            let client = new_mock_client();
+            let db = client.select_database("database_name");
+            assert_eq!(&DatabaseName::from("database_name"), db.name());
+            db
+        };
+
         assert_eq!(&DatabaseName::from("database_name"), db.name());
     }
 }
