@@ -81,6 +81,15 @@ impl MockTransport {
 impl Transport for MockTransport {
     type Response = MockResponse;
 
+    fn delete<'a, B>(&self,
+                     path: &[&str],
+                     options: RequestOptions<'a, B>)
+                     -> Result<Self::Response, Error>
+        where B: serde::Serialize
+    {
+        self.request(Method::Delete, path, options)
+    }
+
     fn get<'a, B>(&self,
                   path: &[&str],
                   options: RequestOptions<'a, B>)
@@ -182,6 +191,13 @@ pub struct MockRequestMatcher {
 impl MockRequestMatcher {
     pub fn new() -> Self {
         MockRequestMatcher { requests: Vec::new() }
+    }
+
+    pub fn delete<F>(mut self, path: &[&str], request_builder: F) -> Self
+        where F: FnOnce(MockRequestBuilder) -> MockRequestBuilder
+    {
+        self.requests.push(request_builder(MockRequestBuilder::new(Method::Delete, path)).unwrap());
+        self
     }
 
     pub fn get<F>(mut self, path: &[&str], request_builder: F) -> Self

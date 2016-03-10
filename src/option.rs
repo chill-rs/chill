@@ -24,6 +24,9 @@ impl CreateDocumentOptions {
 }
 
 #[derive(Debug, Default, PartialEq)]
+pub struct DeleteDocumentOptions;
+
+#[derive(Debug, Default, PartialEq)]
 pub struct ReadDocumentOptions;
 
 #[derive(Debug, Default, PartialEq)]

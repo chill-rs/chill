@@ -28,8 +28,8 @@ pub use client::{BasicClient, Client, IntoUrl};
 pub use database::{BasicDatabase, Database};
 pub use document::{Attachment, Document, SavedAttachment, UnsavedAttachment};
 pub use error::{Error, ErrorResponse};
-pub use option::{CreateDatabaseOptions, CreateDocumentOptions, ReadDocumentOptions,
-                 UpdateDocumentOptions};
+pub use option::{CreateDatabaseOptions, CreateDocumentOptions, DeleteDocumentOptions,
+                 ReadDocumentOptions, UpdateDocumentOptions};
 pub use path::{AttachmentName, DatabaseName, DesignDocumentName, DocumentId, LocalDocumentName,
                NormalDocumentName};
 pub use revision::Revision;

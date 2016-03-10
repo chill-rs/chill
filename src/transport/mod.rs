@@ -13,6 +13,12 @@ pub use self::testing::{MockRequestMatcher, MockResponse, MockTransport};
 pub trait Transport {
     type Response: Response;
 
+    fn delete<'a, B>(&self,
+                     path: &[&str],
+                     options: RequestOptions<'a, B>)
+                     -> Result<Self::Response, Error>
+        where B: serde::Serialize;
+
     fn get<'a, B>(&self,
                   path: &[&str],
                   options: RequestOptions<'a, B>)

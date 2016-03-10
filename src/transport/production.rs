@@ -105,6 +105,15 @@ impl HyperTransport {
 impl Transport for HyperTransport {
     type Response = HyperResponse;
 
+    fn delete<'a, B>(&self,
+                     path: &[&str],
+                     options: RequestOptions<'a, B>)
+                     -> Result<Self::Response, Error>
+        where B: serde::Serialize
+    {
+        self.request(Method::Delete, path, options)
+    }
+
     fn get<'a, B>(&self,
                   path: &[&str],
                   options: RequestOptions<'a, B>)

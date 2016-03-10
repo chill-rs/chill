@@ -179,3 +179,30 @@ fn update_document_ok() {
     assert_eq!(up_content, down_content);
     assert_eq!(&updated_rev, doc.revision());
 }
+
+#[test]
+fn delete_document_ok() {
+
+    let (_server, client) = make_server_and_client();
+    client.create_database("baseball", Default::default()).unwrap();
+    let db = client.select_database("baseball");
+
+    let up_content = serde_json::builder::ObjectBuilder::new()
+                         .insert("name", "Babe Ruth")
+                         .insert("nickname", "The Bambino")
+                         .unwrap();
+
+    let (doc_id, rev1) = db.create_document(&up_content, Default::default()).unwrap();
+
+    let _rev2 = db.delete_document(doc_id.clone(), &rev1, Default::default()).unwrap();
+
+    match db.read_document(doc_id.clone(), Default::default()) {
+        Err(chill::Error::NotFound(..)) => (),
+        x @ _ => {
+            panic!("Unexpected result: {:?}", x);
+        }
+    }
+
+    // FIXME: Check that _rev2 is valid. We need to be able to get a document at
+    // a specific revision to check this.
+}

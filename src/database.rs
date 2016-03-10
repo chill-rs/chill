@@ -1,5 +1,6 @@
 use CreateDocumentOptions;
 use DatabaseName;
+use DeleteDocumentOptions;
 use Document;
 use DocumentId;
 use Error;
@@ -120,6 +121,35 @@ impl<T: Transport> BasicDatabase<T> {
             }
 
             StatusCode::Conflict => Err(Error::document_conflict(response)),
+            StatusCode::NotFound => Err(Error::not_found(response)),
+            StatusCode::Unauthorized => Err(Error::unauthorized(response)),
+            _ => Err(Error::server_response(response)),
+        }
+    }
+
+    pub fn delete_document<D>(&self,
+                              doc_id: D,
+                              revision: &Revision,
+                              _options: DeleteDocumentOptions)
+                              -> Result<Revision, Error>
+        where D: Into<DocumentId>
+    {
+        let doc_id = String::from(doc_id.into());
+
+        let response = try!(self.transport.delete(&[&self.db_name, &doc_id],
+                                                  RequestOptions::new()
+                                                      .with_accept_json()
+                                                      .with_revision_query(revision)));
+
+        match response.status_code() {
+
+            StatusCode::Ok => {
+                let body: WriteDocumentResponse = try!(response.decode_json_body());
+                Ok(body.revision)
+            }
+
+            StatusCode::Conflict => Err(Error::document_conflict(response)),
+            StatusCode::NotFound => Err(Error::not_found(response)),
             StatusCode::Unauthorized => Err(Error::unauthorized(response)),
             _ => Err(Error::server_response(response)),
         }
@@ -485,6 +515,30 @@ mod tests {
     }
 
     #[test]
+    fn update_document_nok_not_found() {
+
+        let db = new_mock_database("database_name");
+        let error = "not_found";
+        let reason = "no_db_file";
+        db.transport
+          .push_response(MockResponse::new(StatusCode::NotFound).build_json_body(|x| {
+              x.insert("error", error)
+               .insert("reason", reason)
+          }));
+
+        let doc = DocumentBuilder::new("document_id",
+                                       Revision::parse("42-1234567890abcdef1234567890abcdef")
+                                           .unwrap())
+                      .unwrap();
+
+        match db.update_document(&doc, Default::default()) {
+            Err(Error::NotFound(ref error_response)) if error == error_response.error() &&
+                                                        reason == error_response.reason() => (),
+            x @ _ => unexpected_result!(x),
+        }
+    }
+
+    #[test]
     fn update_document_nok_unauthorized() {
 
         let db = new_mock_database("database_name");
@@ -502,6 +556,99 @@ mod tests {
                       .unwrap();
 
         match db.update_document(&doc, Default::default()) {
+            Err(Error::Unauthorized(ref error_response)) if error == error_response.error() &&
+                                                            reason == error_response.reason() => (),
+            x @ _ => unexpected_result!(x),
+        }
+    }
+
+    #[test]
+    fn delete_document_ok_basic() {
+
+        let db = new_mock_database("database_name");
+
+        let original_revision: Revision = "1-1234567890abcdef1234567890abcdef".parse().unwrap();
+        let new_revision: Revision = "2-fedcba0987654321fedcba0987654321".parse().unwrap();
+
+        db.transport.push_response(MockResponse::new(StatusCode::Ok).build_json_body(|x| {
+            x.insert("ok", true)
+             .insert("id", "document_id")
+             .insert("rev", new_revision.to_string())
+        }));
+
+        let got = db.delete_document("document_id", &original_revision, Default::default())
+                    .unwrap();
+        assert_eq!(new_revision, got);
+
+        let expected = {
+            MockRequestMatcher::new().delete(&["database_name", "document_id"], |x| {
+                x.with_accept_json()
+                 .with_revision_query(&original_revision)
+            })
+        };
+
+        assert_eq!(expected, db.transport.extract_requests());
+    }
+
+    #[test]
+    fn delete_document_nok_document_conflict() {
+
+        let db = new_mock_database("database_name");
+        let error = "conflict";
+        let reason = "Document update conflict.";
+        db.transport
+          .push_response(MockResponse::new(StatusCode::Conflict).build_json_body(|x| {
+              x.insert("error", error)
+               .insert("reason", reason)
+          }));
+
+        match db.delete_document("document_id",
+                                 &"1-1234567890abcdef1234567890abcdef".parse().unwrap(),
+                                 Default::default()) {
+            Err(Error::DocumentConflict(ref error_response)) if error == error_response.error() &&
+                                                                reason ==
+                                                                error_response.reason() => (),
+            x @ _ => unexpected_result!(x),
+        }
+    }
+
+    #[test]
+    fn delete_document_nok_not_found() {
+
+        let db = new_mock_database("database_name");
+        let error = "not_found";
+        let reason = "no_db_file";
+        db.transport
+          .push_response(MockResponse::new(StatusCode::Conflict).build_json_body(|x| {
+              x.insert("error", error)
+               .insert("reason", reason)
+          }));
+
+        match db.delete_document("document_id",
+                                 &"1-1234567890abcdef1234567890abcdef".parse().unwrap(),
+                                 Default::default()) {
+            Err(Error::DocumentConflict(ref error_response)) if error == error_response.error() &&
+                                                                reason ==
+                                                                error_response.reason() => (),
+            x @ _ => unexpected_result!(x),
+        }
+    }
+
+    #[test]
+    fn delete_document_nok_unauthorized() {
+
+        let db = new_mock_database("database_name");
+        let error = "unauthorized";
+        let reason = "Authentication required.";
+        db.transport
+          .push_response(MockResponse::new(StatusCode::Unauthorized).build_json_body(|x| {
+              x.insert("error", error)
+               .insert("reason", reason)
+          }));
+
+        match db.delete_document("document_id",
+                                 &"1-1234567890abcdef1234567890abcdef".parse().unwrap(),
+                                 Default::default()) {
             Err(Error::Unauthorized(ref error_response)) if error == error_response.error() &&
                                                             reason == error_response.reason() => (),
             x @ _ => unexpected_result!(x),
