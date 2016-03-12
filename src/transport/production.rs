@@ -19,17 +19,6 @@ impl HyperTransport {
             return Err(Error::UrlNotSchemeRelative);
         }
 
-        // Sometimes the URL has an empty final path component, which will lead
-        // to an empty path component (//) if we naively append path components
-        // to the URL. Remove any empty final component now.
-
-        {
-            let mut path = server_base_url.path_mut().unwrap();
-            if !path.is_empty() && path.last().unwrap().is_empty() {
-                path.pop();
-            }
-        }
-
         Ok(HyperTransport {
             server_base_url: server_base_url,
             hyper_client: hyper::Client::new(),
@@ -43,18 +32,7 @@ impl HyperTransport {
                       -> Result<<Self as Transport>::Response, Error>
         where B: serde::Serialize
     {
-        let uri = {
-            let mut u = self.server_base_url.clone();
-            u.path_mut().unwrap().extend(path.iter().map(|x| x.to_string()));
-            u.set_query_from_pairs({
-                let mut pairs = std::collections::HashMap::new();
-                if let Some(revision) = options.revision_query {
-                    pairs.insert("rev".to_string(), revision.to_string());
-                }
-                pairs
-            });
-            u
-        };
+        let uri = self.make_request_url(path, &options);
 
         let headers = {
             let mut h = hyper::header::Headers::new();
@@ -99,6 +77,40 @@ impl HyperTransport {
                 .map_err(|e| Error::Transport { kind: TransportErrorKind::Hyper(e) })
             }),
         })
+    }
+
+    fn make_request_url<'a, B>(&self, path: &[&str], options: &RequestOptions<'a, B>) -> url::Url
+        where B: serde::Serialize
+    {
+        let mut url = self.server_base_url.clone();
+
+        // The base URL may have an empty final path component, which will lead
+        // to an empty path component (//) if we naively append path components
+        // to the URL.
+        if !path.is_empty() && url.path().unwrap().last().map_or(false, |x| x.is_empty()) {
+            url.path_mut().unwrap().pop();
+        }
+
+        url.path_mut().unwrap().extend(path.iter().map(|x| {
+            let x = x.replace("%", "%25")
+                     .replace("/", "%2F");
+            url::percent_encoding::utf8_percent_encode(&x,
+                                                       url::percent_encoding::DEFAULT_ENCODE_SET)
+        }));
+
+        let query_pairs = {
+            let mut pairs = std::collections::HashMap::new();
+            if let Some(revision) = options.revision_query {
+                pairs.insert("rev".to_string(), revision.to_string());
+            }
+            pairs
+        };
+
+        if !query_pairs.is_empty() {
+            url.set_query_from_pairs(query_pairs);
+        }
+
+        url
     }
 }
 
@@ -170,27 +182,72 @@ impl Response for HyperResponse {
 #[cfg(test)]
 mod tests {
 
+    use Revision;
+    use transport::RequestOptions;
     use super::HyperTransport;
+    use url;
 
     #[test]
-    fn new_hyper_transport_sanitizes_base_url() {
-
-        let url = "http://example.com:5984".parse().unwrap();
-        let transport = HyperTransport::new(url).unwrap();
-        assert_eq!(Some(&[] as &[String]), transport.server_base_url.path());
-
+    fn make_request_url_empty() {
         let url = "http://example.com:5984/".parse().unwrap();
         let transport = HyperTransport::new(url).unwrap();
-        assert_eq!(Some(&[] as &[String]), transport.server_base_url.path());
+        let expected: url::Url = "http://example.com:5984/".parse().unwrap();
+        let got = transport.make_request_url(&[], &RequestOptions::<()>::default());
+        assert_eq!(expected, got);
+    }
 
+    #[test]
+    fn make_request_url_normal_path() {
+        let url = "http://example.com:5984/".parse().unwrap();
+        let transport = HyperTransport::new(url).unwrap();
+        let expected: url::Url = "http://example.com:5984/db/docid".parse().unwrap();
+        let got = transport.make_request_url(&["db", "docid"], &RequestOptions::<()>::default());
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn make_request_url_base_url_has_nonempty_path() {
         let url = "http://example.com:5984/foo".parse().unwrap();
         let transport = HyperTransport::new(url).unwrap();
-        assert_eq!(Some(&["foo".to_string()] as &[String]),
-                   transport.server_base_url.path());
+        let expected: url::Url = "http://example.com:5984/foo/db/docid".parse().unwrap();
+        let got = transport.make_request_url(&["db", "docid"], &RequestOptions::<()>::default());
+        assert_eq!(expected, got);
+    }
 
+    #[test]
+    fn make_request_url_base_url_has_nonempty_path_with_trailing_slash() {
         let url = "http://example.com:5984/foo/".parse().unwrap();
         let transport = HyperTransport::new(url).unwrap();
-        assert_eq!(Some(&["foo".to_string()] as &[String]),
-                   transport.server_base_url.path());
+        let expected: url::Url = "http://example.com:5984/foo/db/docid".parse().unwrap();
+        let got = transport.make_request_url(&["db", "docid"], &RequestOptions::<()>::default());
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn make_request_url_path_is_percent_encoded() {
+        let url = "http://example.com:5984/".parse().unwrap();
+        let transport = HyperTransport::new(url).unwrap();
+        let expected: url::Url = "http://example.com:5984/foo%2F%3F%23%20%25bar"
+                                     .parse()
+                                     .unwrap();
+        let got = transport.make_request_url(&["foo/?# %bar"], &RequestOptions::<()>::default());
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn make_request_url_with_revision_query() {
+        let url = "http://example.com:5984/".parse().unwrap();
+        let transport = HyperTransport::new(url).unwrap();
+        let expected: url::Url = "http://example.com:\
+                                  5984/db/doc?rev=42-1234567890abcdef1234567890abcdef"
+                                     .parse()
+                                     .unwrap();
+
+        let got = transport.make_request_url(&["db", "doc"], {
+            &RequestOptions::<()>::new()
+                 .with_revision_query(&Revision::parse("42-1234567890abcdef1234567890abcdef")
+                                           .unwrap())
+        });
+        assert_eq!(expected, got);
     }
 }
