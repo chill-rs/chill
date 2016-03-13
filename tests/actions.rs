@@ -1,6 +1,12 @@
 extern crate chill;
 extern crate serde_json;
 
+// FIXME: This function is needed because `AsRef<DatabaseSegment> for str` is
+// wrong.
+fn make_database_segment(db_name: &str) -> &chill::DatabaseSegment {
+    db_name.as_ref()
+}
+
 macro_rules! unexpected_result {
     ($result:expr) => {
         match $result {
@@ -19,15 +25,15 @@ fn make_server_and_client() -> (chill::testing::FakeServer, chill::Client) {
 #[test]
 fn create_database_ok() {
     let (_server, client) = make_server_and_client();
-    client.create_database("baseball", Default::default()).unwrap();
+    client.create_database("/baseball").run().unwrap();
     // FIXME: Verify that the database was created.
 }
 
 #[test]
 fn create_database_nok_database_exists() {
     let (_server, client) = make_server_and_client();
-    client.create_database("baseball", Default::default()).unwrap();
-    match client.create_database("baseball", Default::default()) {
+    client.create_database("/baseball").run().unwrap();
+    match client.create_database("/baseball").run() {
         Err(chill::Error::DatabaseExists(..)) => (),
         x @ _ => {
             panic!("Unexpected result: {:?}", x);
@@ -39,17 +45,16 @@ fn create_database_nok_database_exists() {
 fn create_document_ok_default_options() {
 
     let (_server, client) = make_server_and_client();
-    client.create_database("baseball", Default::default()).unwrap();
-    let db = client.select_database("baseball");
+    client.create_database("/baseball").run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
                          .insert("name", "Babe Ruth")
                          .insert("nickname", "The Bambino")
                          .unwrap();
 
-    let (doc_id, _rev) = db.create_document(&up_content, Default::default()).unwrap();
+    let (doc_id, _rev) = client.create_document("/baseball", &up_content).run().unwrap();
 
-    let doc = db.read_document(doc_id, Default::default()).unwrap();
+    let doc = client.read_document((make_database_segment("baseball"), doc_id)).run().unwrap();
     let down_content = doc.get_content().unwrap();
     assert_eq!(up_content, down_content);
 }
@@ -58,22 +63,20 @@ fn create_document_ok_default_options() {
 fn create_document_ok_with_document_id() {
 
     let (_server, client) = make_server_and_client();
-    client.create_database("baseball", Default::default()).unwrap();
-    let db = client.select_database("baseball");
+    client.create_database("/baseball").run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
                          .insert("name", "Babe Ruth")
                          .insert("nickname", "The Bambino")
                          .unwrap();
 
-    let (doc_id, _rev) = db.create_document(&up_content,
-                                            chill::CreateDocumentOptions::new()
-                                                .with_document_id("babe_ruth"))
-                           .unwrap();
-
+    let (doc_id, _rev) = client.create_document("/baseball", &up_content)
+                               .with_document_id(&"babe_ruth")
+                               .run()
+                               .unwrap();
     assert_eq!(chill::DocumentId::from("babe_ruth"), doc_id);
 
-    let doc = db.read_document(doc_id, Default::default()).unwrap();
+    let doc = client.read_document((make_database_segment("baseball"), doc_id)).run().unwrap();
     let down_content = doc.get_content().unwrap();
     assert_eq!(up_content, down_content);
 }
@@ -82,18 +85,16 @@ fn create_document_ok_with_document_id() {
 fn create_document_nok_document_conflict() {
 
     let (_server, client) = make_server_and_client();
-    client.create_database("baseball", Default::default()).unwrap();
-    let db = client.select_database("baseball");
+    client.create_database("/baseball").run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
                          .insert("name", "Babe Ruth")
                          .insert("nickname", "The Bambino")
                          .unwrap();
 
-    let (doc_id, _rev) = db.create_document(&up_content, Default::default()).unwrap();
+    let (doc_id, _rev) = client.create_document("/baseball", &up_content).run().unwrap();
 
-    match db.create_document(&up_content,
-                             chill::CreateDocumentOptions::new().with_document_id(doc_id)) {
+    match client.create_document("/baseball", &up_content).with_document_id(&doc_id).run() {
         Err(chill::Error::DocumentConflict(..)) => (),
         x @ _ => unexpected_result!(x),
     }
@@ -109,17 +110,16 @@ fn create_document_nok_document_conflict() {
 fn read_document_ok_default_options() {
 
     let (_server, client) = make_server_and_client();
-    client.create_database("baseball", Default::default()).unwrap();
-    let db = client.select_database("baseball");
+    client.create_database("/baseball").run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
                          .insert("name", "Babe Ruth")
                          .insert("nickname", "The Bambino")
                          .unwrap();
 
-    let (doc_id, _rev) = db.create_document(&up_content, Default::default()).unwrap();
+    let (doc_id, _rev) = client.create_document("/baseball", &up_content).run().unwrap();
 
-    let doc = db.read_document(doc_id, Default::default()).unwrap();
+    let doc = client.read_document((make_database_segment("baseball"), doc_id)).run().unwrap();
     let down_content = doc.get_content().unwrap();
     assert_eq!(up_content, down_content);
 }
@@ -128,10 +128,9 @@ fn read_document_ok_default_options() {
 fn read_document_nok_not_found() {
 
     let (_server, client) = make_server_and_client();
-    client.create_database("baseball", Default::default()).unwrap();
-    let db = client.select_database("baseball");
+    client.create_database("/baseball").run().unwrap();
 
-    match db.read_document("babe_ruth", Default::default()) {
+    match client.read_document("/baseball/babe_ruth").run() {
         Err(chill::Error::NotFound(..)) => (),
         x @ _ => unexpected_result!(x),
     }
@@ -147,17 +146,16 @@ fn read_document_nok_not_found() {
 fn update_document_ok() {
 
     let (_server, client) = make_server_and_client();
-    client.create_database("baseball", Default::default()).unwrap();
-    let db = client.select_database("baseball");
+    client.create_database("/baseball").run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
                          .insert("name", "Babe Ruth")
                          .insert("nickname", "The Bambino")
                          .unwrap();
 
-    let (doc_id, _rev) = db.create_document(&up_content, Default::default()).unwrap();
+    let (doc_id, _rev) = client.create_document("/baseball", &up_content).run().unwrap();
 
-    let mut doc = db.read_document(doc_id.clone(), Default::default()).unwrap();
+    let mut doc = client.read_document((make_database_segment("baseball"), doc_id)).run().unwrap();
 
     let up_content = match doc.get_content::<serde_json::Value>().unwrap() {
         serde_json::Value::Object(mut fields) => {
@@ -172,9 +170,10 @@ fn update_document_ok() {
 
     doc.set_content(&up_content).unwrap();
 
-    let updated_rev = db.update_document(&doc, Default::default()).unwrap();
+    let updated_rev = client.update_document("/baseball", &doc).run().unwrap();
 
-    let doc = db.read_document(doc_id, Default::default()).unwrap();
+    let doc_id = doc.id().clone(); // FIXME: Another kluge for AsRef badness.
+    let doc = client.read_document((make_database_segment("baseball"), doc_id)).run().unwrap();
     let down_content: serde_json::Value = doc.get_content().unwrap();
     assert_eq!(up_content, down_content);
     assert_eq!(&updated_rev, doc.revision());
@@ -184,19 +183,21 @@ fn update_document_ok() {
 fn delete_document_ok() {
 
     let (_server, client) = make_server_and_client();
-    client.create_database("baseball", Default::default()).unwrap();
-    let db = client.select_database("baseball");
+    client.create_database("/baseball").run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
                          .insert("name", "Babe Ruth")
                          .insert("nickname", "The Bambino")
                          .unwrap();
 
-    let (doc_id, rev1) = db.create_document(&up_content, Default::default()).unwrap();
+    let (doc_id, rev1) = client.create_document("/baseball", &up_content).run().unwrap();
 
-    let _rev2 = db.delete_document(doc_id.clone(), &rev1, Default::default()).unwrap();
+    // FIXME: The clone call is needed because AsRef as bad.
+    let _rev2 = client.delete_document((make_database_segment("baseball"), doc_id.clone()), &rev1)
+                      .run()
+                      .unwrap();
 
-    match db.read_document(doc_id.clone(), Default::default()) {
+    match client.read_document((make_database_segment("baseball"), doc_id)).run() {
         Err(chill::Error::NotFound(..)) => (),
         x @ _ => {
             panic!("Unexpected result: {:?}", x);

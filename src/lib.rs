@@ -14,22 +14,18 @@ extern crate uuid;
 mod test_macro;
 
 mod client;
-mod database;
 mod document;
 mod error;
-mod option;
 mod path;
 mod revision;
 mod transport;
 
+pub mod action;
 pub mod testing;
 
 pub use client::{BasicClient, Client, IntoUrl};
-pub use database::{BasicDatabase, Database};
 pub use document::{Attachment, Document, SavedAttachment, UnsavedAttachment};
 pub use error::{Error, ErrorResponse};
-pub use option::{CreateDatabaseOptions, CreateDocumentOptions, DeleteDocumentOptions,
-                 ReadDocumentOptions, UpdateDocumentOptions};
-pub use path::{AttachmentName, DatabaseName, DesignDocumentName, DocumentId, LocalDocumentName,
-               NormalDocumentName};
+pub use path::{DatabaseName, DatabasePath, DatabaseSegment, DocumentId, DocumentPath,
+               DocumentSegment};
 pub use revision::Revision;

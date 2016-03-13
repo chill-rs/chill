@@ -49,6 +49,9 @@ pub enum Error {
     NotFound(ErrorResponse),
 
     #[doc(hidden)]
+    PathParse(PathParseErrorKind),
+
+    #[doc(hidden)]
     ResponseNotJson(Option<mime::Mime>),
 
     #[doc(hidden)]
@@ -145,6 +148,7 @@ impl std::error::Error for Error {
             &JsonEncode { .. } => "An error occurred while encoding JSON",
             &Mock { .. } => "A error occurred while test-mocking",
             &NotFound(..) => "The resource cannot be found",
+            &PathParse(..) => "The path is badly formatted",
             &ResponseNotJson(Some(..)) => "The response has non-JSON content",
             &ResponseNotJson(None) => "The response content has no type",
             &RevisionParse { .. } => "The revision is badly formatted",
@@ -177,6 +181,7 @@ impl std::error::Error for Error {
             &JsonEncode { ref cause } => Some(cause),
             &Mock { .. } => None,
             &NotFound(..) => None,
+            &PathParse(ref kind) => kind.cause(),
             &ResponseNotJson(..) => None,
             &RevisionParse { ref kind } => kind.cause(),
             &ServerResponse { .. } => None,
@@ -205,6 +210,7 @@ impl std::fmt::Display for Error {
             &JsonEncode { ref cause } => write!(f, "{}: {}", description, cause),
             &Mock { ref extra_description } => write!(f, "{}: {}", description, extra_description),
             &NotFound(ref error_response) => write!(f, "{}: {}", description, error_response),
+            &PathParse(ref kind) => write!(f, "{}: {}", description, kind),
             &ResponseNotJson(Some(ref content_type)) => {
                 write!(f, "{}: Content type is {}", description, content_type)
             }
@@ -225,6 +231,34 @@ impl std::fmt::Display for Error {
             &Unauthorized(ref error_response) => write!(f, "{}: {}", description, error_response),
             &UrlNotSchemeRelative => write!(f, "{}", description),
             &UrlParse { ref cause } => write!(f, "{}: {}", description, cause),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum PathParseErrorKind {
+    EmptySegment,
+    NoLeadingSlash,
+    TooFewSegments,
+    TooManySegments,
+    TrailingSlash,
+}
+
+impl PathParseErrorKind {
+    fn cause(&self) -> Option<&std::error::Error> {
+        None
+    }
+}
+
+impl std::fmt::Display for PathParseErrorKind {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        use self::PathParseErrorKind::*;
+        match self {
+            &EmptySegment => write!(formatter, "Path segment is empty"),
+            &NoLeadingSlash => write!(formatter, "Path does not begin with a slash"),
+            &TooFewSegments => write!(formatter, "Too few path segments"),
+            &TooManySegments => write!(formatter, "Too many path segments"),
+            &TrailingSlash => write!(formatter, "Path ends with a slash"),
         }
     }
 }
