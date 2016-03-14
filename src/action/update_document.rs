@@ -2,36 +2,31 @@ use Document;
 use DocumentPath;
 use document::WriteDocumentResponse;
 use Error;
-use IntoDatabasePath;
 use Revision;
 use transport::{RequestOptions, Response, StatusCode, Transport};
 
-pub struct UpdateDocument<'a, P, T>
-    where P: IntoDatabasePath,
-          T: Transport + 'a
+pub struct UpdateDocument<'a, T>
+    where T: Transport + 'a
 {
     transport: &'a T,
-    db_path: P,
     doc: &'a Document,
 }
 
-impl<'a, P, T> UpdateDocument<'a, P, T>
-    where P: IntoDatabasePath,
-          T: Transport + 'a
+impl<'a, T> UpdateDocument<'a, T>
+    where T: Transport + 'a
 {
     #[doc(hidden)]
-    pub fn new(transport: &'a T, db_path: P, doc: &'a Document) -> Self {
+    pub fn new(transport: &'a T, doc: &'a Document) -> Self {
         UpdateDocument {
             transport: transport,
-            db_path: db_path,
             doc: doc,
         }
     }
 
     pub fn run(self) -> Result<Revision, Error> {
 
-        let db_path = try!(self.db_path.into_database_path());
-        let doc_path = DocumentPath::new_from_database_path_and_document_id(db_path,
+        let db_name = self.doc.database_name().clone();
+        let doc_path = DocumentPath::new_from_database_name_and_document_id(db_name,
                                                                             self.doc.id().clone());
 
         let response = try!(self.transport
@@ -72,7 +67,7 @@ mod tests {
 
         let original_revision: Revision = "1-1234567890abcdef1234567890abcdef".parse().unwrap();
 
-        let doc = DocumentBuilder::new("document_id", original_revision.clone())
+        let doc = DocumentBuilder::new("/database_name/document_id", original_revision.clone())
                       .build_content(|x| {
                           x.insert("field_1", 42)
                            .insert("field_2", "hello")
@@ -87,7 +82,7 @@ mod tests {
              .insert("rev", new_revision.to_string())
         }));
 
-        let got = UpdateDocument::new(&transport, "/database_name", &doc).run().unwrap();
+        let got = UpdateDocument::new(&transport, &doc).run().unwrap();
         assert_eq!(new_revision, got);
 
         let expected = {
@@ -115,12 +110,12 @@ mod tests {
              .insert("reason", reason)
         }));
 
-        let doc = DocumentBuilder::new("document_id",
+        let doc = DocumentBuilder::new("/database_name/document_id",
                                        Revision::parse("42-1234567890abcdef1234567890abcdef")
                                            .unwrap())
                       .unwrap();
 
-        match UpdateDocument::new(&transport, "/database_name", &doc).run() {
+        match UpdateDocument::new(&transport, &doc).run() {
             Err(Error::DocumentConflict(ref error_response)) if error == error_response.error() &&
                                                                 reason ==
                                                                 error_response.reason() => (),
@@ -139,12 +134,12 @@ mod tests {
              .insert("reason", reason)
         }));
 
-        let doc = DocumentBuilder::new("document_id",
+        let doc = DocumentBuilder::new("/database_name/document_id",
                                        Revision::parse("42-1234567890abcdef1234567890abcdef")
                                            .unwrap())
                       .unwrap();
 
-        match UpdateDocument::new(&transport, "/database_name", &doc).run() {
+        match UpdateDocument::new(&transport, &doc).run() {
             Err(Error::NotFound(ref error_response)) if error == error_response.error() &&
                                                         reason == error_response.reason() => (),
             x @ _ => unexpected_result!(x),
@@ -162,12 +157,12 @@ mod tests {
              .insert("reason", reason)
         }));
 
-        let doc = DocumentBuilder::new("document_id",
+        let doc = DocumentBuilder::new("/database_name/document_id",
                                        Revision::parse("42-1234567890abcdef1234567890abcdef")
                                            .unwrap())
                       .unwrap();
 
-        match UpdateDocument::new(&transport, "/database_name", &doc).run() {
+        match UpdateDocument::new(&transport, &doc).run() {
             Err(Error::Unauthorized(ref error_response)) if error == error_response.error() &&
                                                             reason == error_response.reason() => (),
             x @ _ => unexpected_result!(x),

@@ -172,7 +172,7 @@ fn update_document_ok() {
 
     doc.set_content(&up_content).unwrap();
 
-    let updated_rev = client.update_document("/baseball", &doc).run().unwrap();
+    let updated_rev = client.update_document(&doc).run().unwrap();
 
     let doc = client.read_document(("/baseball", doc.id().clone()))
                     .run()

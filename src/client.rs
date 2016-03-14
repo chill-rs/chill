@@ -51,15 +51,8 @@ impl<T: Transport> BasicClient<T> {
         action::ReadDocument::new(&self.transport, doc_path)
     }
 
-    // FIXME: Should we store the database name in the document so that it
-    // needn't be passed in as an argument here?
-    pub fn update_document<'a, P>(&'a self,
-                                  db_path: P,
-                                  doc: &'a Document)
-                                  -> action::UpdateDocument<'a, P, T>
-        where P: IntoDatabasePath
-    {
-        action::UpdateDocument::new(&self.transport, db_path, doc)
+    pub fn update_document<'a>(&'a self, doc: &'a Document) -> action::UpdateDocument<'a, T> {
+        action::UpdateDocument::new(&self.transport, doc)
     }
 
     pub fn delete_document<'a, P>(&'a self,

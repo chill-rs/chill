@@ -89,7 +89,7 @@ mod tests {
     use transport::{MockRequestMatcher, MockResponse, MockTransport, StatusCode};
 
     #[test]
-    fn create_document_ok_with_default_options() {
+    fn create_document_ok_basic() {
 
         let transport = MockTransport::new();
         transport.push_response(MockResponse::new(StatusCode::Created).build_json_body(|x| {

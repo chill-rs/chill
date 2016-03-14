@@ -302,8 +302,28 @@ impl DocumentPath {
         }
     }
 
-    #[cfg(test)]
-    fn parse(path: &str) -> Result<Self, Error> {
+    #[doc(hidden)]
+    pub fn new_from_database_name_and_document_id(db_name: DatabaseName,
+                                                  doc_id: DocumentId)
+                                                  -> Self {
+        DocumentPath {
+            db_name: db_name,
+            doc_id: doc_id,
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn database_name(&self) -> &DatabaseName {
+        &self.db_name
+    }
+
+    #[doc(hidden)]
+    pub fn document_id(&self) -> &DocumentId {
+        &self.doc_id
+    }
+
+    #[doc(hidden)]
+    pub fn parse(path: &str) -> Result<Self, Error> {
         path.parse()
     }
 

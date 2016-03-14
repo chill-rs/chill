@@ -1,6 +1,10 @@
 use base64;
+use DatabaseName;
 use DocumentId;
+use DocumentPath;
 use Error;
+#[cfg(test)]
+use IntoDocumentPath;
 use mime;
 use Revision;
 use serde;
@@ -12,7 +16,7 @@ type AttachmentName = String;
 
 #[derive(Debug, PartialEq)]
 pub struct Document {
-    doc_id: DocumentId,
+    doc_path: DocumentPath,
     revision: Revision,
     deleted: bool,
     attachments: std::collections::HashMap<AttachmentName, Attachment>,
@@ -20,8 +24,24 @@ pub struct Document {
 }
 
 impl Document {
+    #[doc(hidden)]
+    pub fn new_from_decoded(db_name: DatabaseName, doc: JsonDecodableDocument) -> Self {
+        Document {
+            doc_path: DocumentPath::new_from_database_name_and_document_id(db_name, doc.doc_id),
+            revision: doc.revision,
+            deleted: doc.deleted,
+            attachments: doc.attachments,
+            content: doc.content,
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn database_name(&self) -> &DatabaseName {
+        self.doc_path.database_name()
+    }
+
     pub fn id(&self) -> &DocumentId {
-        &self.doc_id
+        self.doc_path.document_id()
     }
 
     pub fn revision(&self) -> &Revision {
@@ -73,7 +93,19 @@ impl serde::Serialize for Document {
     }
 }
 
-impl serde::Deserialize for Document {
+// JsonDecodableDocument is necessary because the Document type is not
+// decodable. It's not decodable because it requires a database name, which is
+// not known at decode-time.
+#[derive(Debug, PartialEq)]
+pub struct JsonDecodableDocument {
+    doc_id: DocumentId,
+    revision: Revision,
+    deleted: bool,
+    attachments: std::collections::HashMap<AttachmentName, Attachment>,
+    content: serde_json::Value,
+}
+
+impl serde::Deserialize for JsonDecodableDocument {
     fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
         where D: serde::Deserializer
     {
@@ -98,10 +130,10 @@ impl serde::Deserialize for Document {
                         where E: serde::de::Error
                     {
                         match value {
+                            "_attachments" => Ok(Field::Attachments),
                             "_deleted" => Ok(Field::Deleted),
                             "_id" => Ok(Field::Id),
                             "_rev" => Ok(Field::Rev),
-                            "_attachments" => Ok(Field::Attachments),
                             _ => Ok(Field::Content(value.to_string())),
                         }
                     }
@@ -114,7 +146,7 @@ impl serde::Deserialize for Document {
         struct Visitor;
 
         impl serde::de::Visitor for Visitor {
-            type Value = Document;
+            type Value = JsonDecodableDocument;
 
             fn visit_map<V>(&mut self, mut visitor: V) -> Result<Self::Value, V::Error>
                 where V: serde::de::MapVisitor
@@ -151,7 +183,7 @@ impl serde::Deserialize for Document {
 
                 try!(visitor.end());
 
-                Ok(Document {
+                Ok(JsonDecodableDocument {
                     doc_id: match id {
                         Some(x) => x,
                         None => try!(visitor.missing_field("_id")),
@@ -168,7 +200,7 @@ impl serde::Deserialize for Document {
         }
 
         static FIELDS: &'static [&'static str] = &["_attachments", "_deleted", "_id", "_rev"];
-        deserializer.deserialize_struct("Document", FIELDS, Visitor)
+        deserializer.deserialize_struct("JsonDecodableDocument", FIELDS, Visitor)
     }
 }
 
@@ -526,9 +558,11 @@ pub struct DocumentBuilder(Document);
 
 #[cfg(test)]
 impl DocumentBuilder {
-    pub fn new<D: Into<DocumentId>>(doc_id: D, revision: Revision) -> Self {
+    pub fn new<P>(doc_path: P, revision: Revision) -> Self
+        where P: IntoDocumentPath
+    {
         DocumentBuilder(Document {
-            doc_id: doc_id.into(),
+            doc_path: doc_path.into_document_path().unwrap(),
             revision: revision,
             deleted: false,
             attachments: std::collections::HashMap::new(),
@@ -655,6 +689,7 @@ mod tests {
 
     use base64;
     use DocumentId;
+    use DocumentPath;
     use Error;
     use Revision;
     use serde_json;
@@ -672,7 +707,7 @@ mod tests {
                           .unwrap();
 
         let doc = Document {
-            doc_id: DocumentId::from("document_id"),
+            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
             revision: "1-1234567890abcdef1234567890abcdef".parse().unwrap(),
             deleted: false,
             attachments: std::collections::HashMap::new(),
@@ -690,7 +725,7 @@ mod tests {
         let content = serde_json::builder::ObjectBuilder::new().unwrap();
 
         let doc = Document {
-            doc_id: DocumentId::from("document_id"),
+            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
             revision: "1-1234567890abcdef1234567890abcdef".parse().unwrap(),
             deleted: true,
             attachments: std::collections::HashMap::new(),
@@ -706,7 +741,7 @@ mod tests {
     fn document_get_content_nok_decode_error() {
 
         let doc = Document {
-            doc_id: DocumentId::from("document_id"),
+            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
             revision: "1-1234567890abcdef1234567890abcdef".parse().unwrap(),
             deleted: false,
             attachments: std::collections::HashMap::new(),
@@ -735,7 +770,7 @@ mod tests {
     fn document_serialize_empty() {
 
         let document = Document {
-            doc_id: DocumentId::from("document_id"),
+            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
             revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
             deleted: true, // This value should have no effect.
             attachments: std::collections::HashMap::new(),
@@ -752,7 +787,7 @@ mod tests {
     fn document_serialize_with_content_and_attachments() {
 
         let document = Document {
-            doc_id: DocumentId::from("document_id"),
+            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
             revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
             deleted: true, // This value should have no effect.
             attachments: {
@@ -802,9 +837,9 @@ mod tests {
     }
 
     #[test]
-    fn document_deserialize_ok_as_minimum() {
+    fn json_decodable_document_deserialize_ok_as_minimum() {
 
-        let expected = Document {
+        let expected = JsonDecodableDocument {
             doc_id: DocumentId::from("document_id"),
             revision: "42-1234567890abcdef1234567890abcdef".parse().unwrap(),
             deleted: false,
@@ -823,9 +858,9 @@ mod tests {
     }
 
     #[test]
-    fn document_deserialize_ok_as_deleted() {
+    fn json_decodable_document_deserialize_ok_as_deleted() {
 
-        let expected = Document {
+        let expected = JsonDecodableDocument {
             doc_id: DocumentId::from("document_id"),
             revision: "42-1234567890abcdef1234567890abcdef".parse().unwrap(),
             deleted: true,
@@ -845,9 +880,9 @@ mod tests {
     }
 
     #[test]
-    fn document_deserialize_ok_with_content() {
+    fn json_decodable_document_deserialize_ok_with_content() {
 
-        let expected = Document {
+        let expected = JsonDecodableDocument {
             doc_id: DocumentId::from("document_id"),
             revision: "42-1234567890abcdef1234567890abcdef".parse().unwrap(),
             deleted: false,
@@ -871,9 +906,9 @@ mod tests {
     }
 
     #[test]
-    fn document_deserialize_ok_with_attachments() {
+    fn json_decodable_document_deserialize_ok_with_attachments() {
 
-        let expected = Document {
+        let expected = JsonDecodableDocument {
             doc_id: DocumentId::from("document_id"),
             revision: "42-1234567890abcdef1234567890abcdef".parse().unwrap(),
             deleted: false,
@@ -912,26 +947,26 @@ mod tests {
     }
 
     #[test]
-    fn document_deserialize_nok_missing_id() {
+    fn json_decodable_document_deserialize_nok_missing_id() {
 
         let source = serde_json::builder::ObjectBuilder::new()
                          .insert("_rev", "42-1234567890abcdef1234567890abcdef")
                          .unwrap();
 
         let source = serde_json::to_string(&source).unwrap();
-        let got = serde_json::from_str::<Document>(&source);
+        let got = serde_json::from_str::<JsonDecodableDocument>(&source);
         expect_json_error_missing_field!(got, "_id");
     }
 
     #[test]
-    fn document_deserialize_nok_missing_rev() {
+    fn json_decodable_document_deserialize_nok_missing_rev() {
 
         let source = serde_json::builder::ObjectBuilder::new()
                          .insert("_id", "document_id")
                          .unwrap();
 
         let source = serde_json::to_string(&source).unwrap();
-        let got = serde_json::from_str::<Document>(&source);
+        let got = serde_json::from_str::<JsonDecodableDocument>(&source);
         expect_json_error_missing_field!(got, "_rev");
     }
 

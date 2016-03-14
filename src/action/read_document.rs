@@ -1,4 +1,5 @@
 use Document;
+use document::JsonDecodableDocument;
 use Error;
 use IntoDocumentPath;
 use transport::{RequestOptions, Response, StatusCode, Transport};
@@ -31,7 +32,11 @@ impl<'a, P, T> ReadDocument<'a, P, T>
                                 .get(doc_path.iter(), RequestOptions::new().with_accept_json()));
 
         match response.status_code() {
-            StatusCode::Ok => response.decode_json_body(),
+            StatusCode::Ok => {
+                let decoded_doc: JsonDecodableDocument = try!(response.decode_json_body());
+                // FIXME: Eliminate the database name temporary.
+                Ok(Document::new_from_decoded(doc_path.database_name().clone(), decoded_doc))
+            }
             StatusCode::NotFound => Err(Error::not_found(response)),
             StatusCode::Unauthorized => Err(Error::unauthorized(response)),
             _ => Err(Error::server_response(response)),
@@ -49,7 +54,7 @@ mod tests {
     use transport::{MockRequestMatcher, MockResponse, MockTransport, StatusCode};
 
     #[test]
-    fn read_document_ok_with_default_options() {
+    fn read_document_ok_basic() {
 
         let transport = MockTransport::new();
         transport.push_response(MockResponse::new(StatusCode::Ok).build_json_body(|x| {
@@ -59,7 +64,7 @@ mod tests {
              .insert("field_2", "hello")
         }));
 
-        let expected = DocumentBuilder::new("document_id",
+        let expected = DocumentBuilder::new("/database_name/document_id",
                                             Revision::parse("1-967a00dff5e02add41819138abb3284d")
                                                 .unwrap())
                            .build_content(|x| {
