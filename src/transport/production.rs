@@ -25,12 +25,13 @@ impl HyperTransport {
         })
     }
 
-    fn request<'a, B>(&self,
-                      method: Method,
-                      path: &[&str],
-                      options: RequestOptions<'a, B>)
-                      -> Result<<Self as Transport>::Response, Error>
-        where B: serde::Serialize
+    fn request<'a, B, P>(&self,
+                         method: Method,
+                         path: P,
+                         options: RequestOptions<'a, B>)
+                         -> Result<<Self as Transport>::Response, Error>
+        where B: serde::Serialize,
+              P: IntoIterator<Item = &'a str>
     {
         let uri = self.make_request_url(path, &options);
 
@@ -79,10 +80,15 @@ impl HyperTransport {
         })
     }
 
-    fn make_request_url<'a, B>(&self, path: &[&str], options: &RequestOptions<'a, B>) -> url::Url
-        where B: serde::Serialize
+    fn make_request_url<'a, B, P>(&self, path: P, options: &RequestOptions<'a, B>) -> url::Url
+        where B: serde::Serialize,
+              P: IntoIterator<Item = &'a str>
     {
         let mut url = self.server_base_url.clone();
+
+        // FIXME: Eliminate this temporary vector.
+
+        let path = path.into_iter().collect::<Vec<_>>();
 
         // The base URL may have an empty final path component, which will lead
         // to an empty path component (//) if we naively append path components
@@ -117,38 +123,42 @@ impl HyperTransport {
 impl Transport for HyperTransport {
     type Response = HyperResponse;
 
-    fn delete<'a, B>(&self,
-                     path: &[&str],
-                     options: RequestOptions<'a, B>)
-                     -> Result<Self::Response, Error>
-        where B: serde::Serialize
+    fn delete<'a, B, P>(&self,
+                        path: P,
+                        options: RequestOptions<'a, B>)
+                        -> Result<Self::Response, Error>
+        where B: serde::Serialize,
+              P: IntoIterator<Item = &'a str>
     {
         self.request(Method::Delete, path, options)
     }
 
-    fn get<'a, B>(&self,
-                  path: &[&str],
-                  options: RequestOptions<'a, B>)
-                  -> Result<Self::Response, Error>
-        where B: serde::Serialize
+    fn get<'a, B, P>(&self,
+                     path: P,
+                     options: RequestOptions<'a, B>)
+                     -> Result<Self::Response, Error>
+        where B: serde::Serialize,
+              P: IntoIterator<Item = &'a str>
     {
         self.request(Method::Get, path, options)
     }
 
-    fn post<'a, B>(&self,
-                   path: &[&str],
-                   options: RequestOptions<'a, B>)
-                   -> Result<Self::Response, Error>
-        where B: serde::Serialize
+    fn post<'a, B, P>(&self,
+                      path: P,
+                      options: RequestOptions<'a, B>)
+                      -> Result<Self::Response, Error>
+        where B: serde::Serialize,
+              P: IntoIterator<Item = &'a str>
     {
         self.request(Method::Post, path, options)
     }
 
-    fn put<'a, B>(&self,
-                  path: &[&str],
-                  options: RequestOptions<'a, B>)
-                  -> Result<Self::Response, Error>
-        where B: serde::Serialize
+    fn put<'a, B, P>(&self,
+                     path: P,
+                     options: RequestOptions<'a, B>)
+                     -> Result<Self::Response, Error>
+        where B: serde::Serialize,
+              P: IntoIterator<Item = &'a str>
     {
         self.request(Method::Put, path, options)
     }
@@ -192,7 +202,7 @@ mod tests {
         let url = "http://example.com:5984/".parse().unwrap();
         let transport = HyperTransport::new(url).unwrap();
         let expected: url::Url = "http://example.com:5984/".parse().unwrap();
-        let got = transport.make_request_url(&[], &RequestOptions::<()>::default());
+        let got = transport.make_request_url(vec![], &RequestOptions::<()>::default());
         assert_eq!(expected, got);
     }
 
@@ -201,7 +211,7 @@ mod tests {
         let url = "http://example.com:5984/".parse().unwrap();
         let transport = HyperTransport::new(url).unwrap();
         let expected: url::Url = "http://example.com:5984/db/docid".parse().unwrap();
-        let got = transport.make_request_url(&["db", "docid"], &RequestOptions::<()>::default());
+        let got = transport.make_request_url(vec!["db", "docid"], &RequestOptions::<()>::default());
         assert_eq!(expected, got);
     }
 
@@ -210,7 +220,7 @@ mod tests {
         let url = "http://example.com:5984/foo".parse().unwrap();
         let transport = HyperTransport::new(url).unwrap();
         let expected: url::Url = "http://example.com:5984/foo/db/docid".parse().unwrap();
-        let got = transport.make_request_url(&["db", "docid"], &RequestOptions::<()>::default());
+        let got = transport.make_request_url(vec!["db", "docid"], &RequestOptions::<()>::default());
         assert_eq!(expected, got);
     }
 
@@ -219,7 +229,7 @@ mod tests {
         let url = "http://example.com:5984/foo/".parse().unwrap();
         let transport = HyperTransport::new(url).unwrap();
         let expected: url::Url = "http://example.com:5984/foo/db/docid".parse().unwrap();
-        let got = transport.make_request_url(&["db", "docid"], &RequestOptions::<()>::default());
+        let got = transport.make_request_url(vec!["db", "docid"], &RequestOptions::<()>::default());
         assert_eq!(expected, got);
     }
 
@@ -230,7 +240,7 @@ mod tests {
         let expected: url::Url = "http://example.com:5984/foo%2F%3F%23%20%25bar"
                                      .parse()
                                      .unwrap();
-        let got = transport.make_request_url(&["foo/?# %bar"], &RequestOptions::<()>::default());
+        let got = transport.make_request_url(vec!["foo/?# %bar"], &RequestOptions::<()>::default());
         assert_eq!(expected, got);
     }
 
@@ -243,7 +253,7 @@ mod tests {
                                      .parse()
                                      .unwrap();
 
-        let got = transport.make_request_url(&["db", "doc"], {
+        let got = transport.make_request_url(vec!["db", "doc"], {
             &RequestOptions::<()>::new()
                  .with_revision_query(&Revision::parse("42-1234567890abcdef1234567890abcdef")
                                            .unwrap())

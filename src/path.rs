@@ -3,143 +3,6 @@ use error::PathParseErrorKind;
 use serde;
 use std;
 
-macro_rules! define_name_types {
-    ($owning_type:ident, $borrowed_type:ident) => {
-
-        #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-        pub struct $owning_type {
-            inner: String,
-        }
-
-        #[derive(Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-        pub struct $borrowed_type {
-            inner: str,
-        }
-    }
-}
-
-macro_rules! impl_base_methods {
-    ($owning_type:ident, $borrowed_type:ident, $arg_name:ident) => {
-
-        impl std::fmt::Display for $owning_type {
-            fn fmt(&self, formatter: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-                self.inner.fmt(formatter)
-            }
-        }
-
-        impl AsRef<str> for $owning_type {
-            fn as_ref(&self) -> &str {
-                &self.inner
-            }
-        }
-
-        impl AsRef<$borrowed_type> for $owning_type {
-            fn as_ref(&self) -> &$borrowed_type {
-                $borrowed_type::from_str_ref(&self.inner)
-            }
-        }
-
-        impl<'a> From<&'a str> for $owning_type {
-            fn from($arg_name: &'a str) -> Self {
-                $owning_type { inner: $arg_name.to_owned() }
-            }
-        }
-
-        impl From<String> for $owning_type {
-            fn from($arg_name: String) -> Self {
-                $owning_type { inner: $arg_name }
-            }
-        }
-
-        impl From<$owning_type> for String {
-            fn from($arg_name: $owning_type) -> Self {
-                $arg_name.inner
-            }
-        }
-
-        impl std::borrow::Borrow<$borrowed_type> for $owning_type {
-            fn borrow(&self) -> &$borrowed_type {
-                &self.inner.as_ref()
-            }
-        }
-
-        impl $borrowed_type {
-            fn from_str_ref($arg_name: &str) -> &$borrowed_type {
-                unsafe { std::mem::transmute($arg_name) }
-            }
-        }
-
-        impl std::fmt::Display for $borrowed_type {
-            fn fmt(&self, formatter: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-                self.inner.fmt(formatter)
-            }
-        }
-
-        impl AsRef<str> for $borrowed_type {
-            fn as_ref(&self) -> &str {
-                &self.inner
-            }
-        }
-
-        impl ToOwned for $borrowed_type {
-            type Owned = $owning_type;
-            fn to_owned(&self) -> Self::Owned {
-                $owning_type::from(self.inner.to_owned())
-            }
-        }
-
-        impl AsRef<$borrowed_type> for str {
-            fn as_ref(&self) -> &$borrowed_type {
-                $borrowed_type::from_str_ref(self)
-            }
-        }
-
-        impl AsRef<$borrowed_type> for String {
-            fn as_ref(&self) -> &$borrowed_type {
-                $borrowed_type::from_str_ref(self)
-            }
-        }
-
-    }
-}
-
-define_name_types!(DatabaseName, DatabaseSegment);
-impl_base_methods!(DatabaseName, DatabaseSegment, db_name);
-
-define_name_types!(DocumentId, DocumentSegment);
-impl_base_methods!(DocumentId, DocumentSegment, doc_id);
-
-// FIXME: Test this.
-impl serde::Serialize for DocumentSegment {
-    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
-        where S: serde::Serializer
-    {
-        let s = self.to_string();
-        serializer.serialize_str(&s)
-    }
-}
-
-// FIXME: Test this.
-impl serde::Deserialize for DocumentId {
-    fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
-        where D: serde::Deserializer
-    {
-        struct Visitor;
-
-        impl serde::de::Visitor for Visitor {
-            type Value = DocumentId;
-
-            fn visit_str<E>(&mut self, encoded: &str) -> Result<Self::Value, E>
-                where E: serde::de::Error
-            {
-                Ok(DocumentId::from(encoded))
-            }
-        }
-
-        deserializer.deserialize(Visitor)
-    }
-}
-
 fn path_extract_nonfinal(path: &str) -> Result<(&str, &str), Error> {
     if !path.starts_with('/') {
         return Err(Error::PathParse(PathParseErrorKind::NoLeadingSlash));
@@ -170,45 +33,378 @@ fn path_extract_final(path: &str) -> Result<&str, Error> {
     Ok(segment)
 }
 
-pub trait DatabasePath {
-    fn database_path(&self) -> Result<&DatabaseSegment, Error>;
-}
+macro_rules! define_name_type {
+    ($type_name:ident, $arg_name:ident) => {
 
-impl DatabasePath for &'static str {
-    fn database_path(&self) -> Result<&DatabaseSegment, Error> {
-        let remaining = self;
-        let db_name = try!(path_extract_final(remaining));
-        Ok(db_name.as_ref())
+        #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+        pub struct $type_name {
+            inner: String,
+        }
+
+        impl std::fmt::Display for $type_name {
+            fn fmt(&self, formatter: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+                self.inner.fmt(formatter)
+            }
+        }
+
+        impl<'a> From<&'a str> for $type_name {
+            fn from($arg_name: &'a str) -> Self {
+                $type_name { inner: String::from($arg_name) }
+            }
+        }
+
+        impl From<String> for $type_name {
+            fn from($arg_name: String) -> Self {
+                $type_name { inner: $arg_name }
+            }
+        }
+
+        impl From<$type_name> for String {
+            fn from($arg_name: $type_name) -> Self {
+                $arg_name.inner
+            }
+        }
     }
 }
 
-impl<T> DatabasePath for T
-    where T: std::borrow::Borrow<DatabaseSegment>
-{
-    fn database_path(&self) -> Result<&DatabaseSegment, Error> {
-        Ok(self.borrow())
+macro_rules! impl_name_serialization {
+    ($type_name:ident) => {
+        impl serde::Serialize for $type_name {
+            fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
+                where S: serde::Serializer
+            {
+                self.inner.serialize(serializer)
+            }
+        }
     }
 }
 
-pub trait DocumentPath {
-    fn document_path(&self) -> Result<(&DatabaseSegment, &DocumentSegment), Error>;
+macro_rules! impl_name_deserialization {
+    ($type_name:ident) => {
+        impl serde::Deserialize for $type_name {
+            fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
+                where D: serde::Deserializer
+            {
+                struct Visitor;
+
+                impl serde::de::Visitor for Visitor {
+                    type Value = $type_name;
+
+                    fn visit_str<E>(&mut self, encoded: &str) -> Result<Self::Value, E>
+                        where E: serde::de::Error
+                    {
+                        Ok($type_name::from(encoded))
+                    }
+
+                    fn visit_string<E>(&mut self, encoded: String) -> Result<Self::Value, E>
+                        where E: serde::de::Error
+                    {
+                        Ok($type_name::from(encoded))
+                    }
+                }
+
+                deserializer.deserialize(Visitor)
+            }
+        }
+    }
 }
 
-impl DocumentPath for &'static str {
-    fn document_path(&self) -> Result<(&DatabaseSegment, &DocumentSegment), Error> {
-        let remaining = self;
+define_name_type!(DatabaseName, db_name);
+define_name_type!(DocumentName, doc_name);
+
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum DocumentId {
+    #[doc(hidden)]
+    Normal(DocumentName),
+
+    #[doc(hidden)]
+    Design(DocumentName),
+
+    #[doc(hidden)]
+    Local(DocumentName),
+}
+
+impl DocumentId {
+    fn prefix_as_str(&self) -> Option<&'static str> {
+        match self {
+            &DocumentId::Normal(_) => None,
+            &DocumentId::Design(_) => Some("_design"),
+            &DocumentId::Local(_) => Some("_local"),
+        }
+    }
+
+    fn name_as_str(&self) -> &str {
+        match self {
+            &DocumentId::Normal(ref doc_name) => &doc_name.inner,
+            &DocumentId::Design(ref doc_name) => &doc_name.inner,
+            &DocumentId::Local(ref doc_name) => &doc_name.inner,
+        }
+    }
+}
+
+impl std::fmt::Display for DocumentId {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        match self {
+            &DocumentId::Normal(ref doc_name) => doc_name.fmt(formatter),
+            &DocumentId::Design(ref doc_name) => write!(formatter, "_design/{}", doc_name),
+            &DocumentId::Local(ref doc_name) => write!(formatter, "_local/{}", doc_name),
+        }
+    }
+}
+
+impl<'a> From<&'a str> for DocumentId {
+    fn from(doc_id: &'a str) -> Self {
+
+        let design_prefix = "_design/";
+        let local_prefix = "_local/";
+
+        if doc_id.starts_with(design_prefix) {
+            DocumentId::Design(DocumentName::from(&doc_id[design_prefix.len()..]))
+        } else if doc_id.starts_with(local_prefix) {
+            DocumentId::Local(DocumentName::from(&doc_id[local_prefix.len()..]))
+        } else {
+            DocumentId::Normal(DocumentName::from(doc_id))
+        }
+    }
+}
+
+impl From<String> for DocumentId {
+    fn from(doc_id: String) -> Self {
+        // FIXME: Don't throw away the String, which leads to an extra
+        // allocation.
+        Self::from(doc_id.as_str())
+    }
+}
+
+impl serde::Serialize for DocumentId {
+    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
+        where S: serde::Serializer
+    {
+        self.to_string().serialize(serializer)
+    }
+}
+
+impl serde::Deserialize for DocumentId {
+    fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
+        where D: serde::Deserializer
+    {
+        struct Visitor;
+
+        impl serde::de::Visitor for Visitor {
+            type Value = DocumentId;
+
+            fn visit_str<E>(&mut self, encoded: &str) -> Result<Self::Value, E>
+                where E: serde::de::Error
+            {
+                Ok(DocumentId::from(encoded))
+            }
+
+            fn visit_string<E>(&mut self, encoded: String) -> Result<Self::Value, E>
+                where E: serde::de::Error
+            {
+                Ok(DocumentId::from(encoded))
+            }
+        }
+
+        deserializer.deserialize(Visitor)
+    }
+}
+
+// FIXME: Eliminate the necessity of ownership in DatabasePath.
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+pub struct DatabasePath {
+    db_name: DatabaseName,
+}
+
+impl DatabasePath {
+    #[cfg(test)]
+    fn parse(path: &str) -> Result<Self, Error> {
+        path.parse()
+    }
+
+    #[doc(hidden)]
+    pub fn iter(&self) -> DatabasePathIter {
+        DatabasePathIter::DatabaseName(&self)
+    }
+}
+
+impl std::str::FromStr for DatabasePath {
+    type Err = Error;
+
+    fn from_str(path: &str) -> Result<Self, Self::Err> {
+        let db_name = try!(path_extract_final(path));
+        Ok(DatabasePath { db_name: DatabaseName::from(db_name) })
+    }
+}
+
+pub enum DatabasePathIter<'a> {
+    DatabaseName(&'a DatabasePath),
+    Done,
+}
+
+impl<'a> Iterator for DatabasePathIter<'a> {
+    type Item = &'a str;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let (item, next) = match self {
+            &mut DatabasePathIter::DatabaseName(path) => {
+                (&path.db_name.inner, DatabasePathIter::Done)
+            }
+            &mut DatabasePathIter::Done => {
+                return None;
+            }
+        };
+
+        *self = next;
+        Some(item)
+    }
+}
+
+pub trait IntoDatabasePath {
+    fn into_database_path(self) -> Result<DatabasePath, Error>;
+}
+
+impl IntoDatabasePath for &'static str {
+    fn into_database_path(self) -> Result<DatabasePath, Error> {
+        self.parse()
+    }
+}
+
+impl IntoDatabasePath for DatabasePath {
+    fn into_database_path(self) -> Result<DatabasePath, Error> {
+        Ok(self)
+    }
+}
+
+impl IntoDatabasePath for DatabaseName {
+    fn into_database_path(self) -> Result<DatabasePath, Error> {
+        Ok(DatabasePath { db_name: self })
+    }
+}
+
+// FIXME: Eliminate the necessity of ownership in DocumentPath.
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+pub struct DocumentPath {
+    db_name: DatabaseName,
+    doc_id: DocumentId,
+}
+
+impl DocumentPath {
+    #[doc(hidden)]
+    pub fn new_from_database_path_and_document_id(db_path: DatabasePath,
+                                                  doc_id: DocumentId)
+                                                  -> Self {
+        DocumentPath {
+            db_name: db_path.db_name,
+            doc_id: doc_id,
+        }
+    }
+
+    #[cfg(test)]
+    fn parse(path: &str) -> Result<Self, Error> {
+        path.parse()
+    }
+
+    #[doc(hidden)]
+    pub fn iter(&self) -> DocumentPathIter {
+        DocumentPathIter::DatabaseName(&self)
+    }
+}
+
+impl std::str::FromStr for DocumentPath {
+    type Err = Error;
+
+    fn from_str(path: &str) -> Result<Self, Self::Err> {
+
+        let remaining = path;
         let (db_name, remaining) = try!(path_extract_nonfinal(remaining));
-        let doc_id = try!(path_extract_final(remaining));
-        Ok((db_name.as_ref(), doc_id.as_ref()))
+
+        // The document id type is unusual in that it has a variable number of
+        // segments.
+
+        let design_prefix = "/_design/";
+        let local_prefix = "/_local/";
+
+        let doc_id = if remaining.starts_with(design_prefix) {
+            let doc_name = try!(path_extract_final(&remaining[design_prefix.len() - 1..]));
+            DocumentId::Design(DocumentName::from(doc_name))
+        } else if remaining.starts_with(local_prefix) {
+            let doc_name = try!(path_extract_final(&remaining[local_prefix.len() - 1..]));
+            DocumentId::Local(DocumentName::from(doc_name))
+        } else {
+            let doc_name = try!(path_extract_final(remaining));
+            DocumentId::Normal(DocumentName::from(doc_name))
+        };
+
+        Ok(DocumentPath {
+            db_name: DatabaseName::from(db_name),
+            doc_id: doc_id,
+        })
     }
 }
 
-impl<T, U> DocumentPath for (T, U)
-    where T: std::borrow::Borrow<DatabaseSegment>,
-          U: std::borrow::Borrow<DocumentSegment>
+pub enum DocumentPathIter<'a> {
+    DatabaseName(&'a DocumentPath),
+    DocumentPrefix(&'a DocumentPath),
+    DocumentName(&'a DocumentPath),
+    Done,
+}
+
+impl<'a> Iterator for DocumentPathIter<'a> {
+    type Item = &'a str;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let (item, next) = match self {
+            &mut DocumentPathIter::DatabaseName(path) => {
+                (path.db_name.inner.as_str(),
+                 DocumentPathIter::DocumentPrefix(path))
+            }
+            &mut DocumentPathIter::DocumentPrefix(path) => {
+                match path.doc_id.prefix_as_str() {
+                    None => (path.doc_id.name_as_str(), DocumentPathIter::Done),
+                    Some(prefix) => (prefix, DocumentPathIter::DocumentName(path)),
+                }
+            }
+            &mut DocumentPathIter::DocumentName(path) => {
+                (path.doc_id.name_as_str(), DocumentPathIter::Done)
+            }
+            &mut DocumentPathIter::Done => {
+                return None;
+            }
+        };
+
+        *self = next;
+        Some(item)
+    }
+}
+
+pub trait IntoDocumentPath {
+    fn into_document_path(self) -> Result<DocumentPath, Error>;
+}
+
+impl IntoDocumentPath for &'static str {
+    fn into_document_path(self) -> Result<DocumentPath, Error> {
+        self.parse()
+    }
+}
+
+impl IntoDocumentPath for DocumentPath {
+    fn into_document_path(self) -> Result<DocumentPath, Error> {
+        Ok(self)
+    }
+}
+
+impl<T> IntoDocumentPath for (T, DocumentId)
+    where T: IntoDatabasePath
 {
-    fn document_path(&self) -> Result<(&DatabaseSegment, &DocumentSegment), Error> {
-        Ok((self.0.borrow(), self.1.borrow()))
+    fn into_document_path(self) -> Result<DocumentPath, Error> {
+        let db_path = try!(self.0.into_database_path());
+        Ok(DocumentPath {
+            db_name: db_path.db_name,
+            doc_id: self.1,
+        })
     }
 }
 
@@ -217,6 +413,9 @@ mod tests {
 
     use Error;
     use error::PathParseErrorKind;
+    use serde;
+    use serde_json;
+    use std;
     use super::*;
 
     #[test]
@@ -295,288 +494,317 @@ mod tests {
         }
     }
 
+    // Instead of testing each name type, we create a fake pair of types here
+    // and test those. All name types are defined and implemented by macro, so
+    // these tests cover all types.
+
+    define_name_type!(FakeName, fake_name);
+
     #[test]
-    fn database_name_display() {
-        let db_name = DatabaseName { inner: String::from("foo") };
-        let got = format!("{}", db_name);
+    fn fakename_display() {
+        let got = format!("{}", FakeName::from("foo"));
         assert_eq!("foo", got);
     }
 
     #[test]
-    fn database_name_as_ref_str() {
-        let db_name = DatabaseName { inner: String::from("foo") };
-        let got: &str = db_name.as_ref();
-        assert_eq!("foo", got);
+    fn fakename_from_str_ref() {
+        let got = FakeName::from("foo");
+        assert_eq!(FakeName { inner: String::from("foo") }, got);
     }
 
     #[test]
-    fn database_name_as_ref_segment() {
-        let db_name = DatabaseName { inner: String::from("foo") };
-        let got: &DatabaseSegment = db_name.as_ref();
-        assert_eq!("foo", got.as_ref());
+    fn fakename_from_string() {
+        let got = FakeName::from(String::from("foo"));
+        assert_eq!(FakeName { inner: String::from("foo") }, got);
     }
 
+    impl_name_serialization!(FakeName);
+
     #[test]
-    fn database_name_from_str_ref() {
-        let expected = DatabaseName { inner: String::from("foo") };
-        let got = DatabaseName::from("foo");
+    fn fakename_serialization() {
+        let expected = serde_json::Value::String(String::from("foo"));
+        let got = serde_json::to_value(&FakeName::from("foo"));
         assert_eq!(expected, got);
     }
 
+    impl_name_deserialization!(FakeName);
+
     #[test]
-    fn database_name_from_string() {
-        let expected = DatabaseName { inner: String::from("foo") };
-        let got = DatabaseName::from(String::from("foo"));
-        assert_eq!(expected, got);
+    fn fakename_deserialization() {
+        let got = serde_json::from_value(serde_json::Value::String(String::from("foo"))).unwrap();
+        assert_eq!(FakeName::from("foo"), got);
     }
 
     #[test]
-    fn string_from_database_name() {
-        let db_name = DatabaseName { inner: String::from("foo") };
-        let got = String::from(db_name);
+    fn document_id_prefix_as_str_normal() {
+        assert_eq!(None, DocumentId::from("foo").prefix_as_str());
+    }
+
+    #[test]
+    fn document_id_prefix_as_str_design() {
+        assert_eq!(Some("_design"),
+                   DocumentId::from("_design/foo").prefix_as_str());
+    }
+
+    #[test]
+    fn document_id_prefix_as_str_local() {
+        assert_eq!(Some("_local"),
+                   DocumentId::from("_local/foo").prefix_as_str());
+    }
+
+    #[test]
+    fn document_id_name_as_str_normal() {
+        assert_eq!("foo", DocumentId::from("foo").name_as_str());
+    }
+
+    #[test]
+    fn document_id_name_as_str_design() {
+        assert_eq!("foo", DocumentId::from("_design/foo").name_as_str());
+    }
+
+    #[test]
+    fn document_id_name_as_str_local() {
+        assert_eq!("foo", DocumentId::from("_local/foo").name_as_str());
+    }
+
+    #[test]
+    fn document_id_display_normal() {
+        let got = format!("{}", DocumentId::Normal(DocumentName::from("foo")));
         assert_eq!("foo", got);
     }
 
     #[test]
-    fn database_name_borrow() {
-        use std::borrow::Borrow;
-        let db_name = DatabaseName { inner: String::from("foo") };
-        let got: &DatabaseSegment = db_name.borrow();
-        assert_eq!("foo", got.as_ref());
+    fn document_id_display_design() {
+        let got = format!("{}", DocumentId::Design(DocumentName::from("foo")));
+        assert_eq!("_design/foo", got);
     }
 
     #[test]
-    fn database_segment_display() {
-        let db_name: &DatabaseSegment = "foo".as_ref();
-        let got = format!("{}", db_name);
-        assert_eq!("foo", got);
+    fn document_id_display_local() {
+        let got = format!("{}", DocumentId::Local(DocumentName::from("foo")));
+        assert_eq!("_local/foo", got);
     }
 
     #[test]
-    fn str_as_database_segment_as_ref_str() {
-        let db_name: &DatabaseSegment = "foo".as_ref();
-        let got: &str = db_name.as_ref();
-        assert_eq!("foo", got);
+    fn document_id_from_str_ref_design() {
+        let got = DocumentId::from("_design/foo");
+        assert_eq!(DocumentId::Design(DocumentName::from("foo")), got);
     }
 
     #[test]
-    fn string_as_database_segment() {
-        let underlying = String::from("foo");
-        let db_name: &DatabaseSegment = underlying.as_ref();
-        let got: &str = db_name.as_ref();
-        assert_eq!("foo", got);
+    fn document_id_from_str_ref_local() {
+        let got = DocumentId::from("_local/foo");
+        assert_eq!(DocumentId::Local(DocumentName::from("foo")), got);
     }
 
     #[test]
-    fn database_segment_to_owned() {
-        let expected = DatabaseName { inner: String::from("foo") };
-        let db_name: &DatabaseSegment = "foo".as_ref();
-        let got = db_name.to_owned();
-        assert_eq!(expected, got);
+    fn document_id_from_str_ref_normal() {
+        let got = DocumentId::from("foo");
+        assert_eq!(DocumentId::Normal(DocumentName::from("foo")), got);
     }
 
     #[test]
-    fn database_path_impl_by_static_str_ref() {
-        fn f<P: DatabasePath>(_path: P) {}
-        f("/foo");
+    fn document_id_from_string_design() {
+        let got = DocumentId::from(String::from("_design/foo"));
+        assert_eq!(DocumentId::Design(DocumentName::from("foo")), got);
     }
 
     #[test]
-    fn database_path_impl_by_segment() {
-        fn f<P: DatabasePath>(_path: P) {}
-        let db_name = DatabaseSegment::from_str_ref("foo");
-        f(db_name);
+    fn document_id_from_string_local() {
+        let got = DocumentId::from(String::from("_local/foo"));
+        assert_eq!(DocumentId::Local(DocumentName::from("foo")), got);
     }
 
     #[test]
-    fn database_path_impl_by_name() {
-        fn f<P: DatabasePath>(_path: P) {}
-        let db_name = DatabaseName::from("foo");
-        f(db_name);
+    fn document_id_from_string_normal() {
+        let got = DocumentId::from(String::from("foo"));
+        assert_eq!(DocumentId::Normal(DocumentName::from("foo")), got);
     }
 
     #[test]
-    fn database_path_from_static_str_ref_ok() {
-        let expected = DatabaseSegment::from_str_ref("foo");
-        let source = "/foo";
-        let got = source.database_path().unwrap();
-        assert_eq!(expected, got);
+    fn document_id_serialize_normal() {
+        let got = serde_json::to_value(&DocumentId::Normal(DocumentName::from("foo")));
+        assert_eq!(serde_json::Value::String(String::from("foo")), got);
     }
 
     #[test]
-    fn database_path_from_static_str_ref_nok_no_leading_slash() {
-        match "foo".database_path() {
+    fn document_id_serialize_design() {
+        let got = serde_json::to_value(&DocumentId::Design(DocumentName::from("foo")));
+        assert_eq!(serde_json::Value::String(String::from("_design/foo")), got);
+    }
+
+    #[test]
+    fn document_id_serialize_local() {
+        let got = serde_json::to_value(&DocumentId::Local(DocumentName::from("foo")));
+        assert_eq!(serde_json::Value::String(String::from("_local/foo")), got);
+    }
+
+    #[test]
+    fn document_id_deserialize_ok_normal() {
+        let got = serde_json::from_value(serde_json::Value::String(String::from("foo"))).unwrap();
+        assert_eq!(DocumentId::Normal(DocumentName::from("foo")), got);
+    }
+
+    #[test]
+    fn document_id_deserialize_ok_design() {
+        let got = serde_json::from_value(serde_json::Value::String(String::from("_design/foo")))
+                      .unwrap();
+        assert_eq!(DocumentId::Design(DocumentName::from("foo")), got);
+    }
+
+    #[test]
+    fn document_id_deserialize_ok_local() {
+        let got = serde_json::from_value(serde_json::Value::String(String::from("_local/foo")))
+                      .unwrap();
+        assert_eq!(DocumentId::Local(DocumentName::from("foo")), got);
+    }
+
+    #[test]
+    fn database_path_from_str_ok() {
+        let got = "/foo".parse().unwrap();
+        assert_eq!(DatabasePath { db_name: DatabaseName::from("foo") }, got);
+    }
+
+    #[test]
+    fn database_path_from_str_nok_no_leading_slash() {
+        use std::str::FromStr;
+        match DatabasePath::from_str("foo") {
             Err(Error::PathParse(PathParseErrorKind::NoLeadingSlash)) => (),
             x @ _ => unexpected_result!(x),
         }
     }
 
     #[test]
-    fn database_path_from_static_str_ref_nok_empty_database_name() {
-        match "/".database_path() {
+    fn database_path_from_str_nok_trailing_slash() {
+        use std::str::FromStr;
+        match DatabasePath::from_str("/foo/") {
+            Err(Error::PathParse(PathParseErrorKind::TrailingSlash)) => (),
+            x @ _ => unexpected_result!(x),
+        }
+    }
+
+    #[test]
+    fn database_path_from_str_nok_empty_segment() {
+        use std::str::FromStr;
+        match DatabasePath::from_str("/") {
             Err(Error::PathParse(PathParseErrorKind::EmptySegment)) => (),
             x @ _ => unexpected_result!(x),
         }
     }
 
     #[test]
-    fn database_path_from_static_str_ref_nok_too_many_segments() {
-        match "/foo/bar".database_path() {
+    fn database_path_from_str_nok_too_many_segments() {
+        use std::str::FromStr;
+        match DatabasePath::from_str("/foo/bar") {
             Err(Error::PathParse(PathParseErrorKind::TooManySegments)) => (),
             x @ _ => unexpected_result!(x),
         }
     }
 
     #[test]
-    fn database_path_from_borrow_ok() {
-        let expected = DatabaseSegment::from_str_ref("foo");
-        let source = DatabaseSegment::from_str_ref("foo");
-        let got = source.database_path().unwrap();
+    fn database_path_iter() {
+        let expected = vec!["foo"];
+        let db_path = DatabasePath::parse("/foo").unwrap();
+        let got = db_path.iter().collect::<Vec<_>>();
         assert_eq!(expected, got);
     }
 
     #[test]
-    fn document_id_display() {
-        let doc_id = DocumentId { inner: String::from("foo") };
-        let got = format!("{}", doc_id);
-        assert_eq!("foo", got);
-    }
-
-    #[test]
-    fn document_id_as_ref_str() {
-        let doc_id = DocumentId { inner: String::from("foo") };
-        let got: &str = doc_id.as_ref();
-        assert_eq!("foo", got);
-    }
-
-    #[test]
-    fn document_id_as_ref_segment() {
-        let doc_id = DocumentId { inner: String::from("foo") };
-        let got: &DocumentSegment = doc_id.as_ref();
-        assert_eq!("foo", got.as_ref());
-    }
-
-    #[test]
-    fn document_id_from_str_ref() {
-        let expected = DocumentId { inner: String::from("foo") };
-        let got = DocumentId::from("foo");
+    fn document_path_from_str_ok_normal() {
+        let got = "/foo/bar".parse().unwrap();
+        let expected = DocumentPath {
+            db_name: DatabaseName::from("foo"),
+            doc_id: DocumentId::Normal(DocumentName::from("bar")),
+        };
         assert_eq!(expected, got);
     }
 
     #[test]
-    fn document_id_from_string() {
-        let expected = DocumentId { inner: String::from("foo") };
-        let got = DocumentId::from(String::from("foo"));
+    fn document_path_from_str_ok_design() {
+        let got = "/foo/_design/bar".parse().unwrap();
+        let expected = DocumentPath {
+            db_name: DatabaseName::from("foo"),
+            doc_id: DocumentId::Design(DocumentName::from("bar")),
+        };
         assert_eq!(expected, got);
     }
 
     #[test]
-    fn string_from_document_id() {
-        let doc_id = DocumentId { inner: String::from("foo") };
-        let got = String::from(doc_id);
-        assert_eq!("foo", got);
-    }
-
-    #[test]
-    fn document_id_borrow() {
-        use std::borrow::Borrow;
-        let doc_id = DocumentId { inner: String::from("foo") };
-        let got: &DocumentSegment = doc_id.borrow();
-        assert_eq!("foo", got.as_ref());
-    }
-
-    #[test]
-    fn document_segment_display() {
-        let doc_id: &DocumentSegment = "foo".as_ref();
-        let got = format!("{}", doc_id);
-        assert_eq!("foo", got);
-    }
-
-    #[test]
-    fn str_as_document_segment_as_ref_str() {
-        let doc_id: &DocumentSegment = "foo".as_ref();
-        let got: &str = doc_id.as_ref();
-        assert_eq!("foo", got);
-    }
-
-    #[test]
-    fn string_as_document_segment() {
-        let underlying = String::from("foo");
-        let doc_id: &DocumentSegment = underlying.as_ref();
-        let got: &str = doc_id.as_ref();
-        assert_eq!("foo", got);
-    }
-
-    #[test]
-    fn document_segment_to_owned() {
-        let expected = DocumentId { inner: String::from("foo") };
-        let doc_id: &DocumentSegment = "foo".as_ref();
-        let got = doc_id.to_owned();
+    fn document_path_from_str_ok_local() {
+        let got = "/foo/_local/bar".parse().unwrap();
+        let expected = DocumentPath {
+            db_name: DatabaseName::from("foo"),
+            doc_id: DocumentId::Local(DocumentName::from("bar")),
+        };
         assert_eq!(expected, got);
     }
 
     #[test]
-    fn document_path_impl_by_static_str_ref() {
-        fn f<P: DocumentPath>(_path: P) {}
-        f("/foo");
-    }
-
-    #[test]
-    fn document_path_impl_by_segments() {
-        fn f<P: DocumentPath>(_path: P) {}
-        let db_name = DatabaseSegment::from_str_ref("foo");
-        let doc_id = DocumentSegment::from_str_ref("bar");
-        f((db_name, doc_id));
-    }
-
-    #[test]
-    fn document_path_impl_by_names() {
-        fn f<P: DocumentPath>(_path: P) {}
-        let db_name = DatabaseName::from("foo");
-        let doc_id = DocumentId::from("bar");
-        f((db_name, doc_id));
-    }
-
-    #[test]
-    fn document_path_from_static_str_ref_ok() {
-        let expected = (DatabaseSegment::from_str_ref("foo"),
-                        DocumentSegment::from_str_ref("bar"));
-        let source = "/foo/bar";
-        let got = source.document_path().unwrap();
-        assert_eq!(expected, got);
-    }
-
-    #[test]
-    fn document_path_from_static_str_ref_nok_no_leading_slash() {
-        match "foo/bar".document_path() {
+    fn document_path_from_str_nok_no_leading_slash() {
+        use std::str::FromStr;
+        match DocumentPath::from_str("foo/bar") {
             Err(Error::PathParse(PathParseErrorKind::NoLeadingSlash)) => (),
             x @ _ => unexpected_result!(x),
         }
     }
 
     #[test]
-    fn document_path_from_static_str_ref_nok_too_few_segments() {
-        match "/foo".document_path() {
+    fn document_path_from_str_nok_trailing_slash() {
+        use std::str::FromStr;
+        match DocumentPath::from_str("/foo/bar/") {
+            Err(Error::PathParse(PathParseErrorKind::TrailingSlash)) => (),
+            x @ _ => unexpected_result!(x),
+        }
+    }
+
+    #[test]
+    fn document_path_from_str_nok_empty_segment() {
+        use std::str::FromStr;
+        match DocumentPath::from_str("/foo/") {
+            Err(Error::PathParse(PathParseErrorKind::EmptySegment)) => (),
+            x @ _ => unexpected_result!(x),
+        }
+    }
+
+    #[test]
+    fn document_path_from_str_nok_too_few_segments() {
+        use std::str::FromStr;
+        match DocumentPath::from_str("/foo") {
             Err(Error::PathParse(PathParseErrorKind::TooFewSegments)) => (),
             x @ _ => unexpected_result!(x),
         }
     }
 
     #[test]
-    fn document_path_from_static_str_ref_nok_too_many_segments() {
-        match "/foo/bar/qux".document_path() {
+    fn document_path_from_str_nok_too_many_segments() {
+        use std::str::FromStr;
+        match DocumentPath::from_str("/foo/bar/qux") {
             Err(Error::PathParse(PathParseErrorKind::TooManySegments)) => (),
             x @ _ => unexpected_result!(x),
         }
     }
 
     #[test]
-    fn document_path_from_borrow_ok() {
-        let expected = (DatabaseSegment::from_str_ref("foo"),
-                        DocumentSegment::from_str_ref("bar"));
-        let source = (DatabaseSegment::from_str_ref("foo"),
-                      DocumentSegment::from_str_ref("bar"));
-        let got = source.document_path().unwrap();
+    fn document_path_iter_normal() {
+        let expected = vec!["foo", "bar"];
+        let db_path = DocumentPath::parse("/foo/bar").unwrap();
+        let got = db_path.iter().collect::<Vec<_>>();
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn document_path_iter_design() {
+        let expected = vec!["foo", "_design", "bar"];
+        let db_path = DocumentPath::parse("/foo/_design/bar").unwrap();
+        let got = db_path.iter().collect::<Vec<_>>();
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn document_path_iter_local() {
+        let expected = vec!["foo", "_local", "bar"];
+        let db_path = DocumentPath::parse("/foo/_local/bar").unwrap();
+        let got = db_path.iter().collect::<Vec<_>>();
         assert_eq!(expected, got);
     }
 }

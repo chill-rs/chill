@@ -1,8 +1,7 @@
-use DatabasePath;
 use DocumentId;
-use DocumentSegment;
 use document::WriteDocumentResponse;
 use Error;
+use IntoDatabasePath;
 use Revision;
 use serde;
 use serde_json;
@@ -10,18 +9,18 @@ use transport::{RequestOptions, Response, StatusCode, Transport};
 
 pub struct CreateDocument<'a, C, P, T>
     where C: serde::Serialize + 'a,
-          P: DatabasePath,
+          P: IntoDatabasePath,
           T: Transport + 'a
 {
     transport: &'a T,
     db_path: P,
     content: &'a C,
-    doc_id: Option<&'a DocumentSegment>,
+    doc_id: Option<&'a DocumentId>,
 }
 
 impl<'a, C, P, T> CreateDocument<'a, C, P, T>
     where C: serde::Serialize + 'a,
-          P: DatabasePath,
+          P: IntoDatabasePath,
           T: Transport + 'a
 {
     #[doc(hidden)]
@@ -34,18 +33,14 @@ impl<'a, C, P, T> CreateDocument<'a, C, P, T>
         }
     }
 
-    // FIXME: This signature requires string literals to be passed by reference,
-    // e.g., &"foo".
-    pub fn with_document_id<D>(mut self, doc_id: &'a D) -> Self
-        where D: AsRef<DocumentSegment> + 'a
-    {
-        self.doc_id = Some(doc_id.as_ref());
+    pub fn with_document_id(mut self, doc_id: &'a DocumentId) -> Self {
+        self.doc_id = Some(doc_id);
         self
     }
 
     pub fn run(self) -> Result<(DocumentId, Revision), Error> {
 
-        let db_name = try!(self.db_path.database_path());
+        let db_name = try!(self.db_path.into_database_path());
 
         let body = {
             let mut doc = serde_json::to_value(self.content);
@@ -65,7 +60,7 @@ impl<'a, C, P, T> CreateDocument<'a, C, P, T>
         };
 
         let response = try!(self.transport
-                                .post(&[db_name.as_ref()],
+                                .post(db_name.iter(),
                                       RequestOptions::new()
                                           .with_accept_json()
                                           .with_json_body(&body)));
@@ -142,7 +137,7 @@ mod tests {
                               .unwrap();
 
         let (doc_id, revision) = CreateDocument::new(&transport, "/database_name", &doc_content)
-                                     .with_document_id(&"document_id")
+                                     .with_document_id(&DocumentId::from("document_id"))
                                      .run()
                                      .unwrap();
 

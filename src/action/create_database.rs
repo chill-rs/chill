@@ -1,9 +1,9 @@
-use DatabasePath;
 use Error;
+use IntoDatabasePath;
 use transport::{RequestOptions, Response, StatusCode, Transport};
 
 pub struct CreateDatabase<'a, P, T>
-    where P: DatabasePath,
+    where P: IntoDatabasePath,
           T: Transport + 'a
 {
     transport: &'a T,
@@ -11,7 +11,7 @@ pub struct CreateDatabase<'a, P, T>
 }
 
 impl<'a, P, T> CreateDatabase<'a, P, T>
-    where P: DatabasePath,
+    where P: IntoDatabasePath,
           T: Transport + 'a
 {
     #[doc(hidden)]
@@ -24,11 +24,10 @@ impl<'a, P, T> CreateDatabase<'a, P, T>
 
     pub fn run(self) -> Result<(), Error> {
 
-        let db_name = try!(self.db_path.database_path());
+        let db_path = try!(self.db_path.into_database_path());
 
         let response = try!(self.transport
-                                .put(&[db_name.as_ref()],
-                                     RequestOptions::new().with_accept_json()));
+                                .put(db_path.iter(), RequestOptions::new().with_accept_json()));
 
         match response.status_code() {
             StatusCode::Created => Ok(()),

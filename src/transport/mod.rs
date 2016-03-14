@@ -13,29 +13,33 @@ pub use self::testing::{MockRequestMatcher, MockResponse, MockTransport};
 pub trait Transport {
     type Response: Response;
 
-    fn delete<'a, B>(&self,
-                     path: &[&str],
+    fn delete<'a, B, P>(&self,
+                        path: P,
+                        options: RequestOptions<'a, B>)
+                        -> Result<Self::Response, Error>
+        where B: serde::Serialize,
+              P: IntoIterator<Item = &'a str>;
+
+    fn get<'a, B, P>(&self,
+                     path: P,
                      options: RequestOptions<'a, B>)
                      -> Result<Self::Response, Error>
-        where B: serde::Serialize;
+        where B: serde::Serialize,
+              P: IntoIterator<Item = &'a str>;
 
-    fn get<'a, B>(&self,
-                  path: &[&str],
-                  options: RequestOptions<'a, B>)
-                  -> Result<Self::Response, Error>
-        where B: serde::Serialize;
+    fn post<'a, B, P>(&self,
+                      path: P,
+                      options: RequestOptions<'a, B>)
+                      -> Result<Self::Response, Error>
+        where B: serde::Serialize,
+              P: IntoIterator<Item = &'a str>;
 
-    fn post<'a, B>(&self,
-                   path: &[&str],
-                   options: RequestOptions<'a, B>)
-                   -> Result<Self::Response, Error>
-        where B: serde::Serialize;
-
-    fn put<'a, B>(&self,
-                  path: &[&str],
-                  options: RequestOptions<'a, B>)
-                  -> Result<Self::Response, Error>
-        where B: serde::Serialize;
+    fn put<'a, B, P>(&self,
+                     path: P,
+                     options: RequestOptions<'a, B>)
+                     -> Result<Self::Response, Error>
+        where B: serde::Serialize,
+              P: IntoIterator<Item = &'a str>;
 }
 
 pub trait Response {

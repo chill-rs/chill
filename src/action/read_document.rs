@@ -1,10 +1,10 @@
 use Document;
-use DocumentPath;
 use Error;
+use IntoDocumentPath;
 use transport::{RequestOptions, Response, StatusCode, Transport};
 
 pub struct ReadDocument<'a, P, T>
-    where P: DocumentPath,
+    where P: IntoDocumentPath,
           T: Transport + 'a
 {
     transport: &'a T,
@@ -12,7 +12,7 @@ pub struct ReadDocument<'a, P, T>
 }
 
 impl<'a, P, T> ReadDocument<'a, P, T>
-    where P: DocumentPath,
+    where P: IntoDocumentPath,
           T: Transport + 'a
 {
     #[doc(hidden)]
@@ -25,11 +25,10 @@ impl<'a, P, T> ReadDocument<'a, P, T>
 
     pub fn run(self) -> Result<Document, Error> {
 
-        let (db_name, doc_id) = try!(self.doc_path.document_path());
+        let doc_path = try!(self.doc_path.into_document_path());
 
         let response = try!(self.transport
-                                .get(&[db_name.as_ref(), doc_id.as_ref()],
-                                     RequestOptions::new().with_accept_json()));
+                                .get(doc_path.iter(), RequestOptions::new().with_accept_json()));
 
         match response.status_code() {
             StatusCode::Ok => response.decode_json_body(),

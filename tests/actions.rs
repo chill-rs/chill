@@ -1,12 +1,6 @@
 extern crate chill;
 extern crate serde_json;
 
-// FIXME: This function is needed because `AsRef<DatabaseSegment> for str` is
-// wrong.
-fn make_database_segment(db_name: &str) -> &chill::DatabaseSegment {
-    db_name.as_ref()
-}
-
 macro_rules! unexpected_result {
     ($result:expr) => {
         match $result {
@@ -54,7 +48,9 @@ fn create_document_ok_default_options() {
 
     let (doc_id, _rev) = client.create_document("/baseball", &up_content).run().unwrap();
 
-    let doc = client.read_document((make_database_segment("baseball"), doc_id)).run().unwrap();
+    let doc = client.read_document(("/baseball", doc_id.clone()))
+                    .run()
+                    .unwrap();
     let down_content = doc.get_content().unwrap();
     assert_eq!(up_content, down_content);
 }
@@ -71,12 +67,14 @@ fn create_document_ok_with_document_id() {
                          .unwrap();
 
     let (doc_id, _rev) = client.create_document("/baseball", &up_content)
-                               .with_document_id(&"babe_ruth")
+                               .with_document_id(&chill::DocumentId::from("babe_ruth"))
                                .run()
                                .unwrap();
     assert_eq!(chill::DocumentId::from("babe_ruth"), doc_id);
 
-    let doc = client.read_document((make_database_segment("baseball"), doc_id)).run().unwrap();
+    let doc = client.read_document(("/baseball", doc_id.clone()))
+                    .run()
+                    .unwrap();
     let down_content = doc.get_content().unwrap();
     assert_eq!(up_content, down_content);
 }
@@ -119,7 +117,9 @@ fn read_document_ok_default_options() {
 
     let (doc_id, _rev) = client.create_document("/baseball", &up_content).run().unwrap();
 
-    let doc = client.read_document((make_database_segment("baseball"), doc_id)).run().unwrap();
+    let doc = client.read_document(("/baseball", doc_id.clone()))
+                    .run()
+                    .unwrap();
     let down_content = doc.get_content().unwrap();
     assert_eq!(up_content, down_content);
 }
@@ -155,7 +155,9 @@ fn update_document_ok() {
 
     let (doc_id, _rev) = client.create_document("/baseball", &up_content).run().unwrap();
 
-    let mut doc = client.read_document((make_database_segment("baseball"), doc_id)).run().unwrap();
+    let mut doc = client.read_document(("/baseball", doc_id.clone()))
+                        .run()
+                        .unwrap();
 
     let up_content = match doc.get_content::<serde_json::Value>().unwrap() {
         serde_json::Value::Object(mut fields) => {
@@ -172,8 +174,9 @@ fn update_document_ok() {
 
     let updated_rev = client.update_document("/baseball", &doc).run().unwrap();
 
-    let doc_id = doc.id().clone(); // FIXME: Another kluge for AsRef badness.
-    let doc = client.read_document((make_database_segment("baseball"), doc_id)).run().unwrap();
+    let doc = client.read_document(("/baseball", doc.id().clone()))
+                    .run()
+                    .unwrap();
     let down_content: serde_json::Value = doc.get_content().unwrap();
     assert_eq!(up_content, down_content);
     assert_eq!(&updated_rev, doc.revision());
@@ -192,12 +195,11 @@ fn delete_document_ok() {
 
     let (doc_id, rev1) = client.create_document("/baseball", &up_content).run().unwrap();
 
-    // FIXME: The clone call is needed because AsRef as bad.
-    let _rev2 = client.delete_document((make_database_segment("baseball"), doc_id.clone()), &rev1)
+    let _rev2 = client.delete_document(("/baseball", doc_id.clone()), &rev1)
                       .run()
                       .unwrap();
 
-    match client.read_document((make_database_segment("baseball"), doc_id)).run() {
+    match client.read_document(("/baseball", doc_id.clone())).run() {
         Err(chill::Error::NotFound(..)) => (),
         x @ _ => {
             panic!("Unexpected result: {:?}", x);

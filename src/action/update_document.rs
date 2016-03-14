@@ -1,12 +1,13 @@
-use DatabasePath;
 use Document;
+use DocumentPath;
 use document::WriteDocumentResponse;
 use Error;
+use IntoDatabasePath;
 use Revision;
 use transport::{RequestOptions, Response, StatusCode, Transport};
 
 pub struct UpdateDocument<'a, P, T>
-    where P: DatabasePath,
+    where P: IntoDatabasePath,
           T: Transport + 'a
 {
     transport: &'a T,
@@ -15,7 +16,7 @@ pub struct UpdateDocument<'a, P, T>
 }
 
 impl<'a, P, T> UpdateDocument<'a, P, T>
-    where P: DatabasePath,
+    where P: IntoDatabasePath,
           T: Transport + 'a
 {
     #[doc(hidden)]
@@ -29,10 +30,12 @@ impl<'a, P, T> UpdateDocument<'a, P, T>
 
     pub fn run(self) -> Result<Revision, Error> {
 
-        let db_name = try!(self.db_path.database_path());
+        let db_path = try!(self.db_path.into_database_path());
+        let doc_path = DocumentPath::new_from_database_path_and_document_id(db_path,
+                                                                            self.doc.id().clone());
 
         let response = try!(self.transport
-                                .put(&[db_name.as_ref(), self.doc.id().as_ref()],
+                                .put(doc_path.iter(),
                                      RequestOptions::new()
                                          .with_accept_json()
                                          .with_revision_query(&self.doc.revision())

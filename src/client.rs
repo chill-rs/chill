@@ -1,9 +1,9 @@
 use action;
-use DatabasePath;
 use Document;
-use DocumentPath;
 use Error;
 use hyper;
+use IntoDatabasePath;
+use IntoDocumentPath;
 use Revision;
 use serde;
 use transport::{HyperTransport, Transport};
@@ -30,7 +30,7 @@ pub struct BasicClient<T: Transport> {
 
 impl<T: Transport> BasicClient<T> {
     pub fn create_database<'a, P>(&'a self, db_path: P) -> action::CreateDatabase<'a, P, T>
-        where P: DatabasePath
+        where P: IntoDatabasePath
     {
         action::CreateDatabase::new(&self.transport, db_path)
     }
@@ -40,13 +40,13 @@ impl<T: Transport> BasicClient<T> {
                                      content: &'a C)
                                      -> action::CreateDocument<'a, C, P, T>
         where C: serde::Serialize,
-              P: DatabasePath
+              P: IntoDatabasePath
     {
         action::CreateDocument::new(&self.transport, db_path, content)
     }
 
     pub fn read_document<'a, P>(&'a self, doc_path: P) -> action::ReadDocument<'a, P, T>
-        where P: DocumentPath
+        where P: IntoDocumentPath
     {
         action::ReadDocument::new(&self.transport, doc_path)
     }
@@ -57,7 +57,7 @@ impl<T: Transport> BasicClient<T> {
                                   db_path: P,
                                   doc: &'a Document)
                                   -> action::UpdateDocument<'a, P, T>
-        where P: DatabasePath
+        where P: IntoDatabasePath
     {
         action::UpdateDocument::new(&self.transport, db_path, doc)
     }
@@ -66,7 +66,7 @@ impl<T: Transport> BasicClient<T> {
                                   doc_path: P,
                                   revision: &'a Revision)
                                   -> action::DeleteDocument<'a, P, T>
-        where P: DocumentPath
+        where P: IntoDocumentPath
     {
         action::DeleteDocument::new(&self.transport, doc_path, revision)
     }

@@ -1,11 +1,11 @@
-use DocumentPath;
 use document::WriteDocumentResponse;
 use Error;
+use IntoDocumentPath;
 use Revision;
 use transport::{RequestOptions, Response, StatusCode, Transport};
 
 pub struct DeleteDocument<'a, P, T>
-    where P: DocumentPath,
+    where P: IntoDocumentPath,
           T: Transport + 'a
 {
     transport: &'a T,
@@ -14,7 +14,7 @@ pub struct DeleteDocument<'a, P, T>
 }
 
 impl<'a, P, T> DeleteDocument<'a, P, T>
-    where P: DocumentPath,
+    where P: IntoDocumentPath,
           T: Transport + 'a
 {
     #[doc(hidden)]
@@ -28,9 +28,9 @@ impl<'a, P, T> DeleteDocument<'a, P, T>
 
     pub fn run(self) -> Result<Revision, Error> {
 
-        let (db_name, doc_id) = try!(self.doc_path.document_path());
+        let doc_path = try!(self.doc_path.into_document_path());
 
-        let response = try!(self.transport.delete(&[db_name.as_ref(), doc_id.as_ref()],
+        let response = try!(self.transport.delete(doc_path.iter(),
                                                   RequestOptions::new()
                                                       .with_accept_json()
                                                       .with_revision_query(self.revision)));

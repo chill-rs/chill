@@ -26,6 +26,6 @@ pub mod testing;
 pub use client::{BasicClient, Client, IntoUrl};
 pub use document::{Attachment, Document, SavedAttachment, UnsavedAttachment};
 pub use error::{Error, ErrorResponse};
-pub use path::{DatabaseName, DatabasePath, DatabaseSegment, DocumentId, DocumentPath,
-               DocumentSegment};
+pub use path::{DatabaseName, DatabasePath, DocumentName, DocumentPath, DocumentId,
+               IntoDatabasePath, IntoDocumentPath};
 pub use revision::Revision;

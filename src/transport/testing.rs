@@ -51,16 +51,17 @@ impl MockTransport {
         self.responses.borrow_mut().push(response)
     }
 
-    fn request<'a, B>(&self,
-                      method: Method,
-                      path: &[&str],
-                      options: RequestOptions<'a, B>)
-                      -> Result<<Self as Transport>::Response, Error>
-        where B: serde::Serialize
+    fn request<'a, B, P>(&self,
+                         method: Method,
+                         path: P,
+                         options: RequestOptions<'a, B>)
+                         -> Result<<Self as Transport>::Response, Error>
+        where B: serde::Serialize,
+              P: IntoIterator<Item = &'a str>
     {
         self.requests.borrow_mut().push(MockRequest {
             method: method,
-            path: path.iter().map(|x| x.to_string()).collect(),
+            path: path.into_iter().map(|x| x.to_string()).collect(),
             accept: match options.accept {
                 None => None,
                 Some(RequestAccept::Json) => Some(MockRequestAccept::Json),
@@ -81,38 +82,42 @@ impl MockTransport {
 impl Transport for MockTransport {
     type Response = MockResponse;
 
-    fn delete<'a, B>(&self,
-                     path: &[&str],
-                     options: RequestOptions<'a, B>)
-                     -> Result<Self::Response, Error>
-        where B: serde::Serialize
+    fn delete<'a, B, P>(&self,
+                        path: P,
+                        options: RequestOptions<'a, B>)
+                        -> Result<Self::Response, Error>
+        where B: serde::Serialize,
+              P: IntoIterator<Item = &'a str>
     {
         self.request(Method::Delete, path, options)
     }
 
-    fn get<'a, B>(&self,
-                  path: &[&str],
-                  options: RequestOptions<'a, B>)
-                  -> Result<Self::Response, Error>
-        where B: serde::Serialize
+    fn get<'a, B, P>(&self,
+                     path: P,
+                     options: RequestOptions<'a, B>)
+                     -> Result<Self::Response, Error>
+        where B: serde::Serialize,
+              P: IntoIterator<Item = &'a str>
     {
         self.request(Method::Get, path, options)
     }
 
-    fn post<'a, B>(&self,
-                   path: &[&str],
-                   options: RequestOptions<'a, B>)
-                   -> Result<Self::Response, Error>
-        where B: serde::Serialize
+    fn post<'a, B, P>(&self,
+                      path: P,
+                      options: RequestOptions<'a, B>)
+                      -> Result<Self::Response, Error>
+        where B: serde::Serialize,
+              P: IntoIterator<Item = &'a str>
     {
         self.request(Method::Post, path, options)
     }
 
-    fn put<'a, B>(&self,
-                  path: &[&str],
-                  options: RequestOptions<'a, B>)
-                  -> Result<Self::Response, Error>
-        where B: serde::Serialize
+    fn put<'a, B, P>(&self,
+                     path: P,
+                     options: RequestOptions<'a, B>)
+                     -> Result<Self::Response, Error>
+        where B: serde::Serialize,
+              P: IntoIterator<Item = &'a str>
     {
         self.request(Method::Put, path, options)
     }
