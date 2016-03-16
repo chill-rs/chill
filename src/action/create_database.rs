@@ -3,7 +3,7 @@ use IntoDatabasePath;
 use transport::{RequestOptions, Response, StatusCode, Transport};
 
 pub struct CreateDatabase<'a, P, T>
-    where P: IntoDatabasePath,
+    where P: IntoDatabasePath<'a>,
           T: Transport + 'a
 {
     transport: &'a T,
@@ -11,7 +11,7 @@ pub struct CreateDatabase<'a, P, T>
 }
 
 impl<'a, P, T> CreateDatabase<'a, P, T>
-    where P: IntoDatabasePath,
+    where P: IntoDatabasePath<'a>,
           T: Transport + 'a
 {
     #[doc(hidden)]
@@ -27,7 +27,7 @@ impl<'a, P, T> CreateDatabase<'a, P, T>
         let db_path = try!(self.db_path.into_database_path());
 
         let response = try!(self.transport
-                                .put(db_path.iter(), RequestOptions::new().with_accept_json()));
+                                .put(db_path, RequestOptions::new().with_accept_json()));
 
         match response.status_code() {
             StatusCode::Created => Ok(()),

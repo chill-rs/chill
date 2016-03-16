@@ -5,7 +5,7 @@ use Revision;
 use transport::{RequestOptions, Response, StatusCode, Transport};
 
 pub struct DeleteDocument<'a, P, T>
-    where P: IntoDocumentPath,
+    where P: IntoDocumentPath<'a>,
           T: Transport + 'a
 {
     transport: &'a T,
@@ -14,7 +14,7 @@ pub struct DeleteDocument<'a, P, T>
 }
 
 impl<'a, P, T> DeleteDocument<'a, P, T>
-    where P: IntoDocumentPath,
+    where P: IntoDocumentPath<'a>,
           T: Transport + 'a
 {
     #[doc(hidden)]
@@ -30,7 +30,7 @@ impl<'a, P, T> DeleteDocument<'a, P, T>
 
         let doc_path = try!(self.doc_path.into_document_path());
 
-        let response = try!(self.transport.delete(doc_path.iter(),
+        let response = try!(self.transport.delete(doc_path,
                                                   RequestOptions::new()
                                                       .with_accept_json()
                                                       .with_revision_query(self.revision)));

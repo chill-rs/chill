@@ -1,7 +1,7 @@
 use base64;
-use DatabaseName;
-use DocumentId;
-use DocumentPath;
+use DatabaseNameBuf;
+use DocumentIdBuf;
+use DocumentPathBuf;
 use Error;
 #[cfg(test)]
 use IntoDocumentPath;
@@ -16,7 +16,7 @@ type AttachmentName = String;
 
 #[derive(Debug, PartialEq)]
 pub struct Document {
-    doc_path: DocumentPath,
+    doc_path: DocumentPathBuf,
     revision: Revision,
     deleted: bool,
     attachments: std::collections::HashMap<AttachmentName, Attachment>,
@@ -25,9 +25,9 @@ pub struct Document {
 
 impl Document {
     #[doc(hidden)]
-    pub fn new_from_decoded(db_name: DatabaseName, doc: JsonDecodableDocument) -> Self {
+    pub fn new_from_decoded(db_name: DatabaseNameBuf, doc: JsonDecodableDocument) -> Self {
         Document {
-            doc_path: DocumentPath::new_from_database_name_and_document_id(db_name, doc.doc_id),
+            doc_path: DocumentPathBuf::new_from_parts(db_name, doc.doc_id),
             revision: doc.revision,
             deleted: doc.deleted,
             attachments: doc.attachments,
@@ -36,12 +36,17 @@ impl Document {
     }
 
     #[doc(hidden)]
-    pub fn database_name(&self) -> &DatabaseName {
+    pub fn database_name(&self) -> &DatabaseNameBuf {
         self.doc_path.database_name()
     }
 
-    pub fn id(&self) -> &DocumentId {
+    pub fn id(&self) -> &DocumentIdBuf {
         self.doc_path.document_id()
+    }
+
+    #[doc(hidden)]
+    pub fn path(&self) -> &DocumentPathBuf {
+        &self.doc_path
     }
 
     pub fn revision(&self) -> &Revision {
@@ -98,7 +103,7 @@ impl serde::Serialize for Document {
 // not known at decode-time.
 #[derive(Debug, PartialEq)]
 pub struct JsonDecodableDocument {
-    doc_id: DocumentId,
+    doc_id: DocumentIdBuf,
     revision: Revision,
     deleted: bool,
     attachments: std::collections::HashMap<AttachmentName, Attachment>,
@@ -558,11 +563,11 @@ pub struct DocumentBuilder(Document);
 
 #[cfg(test)]
 impl DocumentBuilder {
-    pub fn new<P>(doc_path: P, revision: Revision) -> Self
-        where P: IntoDocumentPath
+    pub fn new<'a, P>(doc_path: P, revision: Revision) -> Self
+        where P: IntoDocumentPath<'a>
     {
         DocumentBuilder(Document {
-            doc_path: doc_path.into_document_path().unwrap(),
+            doc_path: doc_path.into_document_path().unwrap().into(),
             revision: revision,
             deleted: false,
             attachments: std::collections::HashMap::new(),
@@ -593,7 +598,7 @@ impl DocumentBuilder {
 #[derive(Debug, PartialEq)]
 pub struct WriteDocumentResponse {
     pub ok: bool,
-    pub doc_id: DocumentId,
+    pub doc_id: DocumentIdBuf,
     pub revision: Revision,
 }
 
@@ -688,8 +693,8 @@ impl serde::Deserialize for WriteDocumentResponse {
 mod tests {
 
     use base64;
-    use DocumentId;
-    use DocumentPath;
+    use DocumentIdBuf;
+    use DocumentPathBuf;
     use Error;
     use Revision;
     use serde_json;
@@ -707,7 +712,7 @@ mod tests {
                           .unwrap();
 
         let doc = Document {
-            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
+            doc_path: DocumentPathBuf::parse("/database/document_id").unwrap(),
             revision: "1-1234567890abcdef1234567890abcdef".parse().unwrap(),
             deleted: false,
             attachments: std::collections::HashMap::new(),
@@ -725,7 +730,7 @@ mod tests {
         let content = serde_json::builder::ObjectBuilder::new().unwrap();
 
         let doc = Document {
-            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
+            doc_path: DocumentPathBuf::parse("/database/document_id").unwrap(),
             revision: "1-1234567890abcdef1234567890abcdef".parse().unwrap(),
             deleted: true,
             attachments: std::collections::HashMap::new(),
@@ -741,7 +746,7 @@ mod tests {
     fn document_get_content_nok_decode_error() {
 
         let doc = Document {
-            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
+            doc_path: DocumentPathBuf::parse("/database/document_id").unwrap(),
             revision: "1-1234567890abcdef1234567890abcdef".parse().unwrap(),
             deleted: false,
             attachments: std::collections::HashMap::new(),
@@ -770,7 +775,7 @@ mod tests {
     fn document_serialize_empty() {
 
         let document = Document {
-            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
+            doc_path: DocumentPathBuf::parse("/database/document_id").unwrap(),
             revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
             deleted: true, // This value should have no effect.
             attachments: std::collections::HashMap::new(),
@@ -787,7 +792,7 @@ mod tests {
     fn document_serialize_with_content_and_attachments() {
 
         let document = Document {
-            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
+            doc_path: DocumentPathBuf::parse("/database/document_id").unwrap(),
             revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
             deleted: true, // This value should have no effect.
             attachments: {
@@ -840,7 +845,7 @@ mod tests {
     fn json_decodable_document_deserialize_ok_as_minimum() {
 
         let expected = JsonDecodableDocument {
-            doc_id: DocumentId::from("document_id"),
+            doc_id: DocumentIdBuf::from("document_id"),
             revision: "42-1234567890abcdef1234567890abcdef".parse().unwrap(),
             deleted: false,
             attachments: std::collections::HashMap::new(),
@@ -861,7 +866,7 @@ mod tests {
     fn json_decodable_document_deserialize_ok_as_deleted() {
 
         let expected = JsonDecodableDocument {
-            doc_id: DocumentId::from("document_id"),
+            doc_id: DocumentIdBuf::from("document_id"),
             revision: "42-1234567890abcdef1234567890abcdef".parse().unwrap(),
             deleted: true,
             attachments: std::collections::HashMap::new(),
@@ -883,7 +888,7 @@ mod tests {
     fn json_decodable_document_deserialize_ok_with_content() {
 
         let expected = JsonDecodableDocument {
-            doc_id: DocumentId::from("document_id"),
+            doc_id: DocumentIdBuf::from("document_id"),
             revision: "42-1234567890abcdef1234567890abcdef".parse().unwrap(),
             deleted: false,
             attachments: std::collections::HashMap::new(),
@@ -909,7 +914,7 @@ mod tests {
     fn json_decodable_document_deserialize_ok_with_attachments() {
 
         let expected = JsonDecodableDocument {
-            doc_id: DocumentId::from("document_id"),
+            doc_id: DocumentIdBuf::from("document_id"),
             revision: "42-1234567890abcdef1234567890abcdef".parse().unwrap(),
             deleted: false,
             attachments: {

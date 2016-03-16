@@ -1,7 +1,9 @@
 use DocumentId;
+use DocumentIdBuf;
 use document::WriteDocumentResponse;
 use Error;
 use IntoDatabasePath;
+use IntoDocumentId;
 use Revision;
 use serde;
 use serde_json;
@@ -9,18 +11,18 @@ use transport::{RequestOptions, Response, StatusCode, Transport};
 
 pub struct CreateDocument<'a, C, P, T>
     where C: serde::Serialize + 'a,
-          P: IntoDatabasePath,
+          P: IntoDatabasePath<'a>,
           T: Transport + 'a
 {
     transport: &'a T,
     db_path: P,
     content: &'a C,
-    doc_id: Option<&'a DocumentId>,
+    doc_id: Option<DocumentId<'a>>,
 }
 
 impl<'a, C, P, T> CreateDocument<'a, C, P, T>
     where C: serde::Serialize + 'a,
-          P: IntoDatabasePath,
+          P: IntoDatabasePath<'a>,
           T: Transport + 'a
 {
     #[doc(hidden)]
@@ -33,12 +35,14 @@ impl<'a, C, P, T> CreateDocument<'a, C, P, T>
         }
     }
 
-    pub fn with_document_id(mut self, doc_id: &'a DocumentId) -> Self {
-        self.doc_id = Some(doc_id);
+    pub fn with_document_id<D>(mut self, doc_id: D) -> Self
+        where D: IntoDocumentId<'a>
+    {
+        self.doc_id = Some(doc_id.into_document_id());
         self
     }
 
-    pub fn run(self) -> Result<(DocumentId, Revision), Error> {
+    pub fn run(self) -> Result<(DocumentIdBuf, Revision), Error> {
 
         let db_name = try!(self.db_path.into_database_path());
 
@@ -60,7 +64,7 @@ impl<'a, C, P, T> CreateDocument<'a, C, P, T>
         };
 
         let response = try!(self.transport
-                                .post(db_name.iter(),
+                                .post(db_name,
                                       RequestOptions::new()
                                           .with_accept_json()
                                           .with_json_body(&body)));
@@ -81,7 +85,7 @@ impl<'a, C, P, T> CreateDocument<'a, C, P, T>
 #[cfg(test)]
 mod tests {
 
-    use DocumentId;
+    use DocumentIdBuf;
     use Error;
     use Revision;
     use serde_json;
@@ -107,7 +111,7 @@ mod tests {
                                      .run()
                                      .unwrap();
 
-        let expected = (DocumentId::from("17a0e088c69e0a99be6d6159b4000563"),
+        let expected = (DocumentIdBuf::from("17a0e088c69e0a99be6d6159b4000563"),
                         Revision::parse("1-967a00dff5e02add41819138abb3284d").unwrap());
         assert_eq!(expected, (doc_id, revision));
 
@@ -137,11 +141,11 @@ mod tests {
                               .unwrap();
 
         let (doc_id, revision) = CreateDocument::new(&transport, "/database_name", &doc_content)
-                                     .with_document_id(&DocumentId::from("document_id"))
+                                     .with_document_id("document_id")
                                      .run()
                                      .unwrap();
 
-        let expected = (DocumentId::from("document_id"),
+        let expected = (DocumentIdBuf::from("document_id"),
                         Revision::parse("1-967a00dff5e02add41819138abb3284d").unwrap());
         assert_eq!(expected, (doc_id, revision));
 

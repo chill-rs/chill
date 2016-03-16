@@ -48,7 +48,7 @@ fn create_document_ok_default_options() {
 
     let (doc_id, _rev) = client.create_document("/baseball", &up_content).run().unwrap();
 
-    let doc = client.read_document(("/baseball", doc_id.clone()))
+    let doc = client.read_document(("/baseball", &doc_id))
                     .run()
                     .unwrap();
     let down_content = doc.get_content().unwrap();
@@ -67,12 +67,12 @@ fn create_document_ok_with_document_id() {
                          .unwrap();
 
     let (doc_id, _rev) = client.create_document("/baseball", &up_content)
-                               .with_document_id(&chill::DocumentId::from("babe_ruth"))
+                               .with_document_id("babe_ruth")
                                .run()
                                .unwrap();
-    assert_eq!(chill::DocumentId::from("babe_ruth"), doc_id);
+    assert_eq!(chill::DocumentIdBuf::from("babe_ruth"), doc_id);
 
-    let doc = client.read_document(("/baseball", doc_id.clone()))
+    let doc = client.read_document(("/baseball", &doc_id))
                     .run()
                     .unwrap();
     let down_content = doc.get_content().unwrap();
@@ -117,7 +117,7 @@ fn read_document_ok_default_options() {
 
     let (doc_id, _rev) = client.create_document("/baseball", &up_content).run().unwrap();
 
-    let doc = client.read_document(("/baseball", doc_id.clone()))
+    let doc = client.read_document(("/baseball", &doc_id))
                     .run()
                     .unwrap();
     let down_content = doc.get_content().unwrap();
@@ -155,7 +155,7 @@ fn update_document_ok() {
 
     let (doc_id, _rev) = client.create_document("/baseball", &up_content).run().unwrap();
 
-    let mut doc = client.read_document(("/baseball", doc_id.clone()))
+    let mut doc = client.read_document(("/baseball", &doc_id))
                         .run()
                         .unwrap();
 
@@ -174,7 +174,7 @@ fn update_document_ok() {
 
     let updated_rev = client.update_document(&doc).run().unwrap();
 
-    let doc = client.read_document(("/baseball", doc.id().clone()))
+    let doc = client.read_document(("/baseball", doc.id()))
                     .run()
                     .unwrap();
     let down_content: serde_json::Value = doc.get_content().unwrap();
@@ -195,11 +195,11 @@ fn delete_document_ok() {
 
     let (doc_id, rev1) = client.create_document("/baseball", &up_content).run().unwrap();
 
-    let _rev2 = client.delete_document(("/baseball", doc_id.clone()), &rev1)
+    let _rev2 = client.delete_document(("/baseball", &doc_id), &rev1)
                       .run()
                       .unwrap();
 
-    match client.read_document(("/baseball", doc_id.clone())).run() {
+    match client.read_document(("/baseball", &doc_id)).run() {
         Err(chill::Error::NotFound(..)) => (),
         x @ _ => {
             panic!("Unexpected result: {:?}", x);

@@ -5,7 +5,7 @@ use IntoDocumentPath;
 use transport::{RequestOptions, Response, StatusCode, Transport};
 
 pub struct ReadDocument<'a, P, T>
-    where P: IntoDocumentPath,
+    where P: IntoDocumentPath<'a>,
           T: Transport + 'a
 {
     transport: &'a T,
@@ -13,7 +13,7 @@ pub struct ReadDocument<'a, P, T>
 }
 
 impl<'a, P, T> ReadDocument<'a, P, T>
-    where P: IntoDocumentPath,
+    where P: IntoDocumentPath<'a>,
           T: Transport + 'a
 {
     #[doc(hidden)]
@@ -27,15 +27,16 @@ impl<'a, P, T> ReadDocument<'a, P, T>
     pub fn run(self) -> Result<Document, Error> {
 
         let doc_path = try!(self.doc_path.into_document_path());
+        let db_name = doc_path.database_name().to_owned();
 
         let response = try!(self.transport
-                                .get(doc_path.iter(), RequestOptions::new().with_accept_json()));
+                                .get(doc_path, RequestOptions::new().with_accept_json()));
 
         match response.status_code() {
             StatusCode::Ok => {
                 let decoded_doc: JsonDecodableDocument = try!(response.decode_json_body());
                 // FIXME: Eliminate the database name temporary.
-                Ok(Document::new_from_decoded(doc_path.database_name().clone(), decoded_doc))
+                Ok(Document::new_from_decoded(db_name, decoded_doc))
             }
             StatusCode::NotFound => Err(Error::not_found(response)),
             StatusCode::Unauthorized => Err(Error::unauthorized(response)),

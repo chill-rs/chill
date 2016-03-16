@@ -1,5 +1,4 @@
 use Document;
-use DocumentPath;
 use document::WriteDocumentResponse;
 use Error;
 use Revision;
@@ -25,12 +24,8 @@ impl<'a, T> UpdateDocument<'a, T>
 
     pub fn run(self) -> Result<Revision, Error> {
 
-        let db_name = self.doc.database_name().clone();
-        let doc_path = DocumentPath::new_from_database_name_and_document_id(db_name,
-                                                                            self.doc.id().clone());
-
         let response = try!(self.transport
-                                .put(doc_path.iter(),
+                                .put(self.doc.path().iter(),
                                      RequestOptions::new()
                                          .with_accept_json()
                                          .with_revision_query(&self.doc.revision())
