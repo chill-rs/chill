@@ -16,17 +16,17 @@ mod test_macro;
 mod client;
 mod document;
 mod error;
-mod path;
 mod revision;
 mod transport;
 
 pub mod action;
+pub mod path;
 pub mod testing;
 
 pub use client::{BasicClient, Client, IntoUrl};
 pub use document::{Attachment, Document, SavedAttachment, UnsavedAttachment};
 pub use error::{Error, ErrorResponse};
-pub use path::{DatabaseName, DatabaseNameBuf, DatabasePath, DatabasePathBuf, DocumentId,
-               DocumentIdBuf, DocumentPath, DocumentPathBuf, IntoDatabasePath, IntoDocumentId,
-               IntoDocumentPath};
+pub use path::{DatabaseName, DatabaseNameBuf, DatabasePath, DatabasePathBuf, DesignDocumentName,
+               DesignDocumentNameBuf, DocumentId, DocumentIdBuf, DocumentName, DocumentNameBuf,
+               DocumentPath, DocumentPathBuf, IntoDatabasePath, IntoDocumentId, IntoDocumentPath};
 pub use revision::Revision;
