@@ -215,6 +215,7 @@ struct AttachmentEncodingInfo {
     encoding: String,
 }
 
+#[doc(hidden)]
 #[derive(Debug, PartialEq)]
 pub enum Attachment {
     Saved(SavedAttachment),
@@ -247,6 +248,7 @@ enum SavedAttachmentContent {
     Bytes(Vec<u8>),
 }
 
+#[doc(hidden)]
 #[derive(Debug, PartialEq)]
 pub struct SavedAttachment {
     content_type: mime::Mime,
@@ -464,6 +466,7 @@ impl serde::Deserialize for SavedAttachment {
     }
 }
 
+#[doc(hidden)]
 #[derive(Debug, PartialEq)]
 pub struct UnsavedAttachment {
     content_type: mime::Mime,
