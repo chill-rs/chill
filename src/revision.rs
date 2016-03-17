@@ -3,10 +3,10 @@ use serde;
 use std;
 use uuid;
 
-/// A _revision_ identifies a version of a document.
+/// A document revision, which uniquely identifies a version of a document.
 ///
 /// A document revision comprises a **sequence number** and an **MD5 digest**.
-/// The sequence number starts at `1` when the document is created and
+/// The sequence number (usually) starts at `1` when the document is created and
 /// increments by one each time the document is updated. The digest is a hash of
 /// the document content.
 ///
@@ -22,7 +22,7 @@ pub struct Revision {
 impl Revision {
     /// Constructs a new `Revision` from the given string.
     ///
-    /// The string must be of a form like `42-1234567890abcdef1234567890abcdef`.
+    /// The string must be of the form `42-1234567890abcdef1234567890abcdef`.
     ///
     pub fn parse(s: &str) -> Result<Self, Error> {
         use std::str::FromStr;
@@ -31,8 +31,8 @@ impl Revision {
 
     /// Returns the sequence number part of the revision.
     ///
-    /// The sequence number is the `999` part of the revision
-    /// `999-1234567890abcdef1234567890abcdef`.
+    /// The sequence number is the `123` part of the revision
+    /// `123-00000000000000000000000000000000`.
     ///
     pub fn sequence_number(&self) -> u64 {
         self.sequence_number

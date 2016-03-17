@@ -324,8 +324,8 @@ impl std::fmt::Display for TransportErrorKind {
     }
 }
 
-/// An _error response_ contains error information returned from the CouchDB
-/// server when an error occurs while processing the client's request.
+/// Error information returned from the CouchDB server when an error occurs
+/// while processing the client's request.
 #[derive(Clone, Debug, Hash, PartialEq, PartialOrd)]
 pub struct ErrorResponse {
     error: String,
@@ -344,13 +344,13 @@ impl ErrorResponse {
         }
     }
 
-    /// Returns the high-level name of the error—e.g., “file_exists”.
+    /// Returns the high-level name of the error—e.g., <q>file_exists</q>.
     pub fn error(&self) -> &String {
         &self.error
     }
 
-    /// Returns the low-level description of the error—e.g., “The database could
-    /// not be created, the file already exists.”
+    /// Returns the low-level description of the error—e.g., <q>The database could
+    /// not be created, the file already exists.</q>
     pub fn reason(&self) -> &String {
         &self.reason
     }

@@ -1,4 +1,4 @@
-//! The `testing` module defines things for testing a CouchDB application.
+//! Utilities for testing a CouchDB application.
 
 mod fake_server;
 

@@ -8,7 +8,7 @@ use Revision;
 use serde;
 use transport::{HyperTransport, Transport};
 
-/// The `IntoUrl` trait applies to a type that is convertible into a URL.
+/// Types that are convertible into a URL.
 pub trait IntoUrl: hyper::client::IntoUrl {
 }
 
