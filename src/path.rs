@@ -33,13 +33,8 @@ fn path_extract_final(path: &str) -> Result<&str, Error> {
     Ok(segment)
 }
 
-macro_rules! define_name_types {
+macro_rules! impl_name_types {
     ($borrowed_type:ident, $owning_type:ident, $name_arg:ident) => {
-
-        #[derive(Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-        pub struct $borrowed_type {
-            inner: str,
-        }
 
         impl $borrowed_type {
             fn new(s: &str) -> &$borrowed_type {
@@ -64,11 +59,6 @@ macro_rules! define_name_types {
             fn to_owned(&self) -> Self::Owned {
                 $owning_type { inner: String::from(&self.inner) }
             }
-        }
-
-        #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-        pub struct $owning_type {
-            inner: String,
         }
 
         impl AsRef<$borrowed_type> for $owning_type {
@@ -116,9 +106,41 @@ macro_rules! define_name_types {
     }
 }
 
-define_name_types!(DatabaseName, DatabaseNameBuf, db_name);
-define_name_types!(DesignDocumentName, DesignDocumentNameBuf, design_doc_name);
-define_name_types!(DocumentName, DocumentNameBuf, doc_name);
+#[derive(Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct DatabaseName {
+    inner: str,
+}
+
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct DatabaseNameBuf {
+    inner: String,
+}
+
+impl_name_types!(DatabaseName, DatabaseNameBuf, db_name);
+
+#[derive(Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct DesignDocumentName {
+    inner: str,
+}
+
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct DesignDocumentNameBuf {
+    inner: String,
+}
+
+impl_name_types!(DesignDocumentName, DesignDocumentNameBuf, design_doc_name);
+
+#[derive(Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct DocumentName {
+    inner: str,
+}
+
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct DocumentNameBuf {
+    inner: String,
+}
+
+impl_name_types!(DocumentName, DocumentNameBuf, doc_name);
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum DocumentId<'a> {
@@ -673,7 +695,17 @@ mod tests {
     // types and test those. All name types are defined and implemented by
     // macro, so these tests should cover all types.
 
-    define_name_types!(FakeName, FakeNameBuf, fake_name);
+    #[derive(Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    pub struct FakeName {
+        inner: str,
+    }
+
+    #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+    pub struct FakeNameBuf {
+        inner: String,
+    }
+
+    impl_name_types!(FakeName, FakeNameBuf, fake_name);
 
     #[test]
     fn fake_name_new() {
