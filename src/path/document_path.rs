@@ -140,10 +140,10 @@ impl<'a> IntoDocumentPath<'a> for &'static str {
             DocumentId::Design(DesignDocumentName::new(doc_name))
         } else if remaining.starts_with(local_prefix) {
             let doc_name = try!(path_extract_final(&remaining[local_prefix.len()..]));
-            DocumentId::Local(DocumentName::new(doc_name))
+            DocumentId::Local(LocalDocumentName::new(doc_name))
         } else {
             let doc_name = try!(path_extract_final(remaining));
-            DocumentId::Normal(DocumentName::new(doc_name))
+            DocumentId::Normal(NormalDocumentName::new(doc_name))
         };
 
         Ok(DocumentPath {
@@ -191,7 +191,7 @@ mod tests {
     fn document_path_into_iter_normal() {
         let doc_path = DocumentPath {
             db_name: DatabaseName::new("foo"),
-            doc_id: DocumentId::Normal(DocumentName::new("bar")),
+            doc_id: DocumentId::Normal(NormalDocumentName::new("bar")),
         };
         let got = doc_path.into_iter().collect::<Vec<_>>();
         assert_eq!(vec!["foo", "bar"], got);
@@ -211,7 +211,7 @@ mod tests {
     fn document_path_into_iter_local() {
         let doc_path = DocumentPath {
             db_name: DatabaseName::new("foo"),
-            doc_id: DocumentId::Local(DocumentName::new("bar")),
+            doc_id: DocumentId::Local(LocalDocumentName::new("bar")),
         };
         let got = doc_path.into_iter().collect::<Vec<_>>();
         assert_eq!(vec!["foo", "_local", "bar"], got);
@@ -221,11 +221,11 @@ mod tests {
     fn document_path_buf_new_from_parts() {
         let expected = DocumentPathBuf {
             db_name_buf: DatabaseNameBuf::from("foo"),
-            doc_id_buf: DocumentIdBuf::Normal(DocumentNameBuf::from("bar")),
+            doc_id_buf: DocumentIdBuf::Normal(NormalDocumentNameBuf::from("bar")),
         };
         let got =
             DocumentPathBuf::new_from_parts(DatabaseNameBuf::from("foo"),
-                                            DocumentIdBuf::Normal(DocumentNameBuf::from("bar")));
+                                            DocumentIdBuf::Normal(NormalDocumentNameBuf::from("bar")));
         assert_eq!(expected, got);
     }
 
@@ -233,7 +233,7 @@ mod tests {
     fn document_path_buf_parse_normal() {
         let expected = DocumentPathBuf {
             db_name_buf: DatabaseNameBuf::from("foo"),
-            doc_id_buf: DocumentIdBuf::Normal(DocumentNameBuf::from("bar")),
+            doc_id_buf: DocumentIdBuf::Normal(NormalDocumentNameBuf::from("bar")),
         };
         let got = DocumentPathBuf::parse("/foo/bar").unwrap();
         assert_eq!(expected, got);
@@ -253,7 +253,7 @@ mod tests {
     fn document_path_buf_parse_local() {
         let expected = DocumentPathBuf {
             db_name_buf: DatabaseNameBuf::from("foo"),
-            doc_id_buf: DocumentIdBuf::Local(DocumentNameBuf::from("bar")),
+            doc_id_buf: DocumentIdBuf::Local(LocalDocumentNameBuf::from("bar")),
         };
         let got = DocumentPathBuf::parse("/foo/_local/bar").unwrap();
         assert_eq!(expected, got);
@@ -263,11 +263,11 @@ mod tests {
     fn document_path_buf_as_document_path_normal() {
         let expected = DocumentPath {
             db_name: DatabaseName::new("foo"),
-            doc_id: DocumentId::Normal(DocumentName::new("bar")),
+            doc_id: DocumentId::Normal(NormalDocumentName::new("bar")),
         };
         let doc_path_buf = DocumentPathBuf {
             db_name_buf: DatabaseNameBuf::from("foo"),
-            doc_id_buf: DocumentIdBuf::Normal(DocumentNameBuf::from("bar")),
+            doc_id_buf: DocumentIdBuf::Normal(NormalDocumentNameBuf::from("bar")),
         };
         let got = doc_path_buf.as_document_path();
         assert_eq!(expected, got);
@@ -291,11 +291,11 @@ mod tests {
     fn document_path_buf_as_document_path_local() {
         let expected = DocumentPath {
             db_name: DatabaseName::new("foo"),
-            doc_id: DocumentId::Local(DocumentName::new("bar")),
+            doc_id: DocumentId::Local(LocalDocumentName::new("bar")),
         };
         let doc_path_buf = DocumentPathBuf {
             db_name_buf: DatabaseNameBuf::from("foo"),
-            doc_id_buf: DocumentIdBuf::Local(DocumentNameBuf::from("bar")),
+            doc_id_buf: DocumentIdBuf::Local(LocalDocumentNameBuf::from("bar")),
         };
         let got = doc_path_buf.as_document_path();
         assert_eq!(expected, got);
@@ -306,7 +306,7 @@ mod tests {
         let expected = vec!["foo", "bar"];
         let doc_path_buf = DocumentPathBuf {
             db_name_buf: DatabaseNameBuf::from("foo"),
-            doc_id_buf: DocumentIdBuf::Normal(DocumentNameBuf::from("bar")),
+            doc_id_buf: DocumentIdBuf::Normal(NormalDocumentNameBuf::from("bar")),
         };
         let got = doc_path_buf.iter().collect::<Vec<_>>();
         assert_eq!(expected, got);
@@ -328,7 +328,7 @@ mod tests {
         let expected = vec!["foo", "_local", "bar"];
         let doc_path_buf = DocumentPathBuf {
             db_name_buf: DatabaseNameBuf::from("foo"),
-            doc_id_buf: DocumentIdBuf::Local(DocumentNameBuf::from("bar")),
+            doc_id_buf: DocumentIdBuf::Local(LocalDocumentNameBuf::from("bar")),
         };
         let got = doc_path_buf.iter().collect::<Vec<_>>();
         assert_eq!(expected, got);
@@ -338,11 +338,11 @@ mod tests {
     fn document_path_buf_from_document_path() {
         let expected = DocumentPathBuf {
             db_name_buf: DatabaseNameBuf::from("foo"),
-            doc_id_buf: DocumentIdBuf::Normal(DocumentNameBuf::from("bar")),
+            doc_id_buf: DocumentIdBuf::Normal(NormalDocumentNameBuf::from("bar")),
         };
         let got = DocumentPathBuf::from(DocumentPath {
             db_name: DatabaseName::new("foo"),
-            doc_id: DocumentId::Normal(DocumentName::new("bar")),
+            doc_id: DocumentId::Normal(NormalDocumentName::new("bar")),
         });
         assert_eq!(expected, got);
     }
@@ -351,7 +351,7 @@ mod tests {
     fn static_str_ref_into_document_path_ok_normal() {
         let expected = DocumentPath {
             db_name: DatabaseName::new("foo"),
-            doc_id: DocumentId::Normal(DocumentName::new("bar")),
+            doc_id: DocumentId::Normal(NormalDocumentName::new("bar")),
         };
         let got = "/foo/bar".into_document_path().unwrap();
         assert_eq!(expected, got);
@@ -371,7 +371,7 @@ mod tests {
     fn static_str_ref_into_document_path_ok_local() {
         let expected = DocumentPath {
             db_name: DatabaseName::new("foo"),
-            doc_id: DocumentId::Local(DocumentName::new("bar")),
+            doc_id: DocumentId::Local(LocalDocumentName::new("bar")),
         };
         let got = "/foo/_local/bar".into_document_path().unwrap();
         assert_eq!(expected, got);
@@ -469,9 +469,9 @@ mod tests {
     fn into_document_path_with_document_id_normal() {
         let expected = DocumentPath {
             db_name: DatabaseName::new("foo"),
-            doc_id: DocumentId::Normal(DocumentName::new("bar")),
+            doc_id: DocumentId::Normal(NormalDocumentName::new("bar")),
         };
-        let got = ("/foo", DocumentId::Normal(DocumentName::new("bar")))
+        let got = ("/foo", DocumentId::Normal(NormalDocumentName::new("bar")))
                       .into_document_path()
                       .unwrap();
         assert_eq!(expected, got);
@@ -493,9 +493,9 @@ mod tests {
     fn into_document_path_with_document_id_local() {
         let expected = DocumentPath {
             db_name: DatabaseName::new("foo"),
-            doc_id: DocumentId::Local(DocumentName::new("bar")),
+            doc_id: DocumentId::Local(LocalDocumentName::new("bar")),
         };
-        let got = ("/foo", DocumentId::Local(DocumentName::new("bar")))
+        let got = ("/foo", DocumentId::Local(LocalDocumentName::new("bar")))
                       .into_document_path()
                       .unwrap();
         assert_eq!(expected, got);
@@ -505,9 +505,9 @@ mod tests {
     fn into_document_path_with_document_id_buf_ref_normal() {
         let expected = DocumentPath {
             db_name: DatabaseName::new("foo"),
-            doc_id: DocumentId::Normal(DocumentName::new("bar")),
+            doc_id: DocumentId::Normal(NormalDocumentName::new("bar")),
         };
-        let doc_id_buf = DocumentIdBuf::Normal(DocumentNameBuf::from("bar"));
+        let doc_id_buf = DocumentIdBuf::Normal(NormalDocumentNameBuf::from("bar"));
         let got = ("/foo", &doc_id_buf)
                       .into_document_path()
                       .unwrap();
@@ -531,9 +531,9 @@ mod tests {
     fn into_document_path_with_document_id_buf_ref_local() {
         let expected = DocumentPath {
             db_name: DatabaseName::new("foo"),
-            doc_id: DocumentId::Local(DocumentName::new("bar")),
+            doc_id: DocumentId::Local(LocalDocumentName::new("bar")),
         };
-        let doc_id_buf = DocumentIdBuf::Local(DocumentNameBuf::from("bar"));
+        let doc_id_buf = DocumentIdBuf::Local(LocalDocumentNameBuf::from("bar"));
         let got = ("/foo", &doc_id_buf)
                       .into_document_path()
                       .unwrap();
@@ -544,11 +544,11 @@ mod tests {
     fn into_document_path_from_document_path_buf_ref_normal() {
         let expected = DocumentPath {
             db_name: DatabaseName::new("foo"),
-            doc_id: DocumentId::Normal(DocumentName::new("bar")),
+            doc_id: DocumentId::Normal(NormalDocumentName::new("bar")),
         };
         let doc_path_buf = DocumentPathBuf {
             db_name_buf: DatabaseNameBuf::from("foo"),
-            doc_id_buf: DocumentIdBuf::Normal(DocumentNameBuf::from("bar")),
+            doc_id_buf: DocumentIdBuf::Normal(NormalDocumentNameBuf::from("bar")),
         };
         let got = (&doc_path_buf).into_document_path().unwrap();
         assert_eq!(expected, got);
@@ -572,11 +572,11 @@ mod tests {
     fn into_document_path_from_document_path_buf_ref_local() {
         let expected = DocumentPath {
             db_name: DatabaseName::new("foo"),
-            doc_id: DocumentId::Local(DocumentName::new("bar")),
+            doc_id: DocumentId::Local(LocalDocumentName::new("bar")),
         };
         let doc_path_buf = DocumentPathBuf {
             db_name_buf: DatabaseNameBuf::from("foo"),
-            doc_id_buf: DocumentIdBuf::Local(DocumentNameBuf::from("bar")),
+            doc_id_buf: DocumentIdBuf::Local(LocalDocumentNameBuf::from("bar")),
         };
         let got = (&doc_path_buf).into_document_path().unwrap();
         assert_eq!(expected, got);
@@ -586,7 +586,7 @@ mod tests {
     fn into_document_path_from_document_path_normal() {
         let expected = DocumentPath {
             db_name: DatabaseName::new("foo"),
-            doc_id: DocumentId::Normal(DocumentName::new("bar")),
+            doc_id: DocumentId::Normal(NormalDocumentName::new("bar")),
         };
         let got = expected.clone().into_document_path().unwrap();
         assert_eq!(expected, got);
@@ -606,7 +606,7 @@ mod tests {
     fn into_document_path_from_document_path_local() {
         let expected = DocumentPath {
             db_name: DatabaseName::new("foo"),
-            doc_id: DocumentId::Local(DocumentName::new("bar")),
+            doc_id: DocumentId::Local(LocalDocumentName::new("bar")),
         };
         let got = expected.clone().into_document_path().unwrap();
         assert_eq!(expected, got);

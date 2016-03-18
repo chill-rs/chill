@@ -127,19 +127,31 @@ pub struct DesignDocumentNameBuf {
     inner: String,
 }
 
-impl_name_types!(DesignDocumentName, DesignDocumentNameBuf, design_doc_name);
+impl_name_types!(DesignDocumentName, DesignDocumentNameBuf, doc_name);
 
 #[derive(Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct DocumentName {
+pub struct LocalDocumentName {
     inner: str,
 }
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct DocumentNameBuf {
+pub struct LocalDocumentNameBuf {
     inner: String,
 }
 
-impl_name_types!(DocumentName, DocumentNameBuf, doc_name);
+impl_name_types!(LocalDocumentName, LocalDocumentNameBuf, doc_name);
+
+#[derive(Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct NormalDocumentName {
+    inner: str,
+}
+
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct NormalDocumentNameBuf {
+    inner: String,
+}
+
+impl_name_types!(NormalDocumentName, NormalDocumentNameBuf, doc_name);
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct DatabasePath<'a> {
@@ -158,25 +170,25 @@ pub trait IntoDatabasePath<'a> {
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum DocumentId<'a> {
     #[doc(hidden)]
-    Normal(&'a DocumentName),
+    Normal(&'a NormalDocumentName),
 
     #[doc(hidden)]
     Design(&'a DesignDocumentName),
 
     #[doc(hidden)]
-    Local(&'a DocumentName),
+    Local(&'a LocalDocumentName),
 }
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum DocumentIdBuf {
     #[doc(hidden)]
-    Normal(DocumentNameBuf),
+    Normal(NormalDocumentNameBuf),
 
     #[doc(hidden)]
     Design(DesignDocumentNameBuf),
 
     #[doc(hidden)]
-    Local(DocumentNameBuf),
+    Local(LocalDocumentNameBuf),
 }
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]

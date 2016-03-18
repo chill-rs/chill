@@ -137,9 +137,9 @@ impl<'a> From<&'a str> for DocumentId<'a> {
         if s.starts_with(design_prefix) && s[design_prefix.len()..].starts_with('/') {
             DocumentId::Design(DesignDocumentName::new(&s[design_prefix.len() + 1..]))
         } else if s.starts_with(local_prefix) && s[local_prefix.len()..].starts_with('/') {
-            DocumentId::Local(DocumentName::new(&s[local_prefix.len() + 1..]))
+            DocumentId::Local(LocalDocumentName::new(&s[local_prefix.len() + 1..]))
         } else {
-            DocumentId::Normal(DocumentName::new(s))
+            DocumentId::Normal(NormalDocumentName::new(s))
         }
     }
 }
@@ -162,7 +162,7 @@ mod tests {
 
     #[test]
     fn document_id_has_prefix_normal() {
-        let doc_id = DocumentId::Normal(DocumentName::new("foo"));
+        let doc_id = DocumentId::Normal(NormalDocumentName::new("foo"));
         assert_eq!(false, doc_id.has_prefix());
     }
 
@@ -174,13 +174,13 @@ mod tests {
 
     #[test]
     fn document_id_has_prefix_local() {
-        let doc_id = DocumentId::Local(DocumentName::new("foo"));
+        let doc_id = DocumentId::Local(LocalDocumentName::new("foo"));
         assert_eq!(true, doc_id.has_prefix());
     }
 
     #[test]
     fn document_id_prefix_as_str_normal() {
-        let doc_id = DocumentId::Normal(DocumentName::new("foo"));
+        let doc_id = DocumentId::Normal(NormalDocumentName::new("foo"));
         assert_eq!(None, doc_id.prefix_as_str());
     }
 
@@ -192,13 +192,13 @@ mod tests {
 
     #[test]
     fn document_id_prefix_as_str_local() {
-        let doc_id = DocumentId::Local(DocumentName::new("foo"));
+        let doc_id = DocumentId::Local(LocalDocumentName::new("foo"));
         assert_eq!(Some("_local"), doc_id.prefix_as_str());
     }
 
     #[test]
     fn document_id_name_as_str_normal() {
-        let doc_id = DocumentId::Normal(DocumentName::new("foo"));
+        let doc_id = DocumentId::Normal(NormalDocumentName::new("foo"));
         assert_eq!("foo", doc_id.name_as_str());
     }
 
@@ -210,13 +210,13 @@ mod tests {
 
     #[test]
     fn document_id_name_as_str_local() {
-        let doc_id = DocumentId::Local(DocumentName::new("foo"));
+        let doc_id = DocumentId::Local(LocalDocumentName::new("foo"));
         assert_eq!("foo", doc_id.name_as_str());
     }
 
     #[test]
     fn document_id_display_normal() {
-        let doc_id = DocumentId::Normal(DocumentName::new("foo"));
+        let doc_id = DocumentId::Normal(NormalDocumentName::new("foo"));
         assert_eq!("foo", format!("{}", doc_id));
     }
 
@@ -228,14 +228,14 @@ mod tests {
 
     #[test]
     fn document_id_display_local() {
-        let doc_id = DocumentId::Local(DocumentName::new("foo"));
+        let doc_id = DocumentId::Local(LocalDocumentName::new("foo"));
         assert_eq!("_local/foo", format!("{}", doc_id));
     }
 
     #[test]
     fn document_id_serialize_normal() {
         let expected = serde_json::Value::String(String::from("foo"));
-        let doc_id = DocumentId::Normal(DocumentName::new("foo"));
+        let doc_id = DocumentId::Normal(NormalDocumentName::new("foo"));
         assert_eq!(expected, serde_json::to_value(&doc_id));
     }
 
@@ -249,14 +249,14 @@ mod tests {
     #[test]
     fn document_id_serialize_local() {
         let expected = serde_json::Value::String(String::from("_local/foo"));
-        let doc_id = DocumentId::Local(DocumentName::new("foo"));
+        let doc_id = DocumentId::Local(LocalDocumentName::new("foo"));
         assert_eq!(expected, serde_json::to_value(&doc_id));
     }
 
     #[test]
     fn document_id_buf_as_document_id_normal() {
-        let doc_id_buf = DocumentIdBuf::Normal(DocumentNameBuf::from("foo"));
-        let expected = DocumentId::Normal(DocumentName::new("foo"));
+        let doc_id_buf = DocumentIdBuf::Normal(NormalDocumentNameBuf::from("foo"));
+        let expected = DocumentId::Normal(NormalDocumentName::new("foo"));
         assert_eq!(expected, doc_id_buf.as_document_id());
     }
 
@@ -269,14 +269,14 @@ mod tests {
 
     #[test]
     fn document_id_buf_as_document_id_local() {
-        let doc_id_buf = DocumentIdBuf::Local(DocumentNameBuf::from("foo"));
-        let expected = DocumentId::Local(DocumentName::new("foo"));
+        let doc_id_buf = DocumentIdBuf::Local(LocalDocumentNameBuf::from("foo"));
+        let expected = DocumentId::Local(LocalDocumentName::new("foo"));
         assert_eq!(expected, doc_id_buf.as_document_id());
     }
 
     #[test]
     fn document_id_buf_display_normal() {
-        let doc_id_buf = DocumentIdBuf::Normal(DocumentNameBuf::from("foo"));
+        let doc_id_buf = DocumentIdBuf::Normal(NormalDocumentNameBuf::from("foo"));
         assert_eq!("foo", format!("{}", doc_id_buf));
     }
 
@@ -288,13 +288,13 @@ mod tests {
 
     #[test]
     fn document_id_buf_display_local() {
-        let doc_id_buf = DocumentIdBuf::Local(DocumentNameBuf::from("foo"));
+        let doc_id_buf = DocumentIdBuf::Local(LocalDocumentNameBuf::from("foo"));
         assert_eq!("_local/foo", format!("{}", doc_id_buf));
     }
 
     #[test]
     fn document_id_buf_from_str_ref_normal() {
-        let expected = DocumentIdBuf::Normal(DocumentNameBuf::from("foo"));
+        let expected = DocumentIdBuf::Normal(NormalDocumentNameBuf::from("foo"));
         let got = DocumentIdBuf::from("foo");
         assert_eq!(expected, got);
     }
@@ -308,14 +308,14 @@ mod tests {
 
     #[test]
     fn document_id_buf_from_str_ref_local() {
-        let expected = DocumentIdBuf::Local(DocumentNameBuf::from("foo"));
+        let expected = DocumentIdBuf::Local(LocalDocumentNameBuf::from("foo"));
         let got = DocumentIdBuf::from("_local/foo");
         assert_eq!(expected, got);
     }
 
     #[test]
     fn document_id_buf_from_string_normal() {
-        let expected = DocumentIdBuf::Normal(DocumentNameBuf::from("foo"));
+        let expected = DocumentIdBuf::Normal(NormalDocumentNameBuf::from("foo"));
         let got = DocumentIdBuf::from(String::from("foo"));
         assert_eq!(expected, got);
     }
@@ -329,15 +329,15 @@ mod tests {
 
     #[test]
     fn document_id_buf_from_string_local() {
-        let expected = DocumentIdBuf::Local(DocumentNameBuf::from("foo"));
+        let expected = DocumentIdBuf::Local(LocalDocumentNameBuf::from("foo"));
         let got = DocumentIdBuf::from(String::from("_local/foo"));
         assert_eq!(expected, got);
     }
 
     #[test]
     fn document_id_buf_from_document_id_normal() {
-        let expected = DocumentIdBuf::Normal(DocumentNameBuf::from("foo"));
-        let got = DocumentIdBuf::from(DocumentId::Normal(DocumentName::new("foo")));
+        let expected = DocumentIdBuf::Normal(NormalDocumentNameBuf::from("foo"));
+        let got = DocumentIdBuf::from(DocumentId::Normal(NormalDocumentName::new("foo")));
         assert_eq!(expected, got);
     }
 
@@ -350,14 +350,14 @@ mod tests {
 
     #[test]
     fn document_id_buf_from_document_id_local() {
-        let expected = DocumentIdBuf::Local(DocumentNameBuf::from("foo"));
-        let got = DocumentIdBuf::from(DocumentId::Local(DocumentName::new("foo")));
+        let expected = DocumentIdBuf::Local(LocalDocumentNameBuf::from("foo"));
+        let got = DocumentIdBuf::from(DocumentId::Local(LocalDocumentName::new("foo")));
         assert_eq!(expected, got);
     }
 
     #[test]
     fn document_id_buf_deserialize_normal() {
-        let expected = DocumentIdBuf::Normal(DocumentNameBuf::from("foo"));
+        let expected = DocumentIdBuf::Normal(NormalDocumentNameBuf::from("foo"));
         let got = serde_json::from_value(serde_json::Value::String(String::from("foo"))).unwrap();
         assert_eq!(expected, got);
     }
@@ -372,7 +372,7 @@ mod tests {
 
     #[test]
     fn document_id_buf_deserialize_local() {
-        let expected = DocumentIdBuf::Local(DocumentNameBuf::from("foo"));
+        let expected = DocumentIdBuf::Local(LocalDocumentNameBuf::from("foo"));
         let got = serde_json::from_value(serde_json::Value::String(String::from("_local/foo")))
                       .unwrap();
         assert_eq!(expected, got);
@@ -380,7 +380,7 @@ mod tests {
 
     #[test]
     fn document_id_from_str_ref_normal() {
-        let expected = DocumentId::Normal(DocumentName::new("foo"));
+        let expected = DocumentId::Normal(NormalDocumentName::new("foo"));
         let got = DocumentId::from("foo");
         assert_eq!(expected, got);
     }
@@ -389,7 +389,7 @@ mod tests {
     fn document_id_from_str_ref_normal_begins_with_design() {
         // This is an invalid document name, but our type should still exhibit
         // sane behavior.
-        let expected = DocumentId::Normal(DocumentName::new("_designfoo"));
+        let expected = DocumentId::Normal(NormalDocumentName::new("_designfoo"));
         let got = DocumentId::from("_designfoo");
         assert_eq!(expected, got);
     }
@@ -398,7 +398,7 @@ mod tests {
     fn document_id_from_str_ref_normal_begins_with_local() {
         // This is an invalid document name, but our type should still exhibit
         // sane behavior.
-        let expected = DocumentId::Normal(DocumentName::new("_localfoo"));
+        let expected = DocumentId::Normal(NormalDocumentName::new("_localfoo"));
         let got = DocumentId::from("_localfoo");
         assert_eq!(expected, got);
     }
@@ -412,21 +412,21 @@ mod tests {
 
     #[test]
     fn document_id_from_str_ref_local() {
-        let expected = DocumentId::Local(DocumentName::new("foo"));
+        let expected = DocumentId::Local(LocalDocumentName::new("foo"));
         let got = DocumentId::from("_local/foo");
         assert_eq!(expected, got);
     }
 
     #[test]
     fn document_id_from_document_id() {
-        let doc_id = DocumentId::Normal(DocumentName::new("foo"));
+        let doc_id = DocumentId::Normal(NormalDocumentName::new("foo"));
         assert_eq!(doc_id, DocumentId::from(doc_id.clone()));
     }
 
     #[test]
     fn document_id_from_document_id_buf_ref() {
-        let expected = DocumentId::Normal(DocumentName::new("foo"));
-        let doc_id_buf = DocumentIdBuf::Normal(DocumentNameBuf::from("foo"));
+        let expected = DocumentId::Normal(NormalDocumentName::new("foo"));
+        let doc_id_buf = DocumentIdBuf::Normal(NormalDocumentNameBuf::from("foo"));
         assert_eq!(expected, DocumentId::from(&doc_id_buf));
     }
 }

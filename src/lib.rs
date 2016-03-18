@@ -27,6 +27,7 @@ pub use client::{BasicClient, Client, IntoUrl};
 pub use document::{Attachment, Document, SavedAttachment, UnsavedAttachment};
 pub use error::{Error, ErrorResponse};
 pub use path::{DatabaseName, DatabaseNameBuf, DatabasePath, DatabasePathBuf, DesignDocumentName,
-               DesignDocumentNameBuf, DocumentId, DocumentIdBuf, DocumentName, DocumentNameBuf,
-               DocumentPath, DocumentPathBuf, IntoDatabasePath, IntoDocumentPath};
+               DesignDocumentNameBuf, DocumentId, DocumentIdBuf, DocumentPath, DocumentPathBuf,
+               IntoDatabasePath, IntoDocumentPath, LocalDocumentName, LocalDocumentNameBuf,
+               NormalDocumentName, NormalDocumentNameBuf};
 pub use revision::Revision;
