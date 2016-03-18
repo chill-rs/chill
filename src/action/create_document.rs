@@ -3,7 +3,6 @@ use DocumentIdBuf;
 use document::WriteDocumentResponse;
 use Error;
 use IntoDatabasePath;
-use IntoDocumentId;
 use Revision;
 use serde;
 use serde_json;
@@ -36,9 +35,9 @@ impl<'a, C, P, T> CreateDocument<'a, C, P, T>
     }
 
     pub fn with_document_id<D>(mut self, doc_id: D) -> Self
-        where D: IntoDocumentId<'a>
+        where D: Into<DocumentId<'a>>
     {
-        self.doc_id = Some(doc_id.into_document_id());
+        self.doc_id = Some(doc_id.into());
         self
     }
 

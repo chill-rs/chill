@@ -28,5 +28,5 @@ pub use document::{Attachment, Document, SavedAttachment, UnsavedAttachment};
 pub use error::{Error, ErrorResponse};
 pub use path::{DatabaseName, DatabaseNameBuf, DatabasePath, DatabasePathBuf, DesignDocumentName,
                DesignDocumentNameBuf, DocumentId, DocumentIdBuf, DocumentName, DocumentNameBuf,
-               DocumentPath, DocumentPathBuf, IntoDatabasePath, IntoDocumentId, IntoDocumentPath};
+               DocumentPath, DocumentPathBuf, IntoDatabasePath, IntoDocumentPath};
 pub use revision::Revision;

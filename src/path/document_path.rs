@@ -170,12 +170,12 @@ impl<'a> IntoDocumentPath<'a> for &'a DocumentPathBuf {
 
 impl<'a, T, U> IntoDocumentPath<'a> for (T, U)
     where T: IntoDatabasePath<'a>,
-          U: IntoDocumentId<'a>
+          U: Into<DocumentId<'a>>
 {
     fn into_document_path(self) -> Result<DocumentPath<'a>, Error> {
         Ok(DocumentPath {
             db_name: try!(self.0.into_database_path()).database_name(),
-            doc_id: self.1.into_document_id(),
+            doc_id: self.1.into(),
         })
     }
 }

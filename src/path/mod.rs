@@ -179,10 +179,6 @@ pub enum DocumentIdBuf {
     Local(DocumentNameBuf),
 }
 
-pub trait IntoDocumentId<'a> {
-    fn into_document_id(self) -> DocumentId<'a>;
-}
-
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct DocumentPath<'a> {
     db_name: &'a DatabaseName,
