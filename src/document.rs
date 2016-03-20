@@ -482,11 +482,9 @@ impl serde::Serialize for UnsavedAttachment {
             fn visit<S>(&mut self, serializer: &mut S) -> Result<Option<()>, S::Error>
                 where S: serde::Serializer
             {
-                // FIXME: Review: Mime implements Serialize, but it doesn't compile.
-
                 let &mut Visitor(attachment) = self;
                 let content_type = attachment.content_type.clone();
-                try!(serializer.serialize_struct_elt("content_type", content_type.to_string()));
+                try!(serializer.serialize_struct_elt("content_type", &content_type));
                 try!(serializer.serialize_struct_elt("content",
                                                      &JsonEncodableBase64Blob(&attachment.content)));
                 Ok(None)

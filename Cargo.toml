@@ -9,11 +9,20 @@ keywords = ["couchdb", "database", "nosql"]
 
 [dependencies]
 base64 = "0.1"
-hyper = "0.8"
-mime = "0.2"
 regex = "0.1"
 serde = "0.7"
 serde_json = "0.7"
 tempdir = "0.3"
 url = "0.5"
-uuid = "0.1"
+
+[dependencies.mime]
+version = "0.2"
+features = ["serde"]
+
+[dependencies.hyper]
+version = "0.8"
+features = ["serde-serialization"]
+
+[dependencies.uuid]
+version = "0.1"
+features = ["serde"]
