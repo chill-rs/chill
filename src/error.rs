@@ -326,7 +326,7 @@ impl std::fmt::Display for TransportErrorKind {
 
 /// Error information returned from the CouchDB server when an error occurs
 /// while processing the client's request.
-#[derive(Clone, Debug, Hash, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct ErrorResponse {
     error: String,
     reason: String,
@@ -362,6 +362,7 @@ impl std::fmt::Display for ErrorResponse {
     }
 }
 
+#[doc(hidden)]
 impl serde::Deserialize for ErrorResponse {
     fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
         where D: serde::Deserializer

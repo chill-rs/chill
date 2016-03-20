@@ -67,6 +67,7 @@ impl Document {
     }
 }
 
+#[doc(hidden)]
 impl serde::Serialize for Document {
     fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
         where S: serde::Serializer
