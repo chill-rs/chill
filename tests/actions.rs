@@ -20,7 +20,6 @@ fn make_server_and_client() -> (chill::testing::FakeServer, chill::Client) {
 fn create_database_ok() {
     let (_server, client) = make_server_and_client();
     client.create_database("/baseball").run().unwrap();
-    // FIXME: Verify that the database was created.
 }
 
 #[test]
@@ -98,12 +97,6 @@ fn create_document_nok_document_conflict() {
     }
 }
 
-// FIXME: Implement this test.
-// #[test]
-// fn create_document_nok_unauthorized() {
-//     unimplemented!();
-// }
-
 #[test]
 fn read_document_ok_default_options() {
 
@@ -135,12 +128,6 @@ fn read_document_nok_not_found() {
         x @ _ => unexpected_result!(x),
     }
 }
-
-// FIXME: Implement this test.
-// #[test]
-// fn read_document_nok_unauthorized() {
-//     unimplemented!();
-// }
 
 #[test]
 fn update_document_ok() {

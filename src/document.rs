@@ -72,8 +72,6 @@ impl serde::Serialize for Document {
     fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
         where S: serde::Serializer
     {
-        // FIXME: Eliminate all this cloning?
-        //
         // Serde requires structure field names to have static lifetimes.
         // However, our document content is dynamic. As a workaround, we construct a
         // serde_json::Value instance containing both the document's content and
@@ -762,18 +760,6 @@ mod tests {
             x @ _ => unexpected_result!(x),
         }
     }
-
-    // FIXME: Implement this test.
-    // #[test]
-    // fn document_set_content_ok() {
-    //     unimplemented!();
-    // }
-
-    // FIXME: Implement this test.
-    // #[test]
-    // fn document_set_content_ok_document_is_deleted() {
-    //     unimplemented!();
-    // }
 
     #[test]
     fn document_serialize_empty() {

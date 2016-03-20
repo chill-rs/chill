@@ -86,8 +86,6 @@ impl<'a> From<&'a str> for DocumentId {
 
 impl From<String> for DocumentId {
     fn from(s: String) -> Self {
-        // FIXME: Don't convert to a &str. Doing so causes an unnecessary heap
-        // allocation when the document id is of a normal document type.
         DocumentId::from(s.as_str())
     }
 }

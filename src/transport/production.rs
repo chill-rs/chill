@@ -86,8 +86,6 @@ impl HyperTransport {
     {
         let mut url = self.server_base_url.clone();
 
-        // FIXME: Eliminate this temporary vector.
-
         let path = path.into_iter().collect::<Vec<_>>();
 
         // The base URL may have an empty final path component, which will lead
