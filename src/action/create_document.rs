@@ -1,5 +1,5 @@
 use DocumentId;
-use DocumentIdBuf;
+use DocumentIdRef;
 use document::WriteDocumentResponse;
 use Error;
 use IntoDatabasePath;
@@ -16,7 +16,7 @@ pub struct CreateDocument<'a, C, P, T>
     transport: &'a T,
     db_path: P,
     content: &'a C,
-    doc_id: Option<DocumentId<'a>>,
+    doc_id: Option<DocumentIdRef<'a>>,
 }
 
 impl<'a, C, P, T> CreateDocument<'a, C, P, T>
@@ -35,13 +35,13 @@ impl<'a, C, P, T> CreateDocument<'a, C, P, T>
     }
 
     pub fn with_document_id<D>(mut self, doc_id: D) -> Self
-        where D: Into<DocumentId<'a>>
+        where D: Into<DocumentIdRef<'a>>
     {
         self.doc_id = Some(doc_id.into());
         self
     }
 
-    pub fn run(self) -> Result<(DocumentIdBuf, Revision), Error> {
+    pub fn run(self) -> Result<(DocumentId, Revision), Error> {
 
         let db_name = try!(self.db_path.into_database_path());
 
@@ -84,7 +84,7 @@ impl<'a, C, P, T> CreateDocument<'a, C, P, T>
 #[cfg(test)]
 mod tests {
 
-    use DocumentIdBuf;
+    use DocumentId;
     use Error;
     use Revision;
     use serde_json;
@@ -110,7 +110,7 @@ mod tests {
                                      .run()
                                      .unwrap();
 
-        let expected = (DocumentIdBuf::from("17a0e088c69e0a99be6d6159b4000563"),
+        let expected = (DocumentId::from("17a0e088c69e0a99be6d6159b4000563"),
                         Revision::parse("1-967a00dff5e02add41819138abb3284d").unwrap());
         assert_eq!(expected, (doc_id, revision));
 
@@ -144,7 +144,7 @@ mod tests {
                                      .run()
                                      .unwrap();
 
-        let expected = (DocumentIdBuf::from("document_id"),
+        let expected = (DocumentId::from("document_id"),
                         Revision::parse("1-967a00dff5e02add41819138abb3284d").unwrap());
         assert_eq!(expected, (doc_id, revision));
 

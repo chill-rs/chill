@@ -1,3 +1,4 @@
+use DatabaseName;
 use Document;
 use document::JsonDecodableDocument;
 use Error;
@@ -27,7 +28,6 @@ impl<'a, P, T> ReadDocument<'a, P, T>
     pub fn run(self) -> Result<Document, Error> {
 
         let doc_path = try!(self.doc_path.into_document_path());
-        let db_name = doc_path.database_name().to_owned();
 
         let response = try!(self.transport
                                 .get(doc_path, RequestOptions::new().with_accept_json()));
@@ -36,7 +36,8 @@ impl<'a, P, T> ReadDocument<'a, P, T>
             StatusCode::Ok => {
                 let decoded_doc: JsonDecodableDocument = try!(response.decode_json_body());
                 // FIXME: Eliminate the database name temporary.
-                Ok(Document::new_from_decoded(db_name, decoded_doc))
+                Ok(Document::new_from_decoded(DatabaseName::from(*doc_path.database_name()),
+                                              decoded_doc))
             }
             StatusCode::NotFound => Err(Error::not_found(response)),
             StatusCode::Unauthorized => Err(Error::unauthorized(response)),

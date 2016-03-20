@@ -2,7 +2,29 @@ use serde;
 use std;
 use super::*;
 
-impl<'a> DocumentId<'a> {
+impl<'a> DocumentIdRef<'a> {}
+
+impl<'a> DocumentIdRef<'a> {
+    #[doc(hidden)]
+    pub fn prefix(&self) -> Option<&'static str> {
+        match self {
+            &DocumentIdRef::Normal(..) => None,
+            &DocumentIdRef::Design(..) => Some(DocumentId::design_prefix()),
+            &DocumentIdRef::Local(..) => Some(DocumentId::local_prefix()),
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn name_as_str(&self) -> &'a str {
+        match self {
+            &DocumentIdRef::Normal(x) => x.inner,
+            &DocumentIdRef::Design(x) => x.inner,
+            &DocumentIdRef::Local(x) => x.inner,
+        }
+    }
+}
+
+impl DocumentId {
     fn design_prefix() -> &'static str {
         "_design"
     }
@@ -11,107 +33,159 @@ impl<'a> DocumentId<'a> {
         "_local"
     }
 
-    #[doc(hidden)]
-    pub fn has_prefix(&self) -> bool {
-        self.prefix_as_str().is_some()
-    }
-
-    #[doc(hidden)]
-    pub fn prefix_as_str(&self) -> Option<&'static str> {
+    pub fn as_ref(&self) -> DocumentIdRef {
         match self {
-            &DocumentId::Normal(_) => None,
-            &DocumentId::Design(_) => Some(DocumentId::design_prefix()),
-            &DocumentId::Local(_) => Some(DocumentId::local_prefix()),
-        }
-    }
-
-    #[doc(hidden)]
-    pub fn name_as_str(&self) -> &'a str {
-        match self {
-            &DocumentId::Normal(doc_name) => &doc_name.inner,
-            &DocumentId::Design(doc_name) => &doc_name.inner,
-            &DocumentId::Local(doc_name) => &doc_name.inner,
+            &DocumentId::Normal(ref x) => DocumentIdRef::Normal(x.as_ref()),
+            &DocumentId::Design(ref x) => DocumentIdRef::Design(x.as_ref()),
+            &DocumentId::Local(ref x) => DocumentIdRef::Local(x.as_ref()),
         }
     }
 }
 
-impl<'a> std::fmt::Display for DocumentId<'a> {
+impl<'a> std::fmt::Display for DocumentIdRef<'a> {
     fn fmt(&self, formatter: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
         match self {
-            &DocumentId::Normal(doc_name) => doc_name.fmt(formatter),
-            &DocumentId::Design(doc_name) => {
-                write!(formatter, "{}/{}", DocumentId::design_prefix(), doc_name)
-            }
-            &DocumentId::Local(doc_name) => {
-                write!(formatter, "{}/{}", DocumentId::local_prefix(), doc_name)
-            }
+            &DocumentIdRef::Normal(x) => x.fmt(formatter),
+            &DocumentIdRef::Design(x) => write!(formatter, "{}/{}", DocumentId::design_prefix(), x),
+            &DocumentIdRef::Local(x) => write!(formatter, "{}/{}", DocumentId::local_prefix(), x),
         }
     }
 }
 
-impl<'a> From<&'a str> for DocumentId<'a> {
+impl std::fmt::Display for DocumentId {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        DocumentIdRef::from(self).fmt(formatter)
+    }
+}
+
+impl<'a> From<&'a str> for DocumentIdRef<'a> {
     fn from(s: &'a str) -> Self {
 
         let design_prefix = DocumentId::design_prefix();
         let local_prefix = DocumentId::local_prefix();
 
         if s.starts_with(design_prefix) && s[design_prefix.len()..].starts_with('/') {
-            DocumentId::Design(DesignDocumentName::new(&s[design_prefix.len() + 1..]))
+            DocumentIdRef::Design(DesignDocumentNameRef::new(&s[design_prefix.len() + 1..]))
         } else if s.starts_with(local_prefix) && s[local_prefix.len()..].starts_with('/') {
-            DocumentId::Local(LocalDocumentName::new(&s[local_prefix.len() + 1..]))
+            DocumentIdRef::Local(LocalDocumentNameRef::new(&s[local_prefix.len() + 1..]))
         } else {
-            DocumentId::Normal(NormalDocumentName::new(s))
+            DocumentIdRef::Normal(NormalDocumentNameRef::new(s))
         }
     }
 }
 
-impl<'a> From<&'a DocumentIdBuf> for DocumentId<'a> {
-    fn from(doc_id: &'a DocumentIdBuf) -> Self {
+impl<'a> From<&'a str> for DocumentId {
+    fn from(s: &'a str) -> Self {
+        match DocumentIdRef::from(s) {
+            DocumentIdRef::Normal(x) => DocumentId::Normal(x.into()),
+            DocumentIdRef::Design(x) => DocumentId::Design(x.into()),
+            DocumentIdRef::Local(x) => DocumentId::Local(x.into()),
+        }
+    }
+}
+
+impl From<String> for DocumentId {
+    fn from(s: String) -> Self {
+        // FIXME: Don't convert to a &str. Doing so causes an unnecessary heap
+        // allocation when the document id is of a normal document type.
+        DocumentId::from(s.as_str())
+    }
+}
+
+impl<'a> From<&'a DocumentId> for DocumentIdRef<'a> {
+    fn from(doc_id: &'a DocumentId) -> Self {
         match doc_id {
-            &DocumentIdBuf::Normal(ref doc_name_buf) => DocumentId::Normal(&doc_name_buf),
-            &DocumentIdBuf::Design(ref doc_name_buf) => DocumentId::Design(&doc_name_buf),
-            &DocumentIdBuf::Local(ref doc_name_buf) => DocumentId::Local(&doc_name_buf),
+            &DocumentId::Normal(ref x) => DocumentIdRef::Normal(x.into()),
+            &DocumentId::Design(ref x) => DocumentIdRef::Design(x.into()),
+            &DocumentId::Local(ref x) => DocumentIdRef::Local(x.into()),
         }
     }
 }
 
-impl<'a> From<&'a NormalDocumentName> for DocumentId<'a> {
+impl<'a> From<DocumentIdRef<'a>> for DocumentId {
+    fn from(doc_id: DocumentIdRef<'a>) -> Self {
+        match doc_id {
+            DocumentIdRef::Normal(x) => DocumentId::Normal(x.into()),
+            DocumentIdRef::Design(x) => DocumentId::Design(x.into()),
+            DocumentIdRef::Local(x) => DocumentId::Local(x.into()),
+        }
+    }
+}
+
+impl<'a> From<NormalDocumentNameRef<'a>> for DocumentIdRef<'a> {
+    fn from(doc_name: NormalDocumentNameRef<'a>) -> Self {
+        DocumentIdRef::Normal(doc_name)
+    }
+}
+
+impl<'a> From<&'a NormalDocumentName> for DocumentIdRef<'a> {
     fn from(doc_name: &'a NormalDocumentName) -> Self {
-        DocumentId::Normal(doc_name)
+        DocumentIdRef::Normal(doc_name.into())
     }
 }
 
-impl<'a> From<&'a NormalDocumentNameBuf> for DocumentId<'a> {
-    fn from(doc_name: &'a NormalDocumentNameBuf) -> Self {
-        DocumentId::Normal(doc_name)
+impl<'a> From<DesignDocumentNameRef<'a>> for DocumentIdRef<'a> {
+    fn from(doc_name: DesignDocumentNameRef<'a>) -> Self {
+        DocumentIdRef::Design(doc_name)
     }
 }
 
-impl<'a> From<&'a DesignDocumentName> for DocumentId<'a> {
+impl<'a> From<&'a DesignDocumentName> for DocumentIdRef<'a> {
     fn from(doc_name: &'a DesignDocumentName) -> Self {
-        DocumentId::Design(doc_name)
+        DocumentIdRef::Design(doc_name.into())
     }
 }
 
-impl<'a> From<&'a DesignDocumentNameBuf> for DocumentId<'a> {
-    fn from(doc_name: &'a DesignDocumentNameBuf) -> Self {
-        DocumentId::Design(doc_name)
+impl<'a> From<LocalDocumentNameRef<'a>> for DocumentIdRef<'a> {
+    fn from(doc_name: LocalDocumentNameRef<'a>) -> Self {
+        DocumentIdRef::Local(doc_name)
     }
 }
 
-impl<'a> From<&'a LocalDocumentName> for DocumentId<'a> {
+impl<'a> From<&'a LocalDocumentName> for DocumentIdRef<'a> {
     fn from(doc_name: &'a LocalDocumentName) -> Self {
+        DocumentIdRef::Local(doc_name.into())
+    }
+}
+
+impl<'a> From<NormalDocumentNameRef<'a>> for DocumentId {
+    fn from(doc_name: NormalDocumentNameRef<'a>) -> Self {
+        DocumentId::Normal(doc_name.into())
+    }
+}
+
+impl From<NormalDocumentName> for DocumentId {
+    fn from(doc_name: NormalDocumentName) -> Self {
+        DocumentId::Normal(doc_name)
+    }
+}
+
+impl<'a> From<DesignDocumentNameRef<'a>> for DocumentId {
+    fn from(doc_name: DesignDocumentNameRef<'a>) -> Self {
+        DocumentId::Design(doc_name.into())
+    }
+}
+
+impl From<DesignDocumentName> for DocumentId {
+    fn from(doc_name: DesignDocumentName) -> Self {
+        DocumentId::Design(doc_name)
+    }
+}
+
+impl<'a> From<LocalDocumentNameRef<'a>> for DocumentId {
+    fn from(doc_name: LocalDocumentNameRef<'a>) -> Self {
+        DocumentId::Local(doc_name.into())
+    }
+}
+
+impl From<LocalDocumentName> for DocumentId {
+    fn from(doc_name: LocalDocumentName) -> Self {
         DocumentId::Local(doc_name)
     }
 }
 
-impl<'a> From<&'a LocalDocumentNameBuf> for DocumentId<'a> {
-    fn from(doc_name: &'a LocalDocumentNameBuf) -> Self {
-        DocumentId::Local(doc_name)
-    }
-}
-
-impl<'a> serde::Serialize for DocumentId<'a> {
+#[doc(hidden)]
+impl<'a> serde::Serialize for DocumentIdRef<'a> {
     fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
         where S: serde::Serializer
     {
@@ -119,70 +193,35 @@ impl<'a> serde::Serialize for DocumentId<'a> {
     }
 }
 
-impl DocumentIdBuf {
-    #[doc(hidden)]
-    pub fn as_document_id(&self) -> DocumentId {
-        match self {
-            &DocumentIdBuf::Normal(ref doc_name_buf) => DocumentId::Normal(&doc_name_buf),
-            &DocumentIdBuf::Design(ref doc_name_buf) => DocumentId::Design(&doc_name_buf),
-            &DocumentIdBuf::Local(ref doc_name_buf) => DocumentId::Local(&doc_name_buf),
-        }
+#[doc(hidden)]
+impl serde::Serialize for DocumentId {
+    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
+        where S: serde::Serializer
+    {
+        self.to_string().serialize(serializer)
     }
 }
 
-impl std::fmt::Display for DocumentIdBuf {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-        DocumentId::from(self).fmt(formatter)
-    }
-}
-
-impl<'a> From<&'a str> for DocumentIdBuf {
-    fn from(s: &'a str) -> Self {
-        match DocumentId::from(s) {
-            DocumentId::Normal(doc_name) => DocumentIdBuf::Normal(doc_name.to_owned()),
-            DocumentId::Design(doc_name) => DocumentIdBuf::Design(doc_name.to_owned()),
-            DocumentId::Local(doc_name) => DocumentIdBuf::Local(doc_name.to_owned()),
-        }
-    }
-}
-
-impl From<String> for DocumentIdBuf {
-    fn from(s: String) -> Self {
-        // FIXME: Don't convert to a &str. Doing so causes an extra heap
-        // allocation for the common case of a normal document.
-        DocumentIdBuf::from(s.as_str())
-    }
-}
-
-impl<'a> From<DocumentId<'a>> for DocumentIdBuf {
-    fn from(doc_id: DocumentId<'a>) -> Self {
-        match doc_id { 
-            DocumentId::Normal(doc_name) => DocumentIdBuf::Normal(doc_name.to_owned()),
-            DocumentId::Design(doc_name) => DocumentIdBuf::Design(doc_name.to_owned()),
-            DocumentId::Local(doc_name) => DocumentIdBuf::Local(doc_name.to_owned()),
-        }
-    }
-}
-
-impl serde::Deserialize for DocumentIdBuf {
+#[doc(hidden)]
+impl serde::Deserialize for DocumentId {
     fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
         where D: serde::Deserializer
     {
         struct Visitor;
 
         impl serde::de::Visitor for Visitor {
-            type Value = DocumentIdBuf;
+            type Value = DocumentId;
 
             fn visit_str<E>(&mut self, encoded: &str) -> Result<Self::Value, E>
                 where E: serde::de::Error
             {
-                Ok(DocumentIdBuf::from(encoded))
+                Ok(encoded.into())
             }
 
             fn visit_string<E>(&mut self, encoded: String) -> Result<Self::Value, E>
                 where E: serde::de::Error
             {
-                Ok(DocumentIdBuf::from(encoded))
+                Ok(encoded.into())
             }
         }
 
@@ -197,314 +236,48 @@ mod tests {
     use super::super::*;
 
     #[test]
-    fn document_id_has_prefix_normal() {
-        let doc_id = DocumentId::Normal(NormalDocumentName::new("foo"));
-        assert_eq!(false, doc_id.has_prefix());
+    fn document_id_ref_from_str_ref_normal() {
+        let expected = DocumentIdRef::Normal(NormalDocumentNameRef::new("foo"));
+        assert_eq!(expected, DocumentIdRef::from("foo"));
     }
 
     #[test]
-    fn document_id_has_prefix_design() {
-        let doc_id = DocumentId::Design(DesignDocumentName::new("foo"));
-        assert_eq!(true, doc_id.has_prefix());
+    fn document_id_ref_from_str_ref_design() {
+        let expected = DocumentIdRef::Design(DesignDocumentNameRef::new("foo"));
+        assert_eq!(expected, DocumentIdRef::from("_design/foo"));
     }
 
     #[test]
-    fn document_id_has_prefix_local() {
-        let doc_id = DocumentId::Local(LocalDocumentName::new("foo"));
-        assert_eq!(true, doc_id.has_prefix());
+    fn document_id_ref_from_str_ref_local() {
+        let expected = DocumentIdRef::Local(LocalDocumentNameRef::new("foo"));
+        assert_eq!(expected, DocumentIdRef::from("_local/foo"));
     }
 
     #[test]
-    fn document_id_prefix_as_str_normal() {
-        let doc_id = DocumentId::Normal(NormalDocumentName::new("foo"));
-        assert_eq!(None, doc_id.prefix_as_str());
+    fn document_id_ref_from_str_ref_invalid() {
+        let expected = DocumentIdRef::Normal(NormalDocumentNameRef::new("_design"));
+        assert_eq!(expected, DocumentIdRef::from("_design"));
     }
 
     #[test]
-    fn document_id_prefix_as_str_design() {
-        let doc_id = DocumentId::Design(DesignDocumentName::new("foo"));
-        assert_eq!(Some("_design"), doc_id.prefix_as_str());
-    }
-
-    #[test]
-    fn document_id_prefix_as_str_local() {
-        let doc_id = DocumentId::Local(LocalDocumentName::new("foo"));
-        assert_eq!(Some("_local"), doc_id.prefix_as_str());
-    }
-
-    #[test]
-    fn document_id_name_as_str_normal() {
-        let doc_id = DocumentId::Normal(NormalDocumentName::new("foo"));
-        assert_eq!("foo", doc_id.name_as_str());
-    }
-
-    #[test]
-    fn document_id_name_as_str_design() {
-        let doc_id = DocumentId::Design(DesignDocumentName::new("foo"));
-        assert_eq!("foo", doc_id.name_as_str());
-    }
-
-    #[test]
-    fn document_id_name_as_str_local() {
-        let doc_id = DocumentId::Local(LocalDocumentName::new("foo"));
-        assert_eq!("foo", doc_id.name_as_str());
-    }
-
-    #[test]
-    fn document_id_display_normal() {
-        let doc_id = DocumentId::Normal(NormalDocumentName::new("foo"));
-        assert_eq!("foo", format!("{}", doc_id));
-    }
-
-    #[test]
-    fn document_id_display_design() {
-        let doc_id = DocumentId::Design(DesignDocumentName::new("foo"));
-        assert_eq!("_design/foo", format!("{}", doc_id));
-    }
-
-    #[test]
-    fn document_id_display_local() {
-        let doc_id = DocumentId::Local(LocalDocumentName::new("foo"));
-        assert_eq!("_local/foo", format!("{}", doc_id));
-    }
-
-    #[test]
-    fn document_id_from_str_ref_normal() {
-        let expected = DocumentId::Normal(NormalDocumentName::new("foo"));
-        let got = DocumentId::from("foo");
+    fn document_id_ref_serialize() {
+        let expected = serde_json::Value::String("_design/foo".into());
+        let got = serde_json::to_value(&DocumentIdRef::Design("foo".into()));
         assert_eq!(expected, got);
     }
 
     #[test]
-    fn document_id_from_str_ref_normal_begins_with_design() {
-        // This is an invalid document name, but our type should still exhibit
-        // sane behavior.
-        let expected = DocumentId::Normal(NormalDocumentName::new("_designfoo"));
-        let got = DocumentId::from("_designfoo");
+    fn document_id_serialize() {
+        let expected = serde_json::Value::String("_design/foo".into());
+        let got = serde_json::to_value(&DocumentId::Design("foo".into()));
         assert_eq!(expected, got);
     }
 
     #[test]
-    fn document_id_from_str_ref_normal_begins_with_local() {
-        // This is an invalid document name, but our type should still exhibit
-        // sane behavior.
-        let expected = DocumentId::Normal(NormalDocumentName::new("_localfoo"));
-        let got = DocumentId::from("_localfoo");
-        assert_eq!(expected, got);
-    }
-
-    #[test]
-    fn document_id_from_str_ref_design() {
-        let expected = DocumentId::Design(DesignDocumentName::new("foo"));
-        let got = DocumentId::from("_design/foo");
-        assert_eq!(expected, got);
-    }
-
-    #[test]
-    fn document_id_from_str_ref_local() {
-        let expected = DocumentId::Local(LocalDocumentName::new("foo"));
-        let got = DocumentId::from("_local/foo");
-        assert_eq!(expected, got);
-    }
-
-    #[test]
-    fn document_id_from_document_id() {
-        let doc_id = DocumentId::Normal(NormalDocumentName::new("foo"));
-        assert_eq!(doc_id, DocumentId::from(doc_id.clone()));
-    }
-
-    #[test]
-    fn document_id_from_document_id_buf_ref() {
-        let expected = DocumentId::Normal(NormalDocumentName::new("foo"));
-        let doc_id_buf = DocumentIdBuf::Normal(NormalDocumentNameBuf::from("foo"));
-        assert_eq!(expected, DocumentId::from(&doc_id_buf));
-    }
-
-    #[test]
-    fn document_id_from_normal_document_name() {
-        let expected = DocumentId::Normal(NormalDocumentName::new("foo"));
-        let doc_name = NormalDocumentName::new("foo");
-        assert_eq!(expected, DocumentId::from(doc_name));
-    }
-
-    #[test]
-    fn document_id_from_normal_document_name_buf() {
-        let expected = DocumentId::Normal(NormalDocumentName::new("foo"));
-        let doc_name = NormalDocumentNameBuf::from("foo");
-        assert_eq!(expected, DocumentId::from(&doc_name));
-    }
-
-    #[test]
-    fn document_id_from_design_document_name() {
-        let expected = DocumentId::Design(DesignDocumentName::new("foo"));
-        let doc_name = DesignDocumentName::new("foo");
-        assert_eq!(expected, DocumentId::from(doc_name));
-    }
-
-    #[test]
-    fn document_id_from_design_document_name_buf() {
-        let expected = DocumentId::Design(DesignDocumentName::new("foo"));
-        let doc_name = DesignDocumentNameBuf::from("foo");
-        assert_eq!(expected, DocumentId::from(&doc_name));
-    }
-
-    #[test]
-    fn document_id_from_local_document_name() {
-        let expected = DocumentId::Local(LocalDocumentName::new("foo"));
-        let doc_name = LocalDocumentName::new("foo");
-        assert_eq!(expected, DocumentId::from(doc_name));
-    }
-
-    #[test]
-    fn document_id_from_local_document_name_buf() {
-        let expected = DocumentId::Local(LocalDocumentName::new("foo"));
-        let doc_name = LocalDocumentNameBuf::from("foo");
-        assert_eq!(expected, DocumentId::from(&doc_name));
-    }
-
-    #[test]
-    fn document_id_serialize_normal() {
-        let expected = serde_json::Value::String(String::from("foo"));
-        let doc_id = DocumentId::Normal(NormalDocumentName::new("foo"));
-        assert_eq!(expected, serde_json::to_value(&doc_id));
-    }
-
-    #[test]
-    fn document_id_serialize_design() {
-        let expected = serde_json::Value::String(String::from("_design/foo"));
-        let doc_id = DocumentId::Design(DesignDocumentName::new("foo"));
-        assert_eq!(expected, serde_json::to_value(&doc_id));
-    }
-
-    #[test]
-    fn document_id_serialize_local() {
-        let expected = serde_json::Value::String(String::from("_local/foo"));
-        let doc_id = DocumentId::Local(LocalDocumentName::new("foo"));
-        assert_eq!(expected, serde_json::to_value(&doc_id));
-    }
-
-    #[test]
-    fn document_id_buf_as_document_id_normal() {
-        let doc_id_buf = DocumentIdBuf::Normal(NormalDocumentNameBuf::from("foo"));
-        let expected = DocumentId::Normal(NormalDocumentName::new("foo"));
-        assert_eq!(expected, doc_id_buf.as_document_id());
-    }
-
-    #[test]
-    fn document_id_buf_as_document_id_design() {
-        let doc_id_buf = DocumentIdBuf::Design(DesignDocumentNameBuf::from("foo"));
-        let expected = DocumentId::Design(DesignDocumentName::new("foo"));
-        assert_eq!(expected, doc_id_buf.as_document_id());
-    }
-
-    #[test]
-    fn document_id_buf_as_document_id_local() {
-        let doc_id_buf = DocumentIdBuf::Local(LocalDocumentNameBuf::from("foo"));
-        let expected = DocumentId::Local(LocalDocumentName::new("foo"));
-        assert_eq!(expected, doc_id_buf.as_document_id());
-    }
-
-    #[test]
-    fn document_id_buf_display_normal() {
-        let doc_id_buf = DocumentIdBuf::Normal(NormalDocumentNameBuf::from("foo"));
-        assert_eq!("foo", format!("{}", doc_id_buf));
-    }
-
-    #[test]
-    fn document_id_buf_display_design() {
-        let doc_id_buf = DocumentIdBuf::Design(DesignDocumentNameBuf::from("foo"));
-        assert_eq!("_design/foo", format!("{}", doc_id_buf));
-    }
-
-    #[test]
-    fn document_id_buf_display_local() {
-        let doc_id_buf = DocumentIdBuf::Local(LocalDocumentNameBuf::from("foo"));
-        assert_eq!("_local/foo", format!("{}", doc_id_buf));
-    }
-
-    #[test]
-    fn document_id_buf_from_str_ref_normal() {
-        let expected = DocumentIdBuf::Normal(NormalDocumentNameBuf::from("foo"));
-        let got = DocumentIdBuf::from("foo");
-        assert_eq!(expected, got);
-    }
-
-    #[test]
-    fn document_id_buf_from_str_ref_design() {
-        let expected = DocumentIdBuf::Design(DesignDocumentNameBuf::from("foo"));
-        let got = DocumentIdBuf::from("_design/foo");
-        assert_eq!(expected, got);
-    }
-
-    #[test]
-    fn document_id_buf_from_str_ref_local() {
-        let expected = DocumentIdBuf::Local(LocalDocumentNameBuf::from("foo"));
-        let got = DocumentIdBuf::from("_local/foo");
-        assert_eq!(expected, got);
-    }
-
-    #[test]
-    fn document_id_buf_from_string_normal() {
-        let expected = DocumentIdBuf::Normal(NormalDocumentNameBuf::from("foo"));
-        let got = DocumentIdBuf::from(String::from("foo"));
-        assert_eq!(expected, got);
-    }
-
-    #[test]
-    fn document_id_buf_from_string_design() {
-        let expected = DocumentIdBuf::Design(DesignDocumentNameBuf::from("foo"));
-        let got = DocumentIdBuf::from(String::from("_design/foo"));
-        assert_eq!(expected, got);
-    }
-
-    #[test]
-    fn document_id_buf_from_string_local() {
-        let expected = DocumentIdBuf::Local(LocalDocumentNameBuf::from("foo"));
-        let got = DocumentIdBuf::from(String::from("_local/foo"));
-        assert_eq!(expected, got);
-    }
-
-    #[test]
-    fn document_id_buf_from_document_id_normal() {
-        let expected = DocumentIdBuf::Normal(NormalDocumentNameBuf::from("foo"));
-        let got = DocumentIdBuf::from(DocumentId::Normal(NormalDocumentName::new("foo")));
-        assert_eq!(expected, got);
-    }
-
-    #[test]
-    fn document_id_buf_from_document_id_design() {
-        let expected = DocumentIdBuf::Design(DesignDocumentNameBuf::from("foo"));
-        let got = DocumentIdBuf::from(DocumentId::Design(DesignDocumentName::new("foo")));
-        assert_eq!(expected, got);
-    }
-
-    #[test]
-    fn document_id_buf_from_document_id_local() {
-        let expected = DocumentIdBuf::Local(LocalDocumentNameBuf::from("foo"));
-        let got = DocumentIdBuf::from(DocumentId::Local(LocalDocumentName::new("foo")));
-        assert_eq!(expected, got);
-    }
-
-    #[test]
-    fn document_id_buf_deserialize_normal() {
-        let expected = DocumentIdBuf::Normal(NormalDocumentNameBuf::from("foo"));
-        let got = serde_json::from_value(serde_json::Value::String(String::from("foo"))).unwrap();
-        assert_eq!(expected, got);
-    }
-
-    #[test]
-    fn document_id_buf_deserialize_design() {
-        let expected = DocumentIdBuf::Design(DesignDocumentNameBuf::from("foo"));
-        let got = serde_json::from_value(serde_json::Value::String(String::from("_design/foo")))
-                      .unwrap();
-        assert_eq!(expected, got);
-    }
-
-    #[test]
-    fn document_id_buf_deserialize_local() {
-        let expected = DocumentIdBuf::Local(LocalDocumentNameBuf::from("foo"));
-        let got = serde_json::from_value(serde_json::Value::String(String::from("_local/foo")))
-                      .unwrap();
+    fn document_id_deserialize() {
+        let json = serde_json::Value::String("_design/foo".into());
+        let expected = DocumentId::Design("foo".into());
+        let got = serde_json::from_value(json).unwrap();
         assert_eq!(expected, got);
     }
 }

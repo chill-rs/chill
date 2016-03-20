@@ -70,7 +70,7 @@ fn create_document_ok_with_document_id() {
                                .with_document_id("babe_ruth")
                                .run()
                                .unwrap();
-    assert_eq!(chill::DocumentIdBuf::from("babe_ruth"), doc_id);
+    assert_eq!(chill::DocumentId::from("babe_ruth"), doc_id);
 
     let doc = client.read_document(("/baseball", &doc_id))
                     .run()

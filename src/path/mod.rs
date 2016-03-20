@@ -2,80 +2,212 @@ use Error;
 use error::PathParseErrorKind;
 use std;
 
-fn path_extract_nonfinal(path: &str) -> Result<(&str, &str), Error> {
-    if !path.starts_with('/') {
-        return Err(Error::PathParse(PathParseErrorKind::NoLeadingSlash));
-    }
-    let path = &path[1..];
-    let index = try!(path.find('/').ok_or(Error::PathParse(PathParseErrorKind::TooFewSegments)));
-    let (segment, remaining) = path.split_at(index);
-    if segment.is_empty() {
-        return Err(Error::PathParse(PathParseErrorKind::EmptySegment));
-    }
-    Ok((segment, remaining))
+#[derive(Debug)]
+struct PathExtractor<'a> {
+    path: &'a str,
 }
 
-fn path_extract_final(path: &str) -> Result<&str, Error> {
-    if !path.starts_with('/') {
-        return Err(Error::PathParse(PathParseErrorKind::NoLeadingSlash));
+#[derive(Debug)]
+enum PathExtraction<'a> {
+    Final(&'a str),
+    Nonfinal(PathExtractor<'a>, &'a str),
+}
+
+impl<'a> PathExtractor<'a> {
+    fn new(path: &'a str) -> Self {
+        PathExtractor { path: path }
     }
-    let segment = &path[1..];
-    if let Some(index) = segment.find('/') {
-        if segment[index + 1..].is_empty() {
-            return Err(Error::PathParse(PathParseErrorKind::TrailingSlash));
+
+    fn extract_final(self) -> Result<&'a str, Error> {
+        if !self.path.starts_with('/') {
+            return Err(Error::PathParse(PathParseErrorKind::NoLeadingSlash));
         }
-        return Err(Error::PathParse(PathParseErrorKind::TooManySegments));
+        let segment = &self.path[1..];
+        if let Some(index) = segment.find('/') {
+            if segment[index + 1..].is_empty() {
+                return Err(Error::PathParse(PathParseErrorKind::TrailingSlash));
+            }
+            return Err(Error::PathParse(PathParseErrorKind::TooManySegments));
+        }
+        if segment.is_empty() {
+            return Err(Error::PathParse(PathParseErrorKind::EmptySegment));
+        }
+        Ok(segment)
     }
-    if segment.is_empty() {
-        return Err(Error::PathParse(PathParseErrorKind::EmptySegment));
+
+    fn extract_nonfinal(&mut self) -> Result<&'a str, Error> {
+        if !self.path.starts_with('/') {
+            return Err(Error::PathParse(PathParseErrorKind::NoLeadingSlash));
+        }
+        let index = try!(self.path[1..]
+                             .find('/')
+                             .ok_or(Error::PathParse(PathParseErrorKind::TooFewSegments)));
+        let (segment, remaining) = self.path[1..].split_at(index);
+        if segment.is_empty() {
+            return Err(Error::PathParse(PathParseErrorKind::EmptySegment));
+        }
+        self.path = remaining;
+        Ok(segment)
     }
-    Ok(segment)
+
+    fn extract_any(mut self) -> Result<PathExtraction<'a>, Error> {
+        match self.extract_nonfinal() {
+            Ok(segment) => Ok(PathExtraction::Nonfinal(self, segment)),
+            Err(Error::PathParse(PathParseErrorKind::TooFewSegments)) => {
+                self.extract_final().map(|x| PathExtraction::Final(x))
+            }
+            Err(e) => Err(e),
+        }
+    }
 }
 
-macro_rules! impl_name_types {
-    ($borrowed_type:ident, $owning_type:ident, $name_arg:ident) => {
+#[cfg(test)]
+mod extractor_tests {
 
-        impl $borrowed_type {
-            fn new(s: &str) -> &$borrowed_type {
-                unsafe { std::mem::transmute(s) }
+    use Error;
+    use error::PathParseErrorKind;
+    use super::{PathExtraction, PathExtractor};
+
+    #[test]
+    fn final_and_nonfinal_ok() {
+        let mut p = PathExtractor::new("/foo/bar/qux");
+        assert_eq!("foo", p.extract_nonfinal().unwrap());
+        assert_eq!("bar", p.extract_nonfinal().unwrap());
+        assert_eq!("qux", p.extract_final().unwrap());
+    }
+
+    #[test]
+    fn any_ok() {
+        let p = PathExtractor::new("/foo/bar/qux");
+        let p = match p.extract_any() {
+            Ok(PathExtraction::Nonfinal(p, "foo")) => p,
+            x @ _ => unexpected_result!(x),
+        };
+        let p = match p.extract_any() {
+            Ok(PathExtraction::Nonfinal(p, "bar")) => p,
+            x @ _ => unexpected_result!(x),
+        };
+        match p.extract_any() {
+            Ok(PathExtraction::Final("qux")) => (),
+            x @ _ => unexpected_result!(x),
+        };
+    }
+
+    #[test]
+    fn nonfinal_nok_is_empty_string() {
+        match PathExtractor::new("").extract_nonfinal() {
+            Err(Error::PathParse(PathParseErrorKind::NoLeadingSlash)) => (),
+            x @ _ => unexpected_result!(x),
+        }
+    }
+
+    #[test]
+    fn nonfinal_nok_has_no_leading_slash() {
+        match PathExtractor::new("foo/bar").extract_nonfinal() {
+            Err(Error::PathParse(PathParseErrorKind::NoLeadingSlash)) => (),
+            x @ _ => unexpected_result!(x),
+        }
+    }
+
+    #[test]
+    fn nonfinal_nok_is_final() {
+        match PathExtractor::new("/foo").extract_nonfinal() {
+            Err(Error::PathParse(PathParseErrorKind::TooFewSegments)) => (),
+            x @ _ => unexpected_result!(x),
+        }
+    }
+
+    #[test]
+    fn nonfinal_nok_is_empty_segment() {
+        match PathExtractor::new("//foo").extract_nonfinal() {
+            Err(Error::PathParse(PathParseErrorKind::EmptySegment)) => (),
+            x @ _ => unexpected_result!(x),
+        }
+    }
+
+    #[test]
+    fn final_nok_is_empty_string() {
+        match PathExtractor::new("").extract_final() {
+            Err(Error::PathParse(PathParseErrorKind::NoLeadingSlash)) => (),
+            x @ _ => unexpected_result!(x),
+        }
+    }
+
+    #[test]
+    fn final_nok_is_empty_segment() {
+        match PathExtractor::new("/").extract_final() {
+            Err(Error::PathParse(PathParseErrorKind::EmptySegment)) => (),
+            x @ _ => unexpected_result!(x),
+        }
+    }
+
+    #[test]
+    fn final_nok_has_extra_segment() {
+        match PathExtractor::new("/foo/bar").extract_final() {
+            Err(Error::PathParse(PathParseErrorKind::TooManySegments)) => (),
+            x @ _ => unexpected_result!(x),
+        }
+    }
+
+    #[test]
+    fn final_nok_has_trailing_slash() {
+        match PathExtractor::new("/foo/").extract_final() {
+            Err(Error::PathParse(PathParseErrorKind::TrailingSlash)) => (),
+            x @ _ => unexpected_result!(x),
+        }
+    }
+}
+
+macro_rules! define_name_type_pair {
+    ($owning_type:ident, $borrowing_type:ident, $arg_name:ident, #[$description:meta]) => {
+
+        /// A reference to a
+        #[$description]
+        /// name, owned elsewhere.
+        #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+        pub struct $borrowing_type<'a> {
+            inner: &'a str,
+        }
+
+        /// A heap-allocated
+        #[$description]
+        /// name, owned and managed internally.
+        #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+        pub struct $owning_type {
+            inner: String,
+        }
+
+        impl<'a> $borrowing_type<'a> {
+            fn new(s: &'a str) -> Self {
+                $borrowing_type { inner: s }
             }
         }
 
-        impl AsRef<$borrowed_type> for $borrowed_type {
-            fn as_ref(&self) -> &$borrowed_type {
-                self
+        impl $owning_type {
+            fn new(s: String) -> Self {
+                $owning_type { inner: s }
+            }
+
+            pub fn as_ref(&self) -> $borrowing_type {
+                $borrowing_type::new(&self.inner)
             }
         }
 
-        impl std::fmt::Display for $borrowed_type {
+        impl<'a> AsRef<str> for $borrowing_type<'a> {
+            fn as_ref(&self) -> &str {
+                self.inner
+            }
+        }
+
+        impl AsRef<str> for $owning_type {
+            fn as_ref(&self) -> &str {
+                &self.inner
+            }
+        }
+
+        impl<'a> std::fmt::Display for $borrowing_type<'a> {
             fn fmt(&self, formatter: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
                 self.inner.fmt(formatter)
-            }
-        }
-
-        impl ToOwned for $borrowed_type {
-            type Owned = $owning_type;
-            fn to_owned(&self) -> Self::Owned {
-                $owning_type { inner: String::from(&self.inner) }
-            }
-        }
-
-        impl AsRef<$borrowed_type> for $owning_type {
-            fn as_ref(&self) -> &$borrowed_type {
-                $borrowed_type::new(&self.inner)
-            }
-        }
-
-        impl std::borrow::Borrow<$borrowed_type> for $owning_type {
-            fn borrow(&self) -> &$borrowed_type {
-                $borrowed_type::new(&self.inner)
-            }
-        }
-
-        impl std::ops::Deref for $owning_type {
-            type Target = $borrowed_type;
-            fn deref(&self) -> &Self::Target {
-                $borrowed_type::new(&self.inner)
             }
         }
 
@@ -85,311 +217,108 @@ macro_rules! impl_name_types {
             }
         }
 
+        impl<'a> From<&'a str> for $borrowing_type<'a> {
+            fn from(s: &'a str) -> Self {
+                $borrowing_type::new(s)
+            }
+        }
+
         impl<'a> From<&'a str> for $owning_type {
             fn from(s: &'a str) -> Self {
-                $owning_type { inner: String::from(s) }
+                $owning_type::new(s.into())
             }
         }
 
         impl From<String> for $owning_type {
             fn from(s: String) -> Self {
-                $owning_type { inner: s }
+                $owning_type::new(s)
             }
         }
 
         impl From<$owning_type> for String {
-            fn from($name_arg: $owning_type) -> Self {
-                $name_arg.inner
+            fn from($arg_name: $owning_type) -> Self {
+                $arg_name.inner
+            }
+        }
+
+        impl<'a> From<&'a $owning_type> for $borrowing_type<'a> {
+            fn from($arg_name: &'a $owning_type) -> Self {
+                $borrowing_type::new(&$arg_name.inner)
+            }
+        }
+
+        impl<'a> From<$borrowing_type<'a>> for $owning_type {
+            fn from($arg_name: $borrowing_type<'a>) -> Self {
+                $owning_type::new($arg_name.inner.into())
             }
         }
     }
 }
 
-#[derive(Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct DatabaseName {
-    inner: str,
+define_name_type_pair!(DatabaseName, DatabaseNameRef, db_name, /** database */);
+define_name_type_pair!(DesignDocumentName, DesignDocumentNameRef, db_name, /** design document */);
+define_name_type_pair!(LocalDocumentName, LocalDocumentNameRef, db_name, /** local document */);
+define_name_type_pair!(NormalDocumentName, NormalDocumentNameRef, db_name, /** normal document */);
+
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum DocumentIdRef<'a> {
+    #[doc(hidden)]
+    Normal(NormalDocumentNameRef<'a>),
+
+    #[doc(hidden)]
+    Design(DesignDocumentNameRef<'a>),
+
+    #[doc(hidden)]
+    Local(LocalDocumentNameRef<'a>),
 }
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct DatabaseNameBuf {
-    inner: String,
+pub enum DocumentId {
+    #[doc(hidden)]
+    Normal(NormalDocumentName),
+
+    #[doc(hidden)]
+    Design(DesignDocumentName),
+
+    #[doc(hidden)]
+    Local(LocalDocumentName),
 }
 
-impl_name_types!(DatabaseName, DatabaseNameBuf, db_name);
-
-#[derive(Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct DesignDocumentName {
-    inner: str,
-}
-
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct DesignDocumentNameBuf {
-    inner: String,
-}
-
-impl_name_types!(DesignDocumentName, DesignDocumentNameBuf, doc_name);
-
-#[derive(Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct LocalDocumentName {
-    inner: str,
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct DatabasePathRef<'a> {
+    db_name: DatabaseNameRef<'a>,
 }
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct LocalDocumentNameBuf {
-    inner: String,
-}
-
-impl_name_types!(LocalDocumentName, LocalDocumentNameBuf, doc_name);
-
-#[derive(Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct NormalDocumentName {
-    inner: str,
-}
-
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct NormalDocumentNameBuf {
-    inner: String,
-}
-
-impl_name_types!(NormalDocumentName, NormalDocumentNameBuf, doc_name);
-
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct DatabasePath<'a> {
-    db_name: &'a DatabaseName,
-}
-
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct DatabasePathBuf {
-    db_name_buf: DatabaseNameBuf,
+pub struct DatabasePath {
+    db_name: DatabaseName,
 }
 
 pub trait IntoDatabasePath<'a> {
-    fn into_database_path(self) -> Result<DatabasePath<'a>, Error>;
+    fn into_database_path(self) -> Result<DatabasePathRef<'a>, Error>;
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct DocumentPathRef<'a> {
+    db_name: DatabaseNameRef<'a>,
+    doc_id: DocumentIdRef<'a>,
 }
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub enum DocumentId<'a> {
-    #[doc(hidden)]
-    Normal(&'a NormalDocumentName),
-
-    #[doc(hidden)]
-    Design(&'a DesignDocumentName),
-
-    #[doc(hidden)]
-    Local(&'a LocalDocumentName),
-}
-
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub enum DocumentIdBuf {
-    #[doc(hidden)]
-    Normal(NormalDocumentNameBuf),
-
-    #[doc(hidden)]
-    Design(DesignDocumentNameBuf),
-
-    #[doc(hidden)]
-    Local(LocalDocumentNameBuf),
-}
-
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct DocumentPath<'a> {
-    db_name: &'a DatabaseName,
-    doc_id: DocumentId<'a>,
-}
-
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct DocumentPathBuf {
-    db_name_buf: DatabaseNameBuf,
-    doc_id_buf: DocumentIdBuf,
+pub struct DocumentPath {
+    db_name: DatabaseName,
+    doc_id: DocumentId,
 }
 
 pub trait IntoDocumentPath<'a> {
-    fn into_document_path(self) -> Result<DocumentPath<'a>, Error>;
+    fn into_document_path(self) -> Result<DocumentPathRef<'a>, Error>;
 }
 
-// The following submodules implement methods for traits and types. However, the
-// definitions for these traits and types reside in this submodule, above. The
-// rationale for the definitions being in this module is that it causes the
-// doc-comment documentation to organize all name, id, and path types and traits
-// into this module. Whereas, the submodules exist merely to break this module
-// into smaller parts for better readability and navigation.
+// The following submodules implement methods for the traits and types defined
+// above. The rationale for splitting across modules is so that the
+// documentation all appears in one place—this module—while allowing many of the
+// implementation details to reside elsewhere.
 
 mod database_path;
 mod document_id;
 mod document_path;
-
-#[cfg(test)]
-mod tests {
-
-    use Error;
-    use error::PathParseErrorKind;
-    use std;
-
-    #[test]
-    fn path_extract_nonfinal_ok() {
-        let got = super::path_extract_nonfinal("/foo/bar").unwrap();
-        assert_eq!(("foo", "/bar"), got);
-    }
-
-    #[test]
-    fn path_extract_nonfinal_nok_empty() {
-        match super::path_extract_nonfinal("") {
-            Err(Error::PathParse(PathParseErrorKind::NoLeadingSlash)) => (),
-            x @ _ => unexpected_result!(x),
-        }
-    }
-
-    #[test]
-    fn path_extract_nonfinal_nok_without_leading_slash() {
-        match super::path_extract_nonfinal("foo/bar") {
-            Err(Error::PathParse(PathParseErrorKind::NoLeadingSlash)) => (),
-            x @ _ => unexpected_result!(x),
-        }
-    }
-
-    #[test]
-    fn path_extract_nonfinal_nok_as_final() {
-        match super::path_extract_nonfinal("/foo") {
-            Err(Error::PathParse(PathParseErrorKind::TooFewSegments)) => (),
-            x @ _ => unexpected_result!(x),
-        }
-    }
-
-    #[test]
-    fn path_extract_nonfinal_nok_with_empty_segment() {
-        match super::path_extract_nonfinal("//foo") {
-            Err(Error::PathParse(PathParseErrorKind::EmptySegment)) => (),
-            x @ _ => unexpected_result!(x),
-        }
-    }
-
-    #[test]
-    fn path_extract_final_ok() {
-        let segment = super::path_extract_final("/foo").unwrap();
-        assert_eq!("foo", segment);
-    }
-
-    #[test]
-    fn path_extract_final_segment_nok_empty() {
-        match super::path_extract_final("") {
-            Err(Error::PathParse(PathParseErrorKind::NoLeadingSlash)) => (),
-            x @ _ => unexpected_result!(x),
-        }
-    }
-
-    #[test]
-    fn path_extract_final_segment_nok_with_empty_segment() {
-        match super::path_extract_final("/") {
-            Err(Error::PathParse(PathParseErrorKind::EmptySegment)) => (),
-            x @ _ => unexpected_result!(x),
-        }
-    }
-
-    #[test]
-    fn path_extract_final_segment_with_extra_segment() {
-        match super::path_extract_final("/foo/bar") {
-            Err(Error::PathParse(PathParseErrorKind::TooManySegments)) => (),
-            x @ _ => unexpected_result!(x),
-        }
-    }
-
-    #[test]
-    fn path_extract_final_segment_with_trailing_slash() {
-        match super::path_extract_final("/foo/") {
-            Err(Error::PathParse(PathParseErrorKind::TrailingSlash)) => (),
-            x @ _ => unexpected_result!(x),
-        }
-    }
-
-    // Instead of testing each pair of name types, we create a fake pair of
-    // types and test those. All name types are defined and implemented by
-    // macro, so these tests should cover all types.
-
-    #[derive(Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-    pub struct FakeName {
-        inner: str,
-    }
-
-    #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-    pub struct FakeNameBuf {
-        inner: String,
-    }
-
-    impl_name_types!(FakeName, FakeNameBuf, fake_name);
-
-    #[test]
-    fn fake_name_new() {
-        let fake_name = FakeName::new("foo");
-        assert_eq!("foo", &fake_name.inner);
-    }
-
-    #[test]
-    fn fake_name_as_ref() {
-        let fake_name = FakeName::new("foo");
-        let got: &FakeName = fake_name.as_ref();
-        assert_eq!("foo", &got.inner);
-    }
-
-    #[test]
-    fn fake_name_display() {
-        let fake_name = FakeName::new("foo");
-        let got = format!("{}", fake_name);
-        assert_eq!("foo", got);
-    }
-
-    #[test]
-    fn fake_name_to_owned() {
-        let fake_name = FakeName::new("foo");
-        let owned = fake_name.to_owned();
-        assert_eq!(FakeNameBuf::from("foo"), owned);
-    }
-
-    #[test]
-    fn fake_name_buf_as_ref() {
-        let fake_name_buf = FakeNameBuf::from("foo");
-        let got: &FakeName = fake_name_buf.as_ref();
-        assert_eq!("foo", &got.inner);
-    }
-
-    #[test]
-    fn fake_name_buf_borrow() {
-        use std::borrow::Borrow;
-        let fake_name_buf = FakeNameBuf::from("foo");
-        let got: &FakeName = fake_name_buf.borrow();
-        assert_eq!("foo", &got.inner);
-    }
-
-    #[test]
-    fn fake_name_buf_deref() {
-        use std::ops::Deref;
-        let fake_name_buf = FakeNameBuf::from("foo");
-        let got = fake_name_buf.deref();
-        assert_eq!("foo", &got.inner);
-    }
-
-    #[test]
-    fn fake_name_buf_display() {
-        let fake_name_buf = FakeNameBuf::from("foo");
-        let got = format!("{}", fake_name_buf);
-        assert_eq!("foo", got);
-    }
-
-    #[test]
-    fn fake_name_buf_from_str_ref() {
-        let fake_name_buf = FakeNameBuf::from("foo");
-        assert_eq!(FakeNameBuf { inner: String::from("foo") }, fake_name_buf);
-    }
-
-    #[test]
-    fn fake_name_buf_from_string() {
-        let fake_name_buf = FakeNameBuf::from(String::from("foo"));
-        assert_eq!(FakeNameBuf { inner: String::from("foo") }, fake_name_buf);
-    }
-
-    #[test]
-    fn string_from_fake_name_buf() {
-        let fake_name_buf = FakeNameBuf::from("foo");
-        let got = String::from(fake_name_buf);
-        assert_eq!("foo", got);
-    }
-}
