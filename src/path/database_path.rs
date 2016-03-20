@@ -3,8 +3,8 @@ use super::PathExtractor;
 use super::*;
 
 impl<'a> DatabasePathRef<'a> {
-    pub fn database_name(&self) -> &DatabaseNameRef<'a> {
-        &self.db_name
+    pub fn database_name(&self) -> DatabaseNameRef<'a> {
+        self.db_name
     }
 }
 

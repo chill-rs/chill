@@ -35,8 +35,7 @@ impl<'a, P, T> ReadDocument<'a, P, T>
         match response.status_code() {
             StatusCode::Ok => {
                 let decoded_doc: JsonDecodableDocument = try!(response.decode_json_body());
-                // FIXME: Eliminate the database name temporary.
-                Ok(Document::new_from_decoded(DatabaseName::from(*doc_path.database_name()),
+                Ok(Document::new_from_decoded(DatabaseName::from(doc_path.database_name()),
                                               decoded_doc))
             }
             StatusCode::NotFound => Err(Error::not_found(response)),

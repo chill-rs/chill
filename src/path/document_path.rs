@@ -4,12 +4,12 @@ use super::{PathExtraction, PathExtractor};
 use super::*;
 
 impl<'a> DocumentPathRef<'a> {
-    pub fn database_name(&self) -> &DatabaseNameRef<'a> {
-        &self.db_name
+    pub fn database_name(&self) -> DatabaseNameRef<'a> {
+        self.db_name
     }
 
-    pub fn document_id(&self) -> &DocumentIdRef<'a> {
-        &self.doc_id
+    pub fn document_id(&self) -> DocumentIdRef<'a> {
+        self.doc_id
     }
 }
 
