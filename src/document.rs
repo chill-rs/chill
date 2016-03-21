@@ -11,7 +11,6 @@ use serde;
 use serde_json;
 use std;
 
-// FIXME: Make this a unique type.
 type AttachmentName = String;
 
 #[derive(Debug, PartialEq)]
