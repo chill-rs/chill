@@ -23,7 +23,7 @@ pub mod action;
 pub mod path;
 pub mod testing;
 
-pub use client::{BasicClient, Client, IntoUrl};
+pub use client::{Client, IntoUrl};
 pub use document::{Attachment, Document, SavedAttachment, UnsavedAttachment};
 pub use error::{Error, ErrorResponse};
 pub use path::{DatabaseName, DatabaseNameRef, DatabasePath, DatabasePathRef, DesignDocumentName,
