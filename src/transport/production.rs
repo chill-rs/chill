@@ -4,9 +4,11 @@ use hyper;
 use serde;
 use serde_json;
 use std;
-use super::{Method, RequestAccept, RequestBody, RequestOptions, Response, StatusCode, Transport};
+use super::{Action, Method, RequestAccept, RequestBody, RequestOptions, Response, StatusCode,
+            Transport};
 use url;
 
+#[derive(Debug)]
 pub struct HyperTransport {
     server_base_url: url::Url,
     hyper_client: hyper::Client,
@@ -25,59 +27,29 @@ impl HyperTransport {
         })
     }
 
-    fn request<'a, B, P>(&self,
-                         method: Method,
-                         path: P,
-                         options: RequestOptions<'a, B>)
-                         -> Result<<Self as Transport>::Response, Error>
-        where B: serde::Serialize,
-              P: IntoIterator<Item = &'a str>
-    {
-        let uri = self.make_request_url(path, &options);
+    pub fn exec_sync<A: Action<Self>>(&self, mut action: A) -> Result<A::Output, Error> {
 
-        let headers = {
-            let mut h = hyper::header::Headers::new();
+        let (request, state) = try!(action.make_request());
 
-            match options.accept {
-                None => (),
-                Some(RequestAccept::Json) => {
-                    let quality_items = vec![hyper::header::qitem(mime!(Application / Json))];
-                    h.set(hyper::header::Accept(quality_items));
-                }
-            }
+        let response = {
+            let b = self.hyper_client
+                        .request(request.method, request.url)
+                        .headers(request.headers);
 
-            match options.body {
-                None => (),
-                Some(RequestBody::Json(..)) => {
-                    h.set(hyper::header::ContentType(mime!(Application / Json)));
-                }
-            }
+            let b = if request.body.is_empty() {
+                b
+            } else {
+                b.body(&request.body[..])
+            };
 
-            h
+            let response = try!(b.send().map_err(|e| {
+                Error::Transport { kind: TransportErrorKind::Hyper(e) }
+            }));
+
+            HyperResponse { hyper_response: response }
         };
 
-        Ok(HyperResponse {
-            hyper_response: try!({
-                match options.body {
-                    None => {
-                        self.hyper_client
-                            .request(method, uri)
-                            .headers(headers)
-                            .send()
-                    }
-                    Some(RequestBody::Json(body)) => {
-                        let body = try!(serde_json::to_vec(body)
-                                            .map_err(|e| Error::JsonEncode { cause: e }));
-                        self.hyper_client
-                            .request(method, uri)
-                            .headers(headers)
-                            .body(&body[..])
-                            .send()
-                    }
-                }
-                .map_err(|e| Error::Transport { kind: TransportErrorKind::Hyper(e) })
-            }),
-        })
+        A::take_response(response, state)
     }
 
     fn make_request_url<'a, B, P>(&self, path: P, options: &RequestOptions<'a, B>) -> url::Url
@@ -119,47 +91,62 @@ impl HyperTransport {
 }
 
 impl Transport for HyperTransport {
-    type Response = HyperResponse;
+    type Request = HyperRequest;
 
-    fn delete<'a, B, P>(&self,
-                        path: P,
-                        options: RequestOptions<'a, B>)
-                        -> Result<Self::Response, Error>
+    fn request<'a, B, P>(&self,
+                         method: Method,
+                         path: P,
+                         options: RequestOptions<'a, B>)
+                         -> Result<Self::Request, Error>
         where B: serde::Serialize,
               P: IntoIterator<Item = &'a str>
     {
-        self.request(Method::Delete, path, options)
-    }
+        let url = self.make_request_url(path, &options);
 
-    fn get<'a, B, P>(&self,
-                     path: P,
-                     options: RequestOptions<'a, B>)
-                     -> Result<Self::Response, Error>
-        where B: serde::Serialize,
-              P: IntoIterator<Item = &'a str>
-    {
-        self.request(Method::Get, path, options)
-    }
+        // FIXME: Move header-construction into separate method?
+        let headers = {
+            let mut h = hyper::header::Headers::new();
 
-    fn post<'a, B, P>(&self,
-                      path: P,
-                      options: RequestOptions<'a, B>)
-                      -> Result<Self::Response, Error>
-        where B: serde::Serialize,
-              P: IntoIterator<Item = &'a str>
-    {
-        self.request(Method::Post, path, options)
-    }
+            match options.accept {
+                None => (),
+                Some(RequestAccept::Json) => {
+                    let quality_items = vec![hyper::header::qitem(mime!(Application / Json))];
+                    h.set(hyper::header::Accept(quality_items));
+                }
+            }
 
-    fn put<'a, B, P>(&self,
-                     path: P,
-                     options: RequestOptions<'a, B>)
-                     -> Result<Self::Response, Error>
-        where B: serde::Serialize,
-              P: IntoIterator<Item = &'a str>
-    {
-        self.request(Method::Put, path, options)
+            match options.body {
+                None => (),
+                Some(RequestBody::Json(..)) => {
+                    h.set(hyper::header::ContentType(mime!(Application / Json)));
+                }
+            }
+
+            h
+        };
+
+        let body = match options.body {
+            None => Vec::new(),
+            Some(RequestBody::Json(body)) => {
+                try!(serde_json::to_vec(body).map_err(|e| Error::JsonEncode { cause: e }))
+            }
+        };
+
+        Ok(HyperRequest {
+            method: method,
+            url: url,
+            headers: headers,
+            body: body,
+        })
     }
+}
+
+#[derive(Debug)]
+pub struct HyperRequest {
+    method: Method,
+    url: url::Url,
+    headers: hyper::header::Headers,
+    body: Vec<u8>,
 }
 
 #[derive(Debug)]

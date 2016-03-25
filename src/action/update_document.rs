@@ -2,7 +2,7 @@ use Document;
 use document::WriteDocumentResponse;
 use Error;
 use Revision;
-use transport::{RequestOptions, Response, StatusCode, Transport};
+use transport::{Action, HyperTransport, RequestOptions, Response, StatusCode, Transport};
 
 pub struct UpdateDocument<'a, T>
     where T: Transport + 'a
@@ -15,29 +15,39 @@ impl<'a, T> UpdateDocument<'a, T>
     where T: Transport + 'a
 {
     #[doc(hidden)]
-    pub fn new(transport: &'a T, doc: &'a Document) -> Self {
-        UpdateDocument {
+    pub fn new(transport: &'a T, doc: &'a Document) -> Result<Self, Error> {
+        Ok(UpdateDocument {
             transport: transport,
             doc: doc,
-        }
+        })
+    }
+}
+
+impl<'a> UpdateDocument<'a, HyperTransport> {
+    pub fn run(self) -> Result<<Self as Action<HyperTransport>>::Output, Error> {
+        self.transport.exec_sync(self)
+    }
+}
+
+impl<'a, T: Transport + 'a> Action<T> for UpdateDocument<'a, T> {
+    type Output = Revision;
+    type State = ();
+
+    fn make_request(&mut self) -> Result<(T::Request, Self::State), Error> {
+        let options = RequestOptions::new()
+                          .with_accept_json()
+                          .with_revision_query(&self.doc.revision())
+                          .with_json_body(self.doc);
+        let request = try!(self.transport.put(self.doc.path().iter(), options));
+        Ok((request, ()))
     }
 
-    pub fn run(self) -> Result<Revision, Error> {
-
-        let response = try!(self.transport
-                                .put(self.doc.path().iter(),
-                                     RequestOptions::new()
-                                         .with_accept_json()
-                                         .with_revision_query(&self.doc.revision())
-                                         .with_json_body(self.doc)));
-
+    fn take_response<R: Response>(response: R, _state: Self::State) -> Result<Self::Output, Error> {
         match response.status_code() {
-
             StatusCode::Created => {
                 let body: WriteDocumentResponse = try!(response.decode_json_body());
                 Ok(body.revision)
             }
-
             StatusCode::Conflict => Err(Error::document_conflict(response)),
             StatusCode::NotFound => Err(Error::not_found(response)),
             StatusCode::Unauthorized => Err(Error::unauthorized(response)),
@@ -52,65 +62,65 @@ mod tests {
     use document::DocumentBuilder;
     use Error;
     use Revision;
+    use serde_json;
     use super::*;
-    use transport::{MockRequestMatcher, MockResponse, MockTransport, StatusCode};
+    use transport::{Action, MockResponse, MockTransport, RequestOptions, StatusCode, Transport};
 
     #[test]
-    fn update_document_ok_basic() {
-
+    fn make_request_default() {
         let transport = MockTransport::new();
 
-        let original_revision: Revision = "1-1234567890abcdef1234567890abcdef".parse().unwrap();
-
-        let doc = DocumentBuilder::new("/database_name/document_id", original_revision.clone())
+        let rev1 = Revision::parse("1-1234567890abcdef1234567890abcdef").unwrap();
+        let doc = DocumentBuilder::new("/foo/bar", rev1.clone())
                       .build_content(|x| {
                           x.insert("field_1", 42)
                            .insert("field_2", "hello")
                       })
                       .unwrap();
 
-        let new_revision: Revision = "2-fedcba0987654321fedcba0987654321".parse().unwrap();
+        let expected = ({
+            let body = serde_json::builder::ObjectBuilder::new()
+                           .insert("field_1", 42)
+                           .insert("field_2", "hello")
+                           .unwrap();
+            let options = RequestOptions::new()
+                              .with_accept_json()
+                              .with_revision_query(&rev1)
+                              .with_json_body(&body);
+            transport.put(vec!["foo", "bar"], options).unwrap()
+        },
+                        ());
 
-        transport.push_response(MockResponse::new(StatusCode::Created).build_json_body(|x| {
-            x.insert("ok", true)
-             .insert("id", "document_id")
-             .insert("rev", new_revision.to_string())
-        }));
-
-        let got = UpdateDocument::new(&transport, &doc).run().unwrap();
-        assert_eq!(new_revision, got);
-
-        let expected = {
-            MockRequestMatcher::new().put(&["database_name", "document_id"], |x| {
-                x.with_accept_json()
-                 .with_revision_query(&original_revision)
-                 .build_json_body(|x| {
-                     x.insert("field_1", 42)
-                      .insert("field_2", "hello")
-                 })
-            })
+        let got = {
+            let mut action = UpdateDocument::new(&transport, &doc).unwrap();
+            action.make_request().unwrap()
         };
 
-        assert_eq!(expected, transport.extract_requests());
+        assert_eq!(expected, got);
     }
 
     #[test]
-    fn update_document_nok_document_conflict() {
+    fn take_response_created() {
+        let rev = Revision::parse("1-1234567890abcdef1234567890abcdef").unwrap();
+        let response = MockResponse::new(StatusCode::Created).build_json_body(|x| {
+            x.insert("ok", true)
+             .insert("id", "bar")
+             .insert("rev", rev.to_string())
+        });
+        let expected = rev;
+        let got = UpdateDocument::<MockTransport>::take_response(response, ()).unwrap();
+        assert_eq!(expected, got);
+    }
 
-        let transport = MockTransport::new();
+    #[test]
+    fn take_response_conflict() {
         let error = "conflict";
         let reason = "Document update conflict.";
-        transport.push_response(MockResponse::new(StatusCode::Conflict).build_json_body(|x| {
+        let response = MockResponse::new(StatusCode::Conflict).build_json_body(|x| {
             x.insert("error", error)
              .insert("reason", reason)
-        }));
-
-        let doc = DocumentBuilder::new("/database_name/document_id",
-                                       Revision::parse("42-1234567890abcdef1234567890abcdef")
-                                           .unwrap())
-                      .unwrap();
-
-        match UpdateDocument::new(&transport, &doc).run() {
+        });
+        match UpdateDocument::<MockTransport>::take_response(response, ()) {
             Err(Error::DocumentConflict(ref error_response)) if error == error_response.error() &&
                                                                 reason ==
                                                                 error_response.reason() => (),
@@ -119,22 +129,14 @@ mod tests {
     }
 
     #[test]
-    fn update_document_nok_not_found() {
-
-        let transport = MockTransport::new();
+    fn take_response_not_found() {
         let error = "not_found";
         let reason = "no_db_file";
-        transport.push_response(MockResponse::new(StatusCode::NotFound).build_json_body(|x| {
+        let response = MockResponse::new(StatusCode::NotFound).build_json_body(|x| {
             x.insert("error", error)
              .insert("reason", reason)
-        }));
-
-        let doc = DocumentBuilder::new("/database_name/document_id",
-                                       Revision::parse("42-1234567890abcdef1234567890abcdef")
-                                           .unwrap())
-                      .unwrap();
-
-        match UpdateDocument::new(&transport, &doc).run() {
+        });
+        match UpdateDocument::<MockTransport>::take_response(response, ()) {
             Err(Error::NotFound(ref error_response)) if error == error_response.error() &&
                                                         reason == error_response.reason() => (),
             x @ _ => unexpected_result!(x),
@@ -142,26 +144,17 @@ mod tests {
     }
 
     #[test]
-    fn update_document_nok_unauthorized() {
-
-        let transport = MockTransport::new();
+    fn take_response_unauthorized() {
         let error = "unauthorized";
         let reason = "Authentication required.";
-        transport.push_response(MockResponse::new(StatusCode::Unauthorized).build_json_body(|x| {
+        let response = MockResponse::new(StatusCode::Unauthorized).build_json_body(|x| {
             x.insert("error", error)
              .insert("reason", reason)
-        }));
-
-        let doc = DocumentBuilder::new("/database_name/document_id",
-                                       Revision::parse("42-1234567890abcdef1234567890abcdef")
-                                           .unwrap())
-                      .unwrap();
-
-        match UpdateDocument::new(&transport, &doc).run() {
+        });
+        match UpdateDocument::<MockTransport>::take_response(response, ()) {
             Err(Error::Unauthorized(ref error_response)) if error == error_response.error() &&
                                                             reason == error_response.reason() => (),
             x @ _ => unexpected_result!(x),
         }
     }
-
 }

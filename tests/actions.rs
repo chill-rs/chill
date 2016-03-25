@@ -19,14 +19,14 @@ fn make_server_and_client() -> (chill::testing::FakeServer, chill::Client) {
 #[test]
 fn create_database_ok() {
     let (_server, client) = make_server_and_client();
-    client.create_database("/baseball").run().unwrap();
+    client.create_database("/baseball").unwrap().run().unwrap();
 }
 
 #[test]
 fn create_database_nok_database_exists() {
     let (_server, client) = make_server_and_client();
-    client.create_database("/baseball").run().unwrap();
-    match client.create_database("/baseball").run() {
+    client.create_database("/baseball").unwrap().run().unwrap();
+    match client.create_database("/baseball").unwrap().run() {
         Err(chill::Error::DatabaseExists(..)) => (),
         x @ _ => {
             panic!("Unexpected result: {:?}", x);
@@ -38,16 +38,17 @@ fn create_database_nok_database_exists() {
 fn create_document_ok_default_options() {
 
     let (_server, client) = make_server_and_client();
-    client.create_database("/baseball").run().unwrap();
+    client.create_database("/baseball").unwrap().run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
                          .insert("name", "Babe Ruth")
                          .insert("nickname", "The Bambino")
                          .unwrap();
 
-    let (doc_id, _rev) = client.create_document("/baseball", &up_content).run().unwrap();
+    let (doc_id, _rev) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
 
     let doc = client.read_document(("/baseball", &doc_id))
+                    .unwrap()
                     .run()
                     .unwrap();
     let down_content = doc.get_content().unwrap();
@@ -58,7 +59,7 @@ fn create_document_ok_default_options() {
 fn create_document_ok_with_document_id() {
 
     let (_server, client) = make_server_and_client();
-    client.create_database("/baseball").run().unwrap();
+    client.create_database("/baseball").unwrap().run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
                          .insert("name", "Babe Ruth")
@@ -66,12 +67,14 @@ fn create_document_ok_with_document_id() {
                          .unwrap();
 
     let (doc_id, _rev) = client.create_document("/baseball", &up_content)
+                               .unwrap()
                                .with_document_id("babe_ruth")
                                .run()
                                .unwrap();
     assert_eq!(chill::DocumentId::from("babe_ruth"), doc_id);
 
     let doc = client.read_document(("/baseball", &doc_id))
+                    .unwrap()
                     .run()
                     .unwrap();
     let down_content = doc.get_content().unwrap();
@@ -82,16 +85,19 @@ fn create_document_ok_with_document_id() {
 fn create_document_nok_document_conflict() {
 
     let (_server, client) = make_server_and_client();
-    client.create_database("/baseball").run().unwrap();
+    client.create_database("/baseball").unwrap().run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
                          .insert("name", "Babe Ruth")
                          .insert("nickname", "The Bambino")
                          .unwrap();
 
-    let (doc_id, _rev) = client.create_document("/baseball", &up_content).run().unwrap();
+    let (doc_id, _rev) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
 
-    match client.create_document("/baseball", &up_content).with_document_id(&doc_id).run() {
+    match client.create_document("/baseball", &up_content)
+                .unwrap()
+                .with_document_id(&doc_id)
+                .run() {
         Err(chill::Error::DocumentConflict(..)) => (),
         x @ _ => unexpected_result!(x),
     }
@@ -101,16 +107,17 @@ fn create_document_nok_document_conflict() {
 fn read_document_ok_default_options() {
 
     let (_server, client) = make_server_and_client();
-    client.create_database("/baseball").run().unwrap();
+    client.create_database("/baseball").unwrap().run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
                          .insert("name", "Babe Ruth")
                          .insert("nickname", "The Bambino")
                          .unwrap();
 
-    let (doc_id, _rev) = client.create_document("/baseball", &up_content).run().unwrap();
+    let (doc_id, _rev) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
 
     let doc = client.read_document(("/baseball", &doc_id))
+                    .unwrap()
                     .run()
                     .unwrap();
     let down_content = doc.get_content().unwrap();
@@ -121,9 +128,9 @@ fn read_document_ok_default_options() {
 fn read_document_nok_not_found() {
 
     let (_server, client) = make_server_and_client();
-    client.create_database("/baseball").run().unwrap();
+    client.create_database("/baseball").unwrap().run().unwrap();
 
-    match client.read_document("/baseball/babe_ruth").run() {
+    match client.read_document("/baseball/babe_ruth").unwrap().run() {
         Err(chill::Error::NotFound(..)) => (),
         x @ _ => unexpected_result!(x),
     }
@@ -133,16 +140,17 @@ fn read_document_nok_not_found() {
 fn update_document_ok() {
 
     let (_server, client) = make_server_and_client();
-    client.create_database("/baseball").run().unwrap();
+    client.create_database("/baseball").unwrap().run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
                          .insert("name", "Babe Ruth")
                          .insert("nickname", "The Bambino")
                          .unwrap();
 
-    let (doc_id, _rev) = client.create_document("/baseball", &up_content).run().unwrap();
+    let (doc_id, _rev) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
 
     let mut doc = client.read_document(("/baseball", &doc_id))
+                        .unwrap()
                         .run()
                         .unwrap();
 
@@ -159,9 +167,10 @@ fn update_document_ok() {
 
     doc.set_content(&up_content).unwrap();
 
-    let updated_rev = client.update_document(&doc).run().unwrap();
+    let updated_rev = client.update_document(&doc).unwrap().run().unwrap();
 
     let doc = client.read_document(("/baseball", doc.id()))
+                    .unwrap()
                     .run()
                     .unwrap();
     let down_content: serde_json::Value = doc.get_content().unwrap();
@@ -173,20 +182,21 @@ fn update_document_ok() {
 fn delete_document_ok() {
 
     let (_server, client) = make_server_and_client();
-    client.create_database("/baseball").run().unwrap();
+    client.create_database("/baseball").unwrap().run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
                          .insert("name", "Babe Ruth")
                          .insert("nickname", "The Bambino")
                          .unwrap();
 
-    let (doc_id, rev1) = client.create_document("/baseball", &up_content).run().unwrap();
+    let (doc_id, rev1) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
 
     let _rev2 = client.delete_document(("/baseball", &doc_id), &rev1)
+                      .unwrap()
                       .run()
                       .unwrap();
 
-    match client.read_document(("/baseball", &doc_id)).run() {
+    match client.read_document(("/baseball", &doc_id)).unwrap().run() {
         Err(chill::Error::NotFound(..)) => (),
         x @ _ => {
             panic!("Unexpected result: {:?}", x);

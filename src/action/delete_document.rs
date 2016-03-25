@@ -1,47 +1,51 @@
+use DocumentPathRef;
 use document::WriteDocumentResponse;
 use Error;
 use IntoDocumentPath;
 use Revision;
-use transport::{RequestOptions, Response, StatusCode, Transport};
+use transport::{Action, HyperTransport, RequestOptions, Response, StatusCode, Transport};
 
-pub struct DeleteDocument<'a, P, T>
-    where P: IntoDocumentPath<'a>,
-          T: Transport + 'a
-{
+pub struct DeleteDocument<'a, T: Transport + 'a> {
     transport: &'a T,
-    doc_path: P,
+    doc_path: DocumentPathRef<'a>,
     revision: &'a Revision,
 }
 
-impl<'a, P, T> DeleteDocument<'a, P, T>
-    where P: IntoDocumentPath<'a>,
-          T: Transport + 'a
-{
+impl<'a, T: Transport + 'a> DeleteDocument<'a, T> {
     #[doc(hidden)]
-    pub fn new(transport: &'a T, doc_path: P, revision: &'a Revision) -> Self {
-        DeleteDocument {
+    pub fn new<P>(transport: &'a T, doc_path: P, revision: &'a Revision) -> Result<Self, Error>
+        where P: IntoDocumentPath<'a>
+    {
+        Ok(DeleteDocument {
             transport: transport,
-            doc_path: doc_path,
+            doc_path: try!(doc_path.into_document_path()),
             revision: revision,
-        }
+        })
+    }
+}
+
+impl<'a> DeleteDocument<'a, HyperTransport> {
+    pub fn run(self) -> Result<<Self as Action<HyperTransport>>::Output, Error> {
+        self.transport.exec_sync(self)
+    }
+}
+
+impl<'a, T: Transport + 'a> Action<T> for DeleteDocument<'a, T> {
+    type Output = Revision;
+    type State = ();
+
+    fn make_request(&mut self) -> Result<(T::Request, Self::State), Error> {
+        let options = RequestOptions::new().with_accept_json().with_revision_query(self.revision);
+        let request = try!(self.transport.delete(self.doc_path, options));
+        Ok((request, ()))
     }
 
-    pub fn run(self) -> Result<Revision, Error> {
-
-        let doc_path = try!(self.doc_path.into_document_path());
-
-        let response = try!(self.transport.delete(doc_path,
-                                                  RequestOptions::new()
-                                                      .with_accept_json()
-                                                      .with_revision_query(self.revision)));
-
+    fn take_response<R: Response>(response: R, _state: Self::State) -> Result<Self::Output, Error> {
         match response.status_code() {
-
             StatusCode::Ok => {
                 let body: WriteDocumentResponse = try!(response.decode_json_body());
                 Ok(body.revision)
             }
-
             StatusCode::Conflict => Err(Error::document_conflict(response)),
             StatusCode::NotFound => Err(Error::not_found(response)),
             StatusCode::Unauthorized => Err(Error::unauthorized(response)),
@@ -56,50 +60,50 @@ mod tests {
     use Error;
     use Revision;
     use super::*;
-    use transport::{MockRequestMatcher, MockResponse, MockTransport, StatusCode};
+    use transport::{Action, MockResponse, MockTransport, RequestOptions, StatusCode, Transport};
 
     #[test]
-    fn delete_document_ok_basic() {
+    fn make_request_default() {
 
         let transport = MockTransport::new();
+        let rev1 = Revision::parse("1-1234567890abcdef1234567890abcdef").unwrap();
 
-        let original_revision: Revision = "1-1234567890abcdef1234567890abcdef".parse().unwrap();
-        let new_revision: Revision = "2-fedcba0987654321fedcba0987654321".parse().unwrap();
+        let expected = ({
+            let options = RequestOptions::new().with_accept_json().with_revision_query(&rev1);
+            transport.delete(vec!["foo", "bar"], options).unwrap()
+        },
+                        ());
 
-        transport.push_response(MockResponse::new(StatusCode::Ok).build_json_body(|x| {
-            x.insert("ok", true)
-             .insert("id", "document_id")
-             .insert("rev", new_revision.to_string())
-        }));
-
-        let got = DeleteDocument::new(&transport, "/database_name/document_id", &original_revision)
-                      .run()
-                      .unwrap();
-        assert_eq!(new_revision, got);
-
-        let expected = {
-            MockRequestMatcher::new().delete(&["database_name", "document_id"], |x| {
-                x.with_accept_json()
-                 .with_revision_query(&original_revision)
-            })
+        let got = {
+            let mut action = DeleteDocument::new(&transport, "/foo/bar", &rev1).unwrap();
+            action.make_request().unwrap()
         };
 
-        assert_eq!(expected, transport.extract_requests());
+        assert_eq!(expected, got);
     }
 
     #[test]
-    fn delete_document_nok_document_conflict() {
+    fn take_response_ok() {
+        let rev = Revision::parse("1-1234567890abcdef1234567890abcdef").unwrap();
+        let response = MockResponse::new(StatusCode::Ok).build_json_body(|x| {
+            x.insert("ok", "true")
+             .insert("id", "bar")
+             .insert("rev", rev.to_string())
+        });
+        let expected = rev;
+        let got = DeleteDocument::<MockTransport>::take_response(response, ()).unwrap();
+        assert_eq!(expected, got);
+    }
 
-        let transport = MockTransport::new();
+    #[test]
+    fn take_response_conflict() {
         let error = "conflict";
         let reason = "Document update conflict.";
-        transport.push_response(MockResponse::new(StatusCode::Conflict).build_json_body(|x| {
+        let response = MockResponse::new(StatusCode::Conflict).build_json_body(|x| {
             x.insert("error", error)
              .insert("reason", reason)
-        }));
-
-        let revision = Revision::parse("1-1234567890abcdef1234567890abcdef").unwrap();
-        match DeleteDocument::new(&transport, "/database_name/document_id", &revision).run() {
+        });
+        match DeleteDocument::<MockTransport>::take_response(response, ()) {
             Err(Error::DocumentConflict(ref error_response)) if error == error_response.error() &&
                                                                 reason ==
                                                                 error_response.reason() => (),
@@ -108,38 +112,29 @@ mod tests {
     }
 
     #[test]
-    fn delete_document_nok_not_found() {
-
-        let transport = MockTransport::new();
+    fn take_response_not_found() {
         let error = "not_found";
         let reason = "no_db_file";
-        transport.push_response(MockResponse::new(StatusCode::Conflict).build_json_body(|x| {
+        let response = MockResponse::new(StatusCode::NotFound).build_json_body(|x| {
             x.insert("error", error)
              .insert("reason", reason)
-        }));
-
-        let revision = Revision::parse("1-1234567890abcdef1234567890abcdef").unwrap();
-        match DeleteDocument::new(&transport, "/database_name/document_id", &revision).run() {
-            Err(Error::DocumentConflict(ref error_response)) if error == error_response.error() &&
-                                                                reason ==
-                                                                error_response.reason() => (),
+        });
+        match DeleteDocument::<MockTransport>::take_response(response, ()) {
+            Err(Error::NotFound(ref error_response)) if error == error_response.error() &&
+                                                        reason == error_response.reason() => (),
             x @ _ => unexpected_result!(x),
         }
     }
 
     #[test]
-    fn delete_document_nok_unauthorized() {
-
-        let transport = MockTransport::new();
+    fn take_response_unauthorized() {
         let error = "unauthorized";
         let reason = "Authentication required.";
-        transport.push_response(MockResponse::new(StatusCode::Unauthorized).build_json_body(|x| {
+        let response = MockResponse::new(StatusCode::Unauthorized).build_json_body(|x| {
             x.insert("error", error)
              .insert("reason", reason)
-        }));
-
-        let revision = Revision::parse("1-1234567890abcdef1234567890abcdef").unwrap();
-        match DeleteDocument::new(&transport, "/database_name/document_id", &revision).run() {
+        });
+        match DeleteDocument::<MockTransport>::take_response(response, ()) {
             Err(Error::Unauthorized(ref error_response)) if error == error_response.error() &&
                                                             reason == error_response.reason() => (),
             x @ _ => unexpected_result!(x),

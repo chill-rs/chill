@@ -8,38 +8,59 @@ use serde;
 
 pub use self::production::HyperTransport;
 #[cfg(test)]
-pub use self::testing::{MockRequestMatcher, MockResponse, MockTransport};
+pub use self::testing::{MockResponse, MockTransport};
+
+pub trait Action<T: Transport> {
+    type Output;
+    type State;
+    fn make_request(&mut self) -> Result<(T::Request, Self::State), Error>;
+    fn take_response<R: Response>(response: R, state: Self::State) -> Result<Self::Output, Error>;
+}
 
 pub trait Transport {
-    type Response: Response;
+    type Request;
+
+    fn request<'a, B, P>(&self,
+                         method: Method,
+                         path: P,
+                         options: RequestOptions<'a, B>)
+                         -> Result<Self::Request, Error>
+        where B: serde::Serialize,
+              P: IntoIterator<Item = &'a str>;
 
     fn delete<'a, B, P>(&self,
                         path: P,
                         options: RequestOptions<'a, B>)
-                        -> Result<Self::Response, Error>
+                        -> Result<Self::Request, Error>
         where B: serde::Serialize,
-              P: IntoIterator<Item = &'a str>;
+              P: IntoIterator<Item = &'a str>
+    {
+        self.request(Method::Delete, path, options)
+    }
 
-    fn get<'a, B, P>(&self,
-                     path: P,
-                     options: RequestOptions<'a, B>)
-                     -> Result<Self::Response, Error>
+    fn get<'a, B, P>(&self, path: P, options: RequestOptions<'a, B>) -> Result<Self::Request, Error>
         where B: serde::Serialize,
-              P: IntoIterator<Item = &'a str>;
+              P: IntoIterator<Item = &'a str>
+    {
+        self.request(Method::Get, path, options)
+    }
 
     fn post<'a, B, P>(&self,
                       path: P,
                       options: RequestOptions<'a, B>)
-                      -> Result<Self::Response, Error>
+                      -> Result<Self::Request, Error>
         where B: serde::Serialize,
-              P: IntoIterator<Item = &'a str>;
+              P: IntoIterator<Item = &'a str>
+    {
+        self.request(Method::Post, path, options)
+    }
 
-    fn put<'a, B, P>(&self,
-                     path: P,
-                     options: RequestOptions<'a, B>)
-                     -> Result<Self::Response, Error>
+    fn put<'a, B, P>(&self, path: P, options: RequestOptions<'a, B>) -> Result<Self::Request, Error>
         where B: serde::Serialize,
-              P: IntoIterator<Item = &'a str>;
+              P: IntoIterator<Item = &'a str>
+    {
+        self.request(Method::Put, path, options)
+    }
 }
 
 pub trait Response {

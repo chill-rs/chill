@@ -29,16 +29,17 @@ impl Client {
 impl Client {
     pub fn create_database<'a, P>(&'a self,
                                   db_path: P)
-                                  -> action::CreateDatabase<'a, P, HyperTransport>
+                                  -> Result<action::CreateDatabase<'a, HyperTransport>, Error>
         where P: IntoDatabasePath<'a>
     {
         action::CreateDatabase::new(&self.transport, db_path)
     }
 
-    pub fn create_document<'a, C, P>(&'a self,
-                                     db_path: P,
-                                     content: &'a C)
-                                     -> action::CreateDocument<'a, C, P, HyperTransport>
+    pub fn create_document<'a, C, P>
+        (&'a self,
+         db_path: P,
+         content: &'a C)
+         -> Result<action::CreateDocument<'a, HyperTransport, C>, Error>
         where C: serde::Serialize,
               P: IntoDatabasePath<'a>
     {
@@ -47,7 +48,7 @@ impl Client {
 
     pub fn read_document<'a, P>(&'a self,
                                 doc_path: P)
-                                -> action::ReadDocument<'a, P, HyperTransport>
+                                -> Result<action::ReadDocument<'a, HyperTransport>, Error>
         where P: IntoDocumentPath<'a>
     {
         action::ReadDocument::new(&self.transport, doc_path)
@@ -55,14 +56,14 @@ impl Client {
 
     pub fn update_document<'a>(&'a self,
                                doc: &'a Document)
-                               -> action::UpdateDocument<'a, HyperTransport> {
+                               -> Result<action::UpdateDocument<'a, HyperTransport>, Error> {
         action::UpdateDocument::new(&self.transport, doc)
     }
 
     pub fn delete_document<'a, P>(&'a self,
                                   doc_path: P,
                                   revision: &'a Revision)
-                                  -> action::DeleteDocument<'a, P, HyperTransport>
+                                  -> Result<action::DeleteDocument<'a, HyperTransport>, Error>
         where P: IntoDocumentPath<'a>
     {
         action::DeleteDocument::new(&self.transport, doc_path, revision)
