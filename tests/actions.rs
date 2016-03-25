@@ -35,7 +35,7 @@ fn create_database_nok_database_exists() {
 }
 
 #[test]
-fn create_document_ok_default_options() {
+fn create_document_ok_default() {
 
     let (_server, client) = make_server_and_client();
     client.create_database("/baseball").unwrap().run().unwrap();
@@ -104,7 +104,7 @@ fn create_document_nok_document_conflict() {
 }
 
 #[test]
-fn read_document_ok_default_options() {
+fn read_document_ok_default() {
 
     let (_server, client) = make_server_and_client();
     client.create_database("/baseball").unwrap().run().unwrap();
@@ -118,6 +118,28 @@ fn read_document_ok_default_options() {
 
     let doc = client.read_document(("/baseball", &doc_id))
                     .unwrap()
+                    .run()
+                    .unwrap();
+    let down_content = doc.get_content().unwrap();
+    assert_eq!(up_content, down_content);
+}
+
+#[test]
+fn read_document_ok_with_revision() {
+
+    let (_server, client) = make_server_and_client();
+    client.create_database("/baseball").unwrap().run().unwrap();
+
+    let up_content = serde_json::builder::ObjectBuilder::new()
+                         .insert("name", "Babe Ruth")
+                         .insert("nickname", "The Bambino")
+                         .unwrap();
+
+    let (doc_id, rev) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
+
+    let doc = client.read_document(("/baseball", &doc_id))
+                    .unwrap()
+                    .with_revision(&rev)
                     .run()
                     .unwrap();
     let down_content = doc.get_content().unwrap();

@@ -4,11 +4,13 @@ use DocumentPathRef;
 use document::JsonDecodableDocument;
 use Error;
 use IntoDocumentPath;
+use Revision;
 use transport::{Action, HyperTransport, RequestOptions, Response, StatusCode, Transport};
 
 pub struct ReadDocument<'a, T: Transport + 'a> {
     transport: &'a T,
     doc_path: DocumentPathRef<'a>,
+    revision: Option<&'a Revision>,
 }
 
 impl<'a, T: Transport + 'a> ReadDocument<'a, T> {
@@ -17,7 +19,13 @@ impl<'a, T: Transport + 'a> ReadDocument<'a, T> {
         Ok(ReadDocument {
             transport: transport,
             doc_path: try!(doc_path.into_document_path()),
+            revision: None,
         })
+    }
+
+    pub fn with_revision(mut self, revision: &'a Revision) -> Self {
+        self.revision = Some(revision);
+        self
     }
 }
 
@@ -33,7 +41,13 @@ impl<'a, T: Transport + 'a> Action<T> for ReadDocument<'a, T> {
 
     fn make_request(&mut self) -> Result<(T::Request, Self::State), Error> {
         let db_name = DatabaseName::from(self.doc_path.database_name());
+
         let options = RequestOptions::new().with_accept_json();
+        let options = match self.revision {
+            None => options,
+            Some(rev) => options.with_revision_query(rev),
+        };
+
         let request = try!(self.transport.get(self.doc_path, options));
         Ok((request, db_name))
     }
@@ -68,18 +82,31 @@ mod tests {
     #[test]
     fn make_request_default() {
         let transport = MockTransport::new();
-
         let expected = ({
             let options = RequestOptions::new().with_accept_json();
             transport.get(vec!["foo", "bar"], options).unwrap()
         },
                         DatabaseName::from("foo"));
-
         let got = {
             let mut action = ReadDocument::new(&transport, "/foo/bar").unwrap();
             action.make_request().unwrap()
         };
+        assert_eq!(expected, got);
+    }
 
+    #[test]
+    fn make_request_with_revision() {
+        let transport = MockTransport::new();
+        let rev = Revision::parse("1-1234567890abcdef1234567890abcdef").unwrap();
+        let expected = ({
+            let options = RequestOptions::new().with_accept_json().with_revision_query(&rev);
+            transport.get(vec!["foo", "bar"], options).unwrap()
+        },
+                        DatabaseName::from("foo"));
+        let got = {
+            let mut action = ReadDocument::new(&transport, "/foo/bar").unwrap().with_revision(&rev);
+            action.make_request().unwrap()
+        };
         assert_eq!(expected, got);
     }
 
