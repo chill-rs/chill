@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["Client",""]],"trait":[["IntoUrl","Types that are convertible into a URL."]]});

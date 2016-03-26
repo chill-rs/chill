@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["CreateDatabase",""],["CreateDocument",""],["DeleteDocument",""],["ReadDocument",""],["UpdateDocument",""]]});
