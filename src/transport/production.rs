@@ -88,6 +88,29 @@ impl HyperTransport {
 
         url
     }
+
+    fn make_headers<'a, B>(&self, options: &RequestOptions<'a, B>) -> hyper::header::Headers
+        where B: serde::Serialize
+    {
+        let mut headers = hyper::header::Headers::new();
+
+        match options.accept {
+            None => (),
+            Some(RequestAccept::Json) => {
+                let quality_items = vec![hyper::header::qitem(mime!(Application / Json))];
+                headers.set(hyper::header::Accept(quality_items));
+            }
+        }
+
+        match options.body {
+            None => (),
+            Some(RequestBody::Json(..)) => {
+                headers.set(hyper::header::ContentType(mime!(Application / Json)));
+            }
+        }
+
+        headers
+    }
 }
 
 impl Transport for HyperTransport {
@@ -102,28 +125,7 @@ impl Transport for HyperTransport {
               P: IntoIterator<Item = &'a str>
     {
         let url = self.make_request_url(path, &options);
-
-        // FIXME: Move header-construction into separate method?
-        let headers = {
-            let mut h = hyper::header::Headers::new();
-
-            match options.accept {
-                None => (),
-                Some(RequestAccept::Json) => {
-                    let quality_items = vec![hyper::header::qitem(mime!(Application / Json))];
-                    h.set(hyper::header::Accept(quality_items));
-                }
-            }
-
-            match options.body {
-                None => (),
-                Some(RequestBody::Json(..)) => {
-                    h.set(hyper::header::ContentType(mime!(Application / Json)));
-                }
-            }
-
-            h
-        };
+        let headers = self.make_headers(&options);
 
         let body = match options.body {
             None => Vec::new(),
@@ -177,9 +179,11 @@ impl Response for HyperResponse {
 #[cfg(test)]
 mod tests {
 
+    use hyper;
     use Revision;
-    use transport::RequestOptions;
+    use serde_json;
     use super::HyperTransport;
+    use transport::RequestOptions;
     use url;
 
     #[test]
@@ -243,6 +247,43 @@ mod tests {
                  .with_revision_query(&Revision::parse("42-1234567890abcdef1234567890abcdef")
                                            .unwrap())
         });
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn make_headers_default() {
+        let url = "http://example.com:5984/".parse().unwrap();
+        let transport = HyperTransport::new(url).unwrap();
+        let expected = hyper::header::Headers::new();
+        let got = transport.make_headers(&RequestOptions::<()>::new());
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn make_headers_with_accept_json() {
+        let url = "http://example.com:5984/".parse().unwrap();
+        let transport = HyperTransport::new(url).unwrap();
+        let expected = {
+            let mut headers = hyper::header::Headers::new();
+            let quality_items = vec![hyper::header::qitem(mime!(Application / Json))];
+            headers.set(hyper::header::Accept(quality_items));
+            headers
+        };
+        let got = transport.make_headers(&RequestOptions::<()>::new().with_accept_json());
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn make_headers_with_json_body() {
+        let url = "http://example.com:5984/".parse().unwrap();
+        let transport = HyperTransport::new(url).unwrap();
+        let expected = {
+            let mut headers = hyper::header::Headers::new();
+            headers.set(hyper::header::ContentType(mime!(Application / Json)));
+            headers
+        };
+        let body = serde_json::builder::ObjectBuilder::new().unwrap();
+        let got = transport.make_headers(&RequestOptions::<()>::new().with_json_body(&body));
         assert_eq!(expected, got);
     }
 }
