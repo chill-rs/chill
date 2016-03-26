@@ -213,10 +213,10 @@ fn delete_document_ok() {
 
     let (doc_id, rev1) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
 
-    let _rev2 = client.delete_document(("/baseball", &doc_id), &rev1)
-                      .unwrap()
-                      .run()
-                      .unwrap();
+    let rev2 = client.delete_document(("/baseball", &doc_id), &rev1)
+                     .unwrap()
+                     .run()
+                     .unwrap();
 
     match client.read_document(("/baseball", &doc_id)).unwrap().run() {
         Err(chill::Error::NotFound(..)) => (),
@@ -225,6 +225,10 @@ fn delete_document_ok() {
         }
     }
 
-    // FIXME: Check that _rev2 is valid. We need to be able to get a document at
-    // a specific revision to check this.
+    let doc = client.read_document(("/baseball", &doc_id))
+                    .unwrap()
+                    .with_revision(&rev2)
+                    .run()
+                    .unwrap();
+    assert!(doc.is_deleted());
 }
