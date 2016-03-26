@@ -87,7 +87,7 @@
 
     1. Commit changes
 
-            $ git commit
+            $ git commit -m "Prep for work on the next release"
 
     1. [Close the issue milestone for the new release](
        https://github.com/chill-rs/chill/milestones).
