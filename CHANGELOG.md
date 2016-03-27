@@ -1,4 +1,4 @@
-Chill-rs change log
+# Chill-rs Change Log
 
 ## v0.1.1 (unreleased)
 
