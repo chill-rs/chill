@@ -4,6 +4,7 @@ use Error;
 use hyper;
 use IntoDatabasePath;
 use IntoDocumentPath;
+use IntoViewPath;
 use Revision;
 use serde;
 use transport::HyperTransport;
@@ -67,5 +68,16 @@ impl Client {
         where P: IntoDocumentPath<'a>
     {
         action::DeleteDocument::new(&self.transport, doc_path, revision)
+    }
+
+    pub fn execute_view<'a, K, V, P>
+        (&'a self,
+         view_path: P)
+         -> Result<action::ExecuteView<'a, HyperTransport, K, V>, Error>
+        where K: serde::Deserialize + serde::Serialize,
+              P: IntoViewPath<'a>,
+              V: serde::Deserialize
+    {
+        action::ExecuteView::new(&self.transport, view_path)
     }
 }

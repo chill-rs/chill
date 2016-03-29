@@ -50,9 +50,18 @@ impl DocumentPath {
 
 impl<'a> From<&'a DocumentPath> for DocumentPathRef<'a> {
     fn from(doc_path: &'a DocumentPath) -> Self {
+        doc_path.as_ref()
+    }
+}
+
+impl<'a, T, U> From<(T, U)> for DocumentPathRef<'a>
+    where T: Into<DatabasePathRef<'a>>,
+          U: Into<DocumentIdRef<'a>>
+{
+    fn from(parts: (T, U)) -> Self {
         DocumentPathRef {
-            db_name: doc_path.db_name.as_ref(),
-            doc_id: doc_path.doc_id.as_ref(),
+            db_name: parts.0.into().db_name,
+            doc_id: parts.1.into(),
         }
     }
 }
@@ -62,6 +71,18 @@ impl<'a> From<DocumentPathRef<'a>> for DocumentPath {
         DocumentPath {
             db_name: doc_path.db_name.into(),
             doc_id: doc_path.doc_id.into(),
+        }
+    }
+}
+
+impl<'a, T, U> From<(T, U)> for DocumentPath
+    where T: Into<DatabasePath>,
+          U: Into<DocumentId>
+{
+    fn from(parts: (T, U)) -> Self {
+        DocumentPath {
+            db_name: parts.0.into().db_name,
+            doc_id: parts.1.into(),
         }
     }
 }

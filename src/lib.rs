@@ -18,6 +18,7 @@ mod document;
 mod error;
 mod revision;
 mod transport;
+mod view;
 
 pub mod action;
 pub mod path;
@@ -27,7 +28,10 @@ pub use client::{Client, IntoUrl};
 pub use document::{Attachment, Document, SavedAttachment, UnsavedAttachment};
 pub use error::{Error, ErrorResponse};
 pub use path::{DatabaseName, DatabaseNameRef, DatabasePath, DatabasePathRef, DesignDocumentName,
-               DesignDocumentNameRef, DocumentId, DocumentIdRef, DocumentPath, DocumentPathRef,
-               IntoDatabasePath, IntoDocumentPath, LocalDocumentName, LocalDocumentNameRef,
-               NormalDocumentName, NormalDocumentNameRef};
+               DesignDocumentNameRef, DesignDocumentPath, DesignDocumentPathRef, DocumentId,
+               DocumentIdRef, DocumentPath, DocumentPathRef, IntoDatabasePath,
+               IntoDesignDocumentPath, IntoDocumentPath, IntoViewPath, LocalDocumentName,
+               LocalDocumentNameRef, NormalDocumentName, NormalDocumentNameRef, ViewName,
+               ViewNameRef, ViewPath, ViewPathRef};
 pub use revision::Revision;
+pub use view::{ReducedView, UnreducedView, ViewResponse, ViewRow};

@@ -2,7 +2,10 @@
 
 ## v0.1.1 (unreleased)
 
-No changes yet!
+### New
+
+* New action type to execute a view (`action::ExecuteView`).
+* New test type to mock view responses (`testing::ViewResponseBuilder`).
 
 ## v0.1.0 (2016-03-26)
 

@@ -25,11 +25,13 @@ impl<'a> DocumentIdRef<'a> {
 }
 
 impl DocumentId {
-    fn design_prefix() -> &'static str {
+    #[doc(hidden)]
+    pub fn design_prefix() -> &'static str {
         "_design"
     }
 
-    fn local_prefix() -> &'static str {
+    #[doc(hidden)]
+    pub fn local_prefix() -> &'static str {
         "_local"
     }
 
@@ -92,11 +94,7 @@ impl From<String> for DocumentId {
 
 impl<'a> From<&'a DocumentId> for DocumentIdRef<'a> {
     fn from(doc_id: &'a DocumentId) -> Self {
-        match doc_id {
-            &DocumentId::Normal(ref x) => DocumentIdRef::Normal(x.into()),
-            &DocumentId::Design(ref x) => DocumentIdRef::Design(x.into()),
-            &DocumentId::Local(ref x) => DocumentIdRef::Local(x.into()),
-        }
+        doc_id.as_ref()
     }
 }
 

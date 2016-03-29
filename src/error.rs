@@ -80,6 +80,9 @@ pub enum Error {
     Unauthorized(ErrorResponse),
 
     #[doc(hidden)]
+    UnexpectedResponse(&'static str),
+
+    #[doc(hidden)]
     UrlNotSchemeRelative,
 
     #[doc(hidden)]
@@ -170,6 +173,7 @@ impl std::error::Error for Error {
             }
             &Transport { .. } => "An HTTP transport error occurred",
             &Unauthorized(..) => "The CouchDB client has insufficient privilege",
+            &UnexpectedResponse(..) => "The CouchDB server responded unexpectedly",
             &UrlNotSchemeRelative => "The URL is not scheme relative",
             &UrlParse { .. } => "The URL is badly formatted",
         }
@@ -194,6 +198,7 @@ impl std::error::Error for Error {
             &ServerResponse { .. } => None,
             &Transport { ref kind } => kind.cause(),
             &Unauthorized(..) => None,
+            &UnexpectedResponse(..) => None,
             &UrlNotSchemeRelative => None,
             &UrlParse { ref cause } => Some(cause),
         }
@@ -236,6 +241,9 @@ impl std::fmt::Display for Error {
             }
             &Transport { ref kind } => write!(f, "{}: {}", description, kind),
             &Unauthorized(ref error_response) => write!(f, "{}: {}", description, error_response),
+            &UnexpectedResponse(sub_description) => {
+                write!(f, "{}: {}", description, sub_description)
+            }
             &UrlNotSchemeRelative => write!(f, "{}", description),
             &UrlParse { ref cause } => write!(f, "{}: {}", description, cause),
         }
@@ -244,6 +252,8 @@ impl std::fmt::Display for Error {
 
 #[derive(Debug)]
 pub enum PathParseErrorKind {
+    BadDesignPrefix,
+    BadViewPrefix,
     EmptySegment,
     NoLeadingSlash,
     TooFewSegments,
@@ -261,6 +271,11 @@ impl std::fmt::Display for PathParseErrorKind {
     fn fmt(&self, formatter: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
         use self::PathParseErrorKind::*;
         match self {
+            &BadDesignPrefix => {
+                write!(formatter,
+                       r#"Design document prefix is invalid (expecting "_design")"#)
+            }
+            &BadViewPrefix => write!(formatter, r#"View prefix is invalid (expecting "_view")"#),
             &EmptySegment => write!(formatter, "Path segment is empty"),
             &NoLeadingSlash => write!(formatter, "Path does not begin with a slash"),
             &TooFewSegments => write!(formatter, "Too few path segments"),

@@ -513,6 +513,7 @@ define_name_type_pair!(DatabaseName, DatabaseNameRef, db_name, /** database */);
 define_name_type_pair!(DesignDocumentName, DesignDocumentNameRef, db_name, /** design document */);
 define_name_type_pair!(LocalDocumentName, LocalDocumentNameRef, db_name, /** local document */);
 define_name_type_pair!(NormalDocumentName, NormalDocumentNameRef, db_name, /** normal document */);
+define_name_type_pair!(ViewName, ViewNameRef, view_name, /** view */);
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum DocumentIdRef<'a> {
@@ -568,11 +569,47 @@ pub trait IntoDocumentPath<'a> {
     fn into_document_path(self) -> Result<DocumentPathRef<'a>, Error>;
 }
 
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct DesignDocumentPathRef<'a> {
+    db_name: DatabaseNameRef<'a>,
+    ddoc_name: DesignDocumentNameRef<'a>,
+}
+
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct DesignDocumentPath {
+    db_name: DatabaseName,
+    ddoc_name: DesignDocumentName,
+}
+
+pub trait IntoDesignDocumentPath<'a> {
+    fn into_design_document_path(self) -> Result<DesignDocumentPathRef<'a>, Error>;
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct ViewPathRef<'a> {
+    db_name: DatabaseNameRef<'a>,
+    ddoc_name: DesignDocumentNameRef<'a>,
+    view_name: ViewNameRef<'a>,
+}
+
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct ViewPath {
+    db_name: DatabaseName,
+    ddoc_name: DesignDocumentName,
+    view_name: ViewName,
+}
+
+pub trait IntoViewPath<'a> {
+    fn into_view_path(self) -> Result<ViewPathRef<'a>, Error>;
+}
+
 // The following submodules implement methods for the traits and types defined
 // above. The rationale for splitting across modules is so that the
 // documentation all appears in one place—this module—while allowing many of the
 // implementation details to reside elsewhere.
 
 mod database_path;
+mod design_document_path;
 mod document_id;
 mod document_path;
+mod view_path;

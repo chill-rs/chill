@@ -25,13 +25,29 @@ impl DatabasePath {
 
 impl<'a> From<&'a DatabasePath> for DatabasePathRef<'a> {
     fn from(db_path: &'a DatabasePath) -> Self {
-        DatabasePathRef { db_name: db_path.db_name.as_ref() }
+        db_path.as_ref()
+    }
+}
+
+impl<'a, T> From<T> for DatabasePathRef<'a>
+    where T: Into<DatabaseNameRef<'a>>
+{
+    fn from(db_name: T) -> Self {
+        DatabasePathRef { db_name: db_name.into() }
     }
 }
 
 impl<'a> From<DatabasePathRef<'a>> for DatabasePath {
     fn from(db_path: DatabasePathRef<'a>) -> Self {
         DatabasePath { db_name: db_path.db_name.into() }
+    }
+}
+
+impl<T> From<T> for DatabasePath
+    where T: Into<DatabaseName>
+{
+    fn from(db_name: T) -> Self {
+        DatabasePath { db_name: db_name.into() }
     }
 }
 
