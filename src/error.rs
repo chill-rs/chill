@@ -7,6 +7,7 @@ use transport::Response;
 use url;
 use uuid;
 
+/// Contains information for an error originating from or propagated by Chill.
 #[derive(Debug)]
 pub enum Error {
     #[doc(hidden)]
@@ -18,8 +19,11 @@ pub enum Error {
     #[doc(hidden)]
     ContentNotAnObject,
 
+    /// The database already exists.
     DatabaseExists(ErrorResponse),
 
+    /// A document with the same id already exists or the given revision is not
+    /// the latest revision for the document.
     DocumentConflict(ErrorResponse),
 
     #[doc(hidden)]
@@ -46,6 +50,8 @@ pub enum Error {
         extra_description: String,
     },
 
+    /// The target resource—e.g., database, document, etc.—does not exist or is
+    /// deleted.
     NotFound(ErrorResponse),
 
     #[doc(hidden)]
@@ -70,6 +76,7 @@ pub enum Error {
         kind: TransportErrorKind,
     },
 
+    /// The client lacks permission to complete the action.
     Unauthorized(ErrorResponse),
 
     #[doc(hidden)]
