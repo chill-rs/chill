@@ -24,7 +24,7 @@ impl<'a, T> UpdateDocument<'a, T>
 }
 
 impl<'a> UpdateDocument<'a, HyperTransport> {
-    pub fn run(self) -> Result<<Self as Action<HyperTransport>>::Output, Error> {
+    pub fn run(self) -> Result<Revision, Error> {
         self.transport.exec_sync(self)
     }
 }

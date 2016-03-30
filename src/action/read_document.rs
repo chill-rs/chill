@@ -30,7 +30,7 @@ impl<'a, T: Transport + 'a> ReadDocument<'a, T> {
 }
 
 impl<'a> ReadDocument<'a, HyperTransport> {
-    pub fn run(self) -> Result<<Self as Action<HyperTransport>>::Output, Error> {
+    pub fn run(self) -> Result<Document, Error> {
         self.transport.exec_sync(self)
     }
 }

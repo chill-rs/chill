@@ -46,7 +46,7 @@ impl<'a, C, T> CreateDocument<'a, T, C>
 impl<'a, C> CreateDocument<'a, HyperTransport, C>
     where C: serde::Serialize + 'a
 {
-    pub fn run(self) -> Result<<Self as Action<HyperTransport>>::Output, Error> {
+    pub fn run(self) -> Result<(DocumentId, Revision), Error> {
         self.transport.exec_sync(self)
     }
 }

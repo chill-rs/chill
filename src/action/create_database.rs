@@ -19,7 +19,7 @@ impl<'a, T: Transport + 'a> CreateDatabase<'a, T> {
 }
 
 impl<'a> CreateDatabase<'a, HyperTransport> {
-    pub fn run(self) -> Result<<Self as Action<HyperTransport>>::Output, Error> {
+    pub fn run(self) -> Result<(), Error> {
         self.transport.exec_sync(self)
     }
 }

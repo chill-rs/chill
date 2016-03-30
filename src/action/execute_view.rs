@@ -39,7 +39,7 @@ impl<'a, K, V> ExecuteView<'a, HyperTransport, K, V>
     where K: serde::Deserialize + serde::Serialize,
           V: serde::Deserialize
 {
-    pub fn run(self) -> Result<<Self as Action<HyperTransport>>::Output, Error> {
+    pub fn run(self) -> Result<ViewResponse<K, V>, Error> {
         self.transport.exec_sync(self)
     }
 }
