@@ -13,6 +13,12 @@ use std;
 
 type AttachmentName = String;
 
+/// Contains a specific version of a document.
+///
+/// A `Document` is an in-memory representation of a document, including its
+/// content, attachments, and meta-information.
+///
+/// A `Document` may represent a document of any type: normal, design, or local.
 #[derive(Debug, PartialEq)]
 pub struct Document {
     doc_path: DocumentPath,
@@ -39,6 +45,9 @@ impl Document {
         self.doc_path.database_name()
     }
 
+    // FIXME: Should this be deprecated? Should we expose only paths, not ids?
+    // What's the value in exposing an id instead of a path?
+    /// Returns the document's id.
     pub fn id(&self) -> &DocumentId {
         self.doc_path.document_id()
     }
@@ -48,18 +57,36 @@ impl Document {
         &self.doc_path
     }
 
+    /// Returns the document's revision.
     pub fn revision(&self) -> &Revision {
         &self.revision
     }
 
+    /// Returns `true` if and only if the document is deleted.
+    ///
+    /// Normally, the CouchDB server returns a `NotFound` error if the
+    /// application attempts to read a deleted document. However, the
+    /// application may specify a revision when reading the document, and, if
+    /// the revision marks when the document was deleted, then the server will
+    /// respond successfully with a `Document` “stub” marked as deleted.
+    ///
     pub fn is_deleted(&self) -> bool {
         self.deleted
     }
 
+    /// Decodes and returns the document content, from a JSON object into a Rust
+    /// type.
     pub fn get_content<C: serde::Deserialize>(&self) -> Result<C, Error> {
         serde_json::from_value(self.content.clone()).map_err(|e| Error::JsonDecode { cause: e })
     }
 
+    /// Encodes the document content, from a Rust type into a JSON object.
+    ///
+    /// The `set_content` method modifies the `Document` instance but doesn't
+    /// update the document on the CouchDB server. To update the document on the
+    /// server, the application must use the `UpdateDocument` action upon the
+    /// modified `Document`.
+    ///
     pub fn set_content<C: serde::Serialize>(&mut self, new_content: &C) -> Result<(), Error> {
         self.content = serde_json::to_value(new_content);
         Ok(())
