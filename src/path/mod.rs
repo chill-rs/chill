@@ -252,8 +252,7 @@
 //! Chill allows convenience to trump type-safety in some cases. Application
 //! programmers should be mindful when converting from raw strings.
 
-use Error;
-use error::PathParseErrorKind;
+use prelude_impl::*;
 use std;
 
 #[derive(Debug)]
@@ -318,8 +317,7 @@ impl<'a> PathExtractor<'a> {
 #[cfg(test)]
 mod extractor_tests {
 
-    use Error;
-    use error::PathParseErrorKind;
+    use prelude_impl::*;
     use super::{PathExtraction, PathExtractor};
 
     #[test]

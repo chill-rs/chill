@@ -1,7 +1,4 @@
-use DatabaseName;
-use DocumentId;
-use DocumentPathRef;
-use Error;
+use prelude_impl::*;
 use serde;
 use std;
 
@@ -298,10 +295,8 @@ impl<K: serde::Deserialize, M, V: serde::Deserialize> ViewResponseBuilder<K, V, 
 #[cfg(test)]
 mod view_response_builder_tests {
 
-    use DatabaseName;
-    use DocumentId;
+    use prelude_impl::*;
     use std;
-    use super::*;
 
     #[test]
     fn reduced_required() {

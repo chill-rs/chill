@@ -1,12 +1,6 @@
-use DatabaseName;
-use Error;
-use IntoViewPath;
+use prelude_impl::*;
 use serde;
 use std;
-use transport::{Action, HyperTransport, RequestOptions, Response, StatusCode, Transport};
-use ViewPathRef;
-use ViewResponse;
-use view::ViewResponseJsonable;
 
 pub struct ExecuteView<'a, T, K, V>
     where K: serde::Deserialize + serde::Serialize,
@@ -77,12 +71,9 @@ impl<'a, T, K, V> Action<T> for ExecuteView<'a, T, K, V>
 #[cfg(test)]
 mod tests {
 
-    use DatabaseName;
-    use Error;
+    use prelude_impl::*;
     use serde_json;
-    use super::*;
-    use transport::{Action, MockResponse, MockTransport, RequestOptions, StatusCode, Transport};
-    use view::ViewResponseBuilder;
+    use super::ExecuteView;
 
     #[test]
     fn make_request_default() {

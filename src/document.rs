@@ -1,12 +1,6 @@
 use base64;
-use DatabaseName;
-use DocumentId;
-use DocumentPath;
-use Error;
-#[cfg(test)]
-use IntoDocumentPath;
 use mime;
-use Revision;
+use prelude_impl::*;
 use serde;
 use serde_json;
 use std;
@@ -560,7 +554,7 @@ impl serde::Deserialize for JsonDecodableBase64Blob {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct JsonDecodableContentType(pub mime::Mime);
+struct JsonDecodableContentType(pub mime::Mime);
 
 impl serde::Deserialize for JsonDecodableContentType {
     fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
@@ -719,15 +713,11 @@ impl serde::Deserialize for WriteDocumentResponse {
 mod tests {
 
     use base64;
-    use DocumentId;
-    use DocumentPath;
-    use Error;
-    use Revision;
+    use prelude_impl::*;
     use serde_json;
     use std;
-    use super::*;
     use super::{AttachmentEncodingInfo, AttachmentName, JsonDecodableBase64Blob,
-                JsonEncodableBase64Blob, SavedAttachmentContent};
+                JsonDecodableContentType, JsonEncodableBase64Blob, SavedAttachmentContent};
 
     #[test]
     fn document_get_content_ok() {

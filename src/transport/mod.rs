@@ -1,14 +1,10 @@
-mod production;
+pub mod production;
 #[cfg(test)]
-mod testing;
+pub mod testing;
 
-use Error;
-use Revision;
+use hyper;
+use prelude_impl::*;
 use serde;
-
-pub use self::production::HyperTransport;
-#[cfg(test)]
-pub use self::testing::{MockResponse, MockTransport};
 
 pub trait Action<T: Transport> {
     type Output;
@@ -21,7 +17,7 @@ pub trait Transport {
     type Request;
 
     fn request<'a, B, P>(&self,
-                         method: Method,
+                         method: hyper::method::Method,
                          path: P,
                          options: RequestOptions<'a, B>)
                          -> Result<Self::Request, Error>
@@ -35,14 +31,14 @@ pub trait Transport {
         where B: serde::Serialize,
               P: IntoIterator<Item = &'a str>
     {
-        self.request(Method::Delete, path, options)
+        self.request(hyper::method::Method::Delete, path, options)
     }
 
     fn get<'a, B, P>(&self, path: P, options: RequestOptions<'a, B>) -> Result<Self::Request, Error>
         where B: serde::Serialize,
               P: IntoIterator<Item = &'a str>
     {
-        self.request(Method::Get, path, options)
+        self.request(hyper::method::Method::Get, path, options)
     }
 
     fn post<'a, B, P>(&self,
@@ -52,14 +48,14 @@ pub trait Transport {
         where B: serde::Serialize,
               P: IntoIterator<Item = &'a str>
     {
-        self.request(Method::Post, path, options)
+        self.request(hyper::method::Method::Post, path, options)
     }
 
     fn put<'a, B, P>(&self, path: P, options: RequestOptions<'a, B>) -> Result<Self::Request, Error>
         where B: serde::Serialize,
               P: IntoIterator<Item = &'a str>
     {
-        self.request(Method::Put, path, options)
+        self.request(hyper::method::Method::Put, path, options)
     }
 }
 
@@ -110,6 +106,3 @@ enum RequestAccept {
 enum RequestBody<'a, B: serde::Serialize + 'a> {
     Json(&'a B),
 }
-
-pub use hyper::method::Method;
-pub use hyper::status::StatusCode;

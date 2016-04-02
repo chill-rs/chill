@@ -1,8 +1,8 @@
-use Error;
-use Revision;
+use hyper;
+use prelude_impl::*;
 use serde;
 use serde_json;
-use super::{Method, RequestAccept, RequestBody, RequestOptions, Response, StatusCode, Transport};
+use super::{RequestAccept, RequestBody};
 
 // A mock transport allows us to test our CouchDB actions without the presence
 // of a CouchDB server. This is helpful because:
@@ -25,7 +25,7 @@ impl Transport for MockTransport {
     type Request = MockRequest;
 
     fn request<'a, B, P>(&self,
-                         method: Method,
+                         method: hyper::method::Method,
                          path: P,
                          options: RequestOptions<'a, B>)
                          -> Result<Self::Request, Error>
@@ -98,7 +98,7 @@ impl Response for MockResponse {
 
 #[derive(Debug, PartialEq)]
 pub struct MockRequest {
-    method: Method,
+    method: hyper::method::Method,
     path: Vec<String>,
     accept: Option<MockRequestAccept>,
     revision_query: Option<Revision>,

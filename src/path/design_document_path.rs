@@ -1,7 +1,5 @@
-use Error;
-use error::PathParseErrorKind;
+use prelude_impl::*;
 use super::PathExtractor;
-use super::*;
 
 impl<'a> DesignDocumentPathRef<'a> {
     pub fn database_name(&self) -> DatabaseNameRef<'a> {
@@ -175,9 +173,7 @@ impl<'a, T, U> IntoDesignDocumentPath<'a> for (T, U)
 #[cfg(test)]
 mod tests {
 
-    use Error;
-    use error::PathParseErrorKind;
-    use super::super::*;
+    use prelude_impl::*;
 
     #[test]
     fn into_iter() {

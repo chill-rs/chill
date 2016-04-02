@@ -1,9 +1,4 @@
-use DocumentPathRef;
-use document::WriteDocumentResponse;
-use Error;
-use IntoDocumentPath;
-use Revision;
-use transport::{Action, HyperTransport, RequestOptions, Response, StatusCode, Transport};
+use prelude_impl::*;
 
 pub struct DeleteDocument<'a, T: Transport + 'a> {
     transport: &'a T,
@@ -57,10 +52,8 @@ impl<'a, T: Transport + 'a> Action<T> for DeleteDocument<'a, T> {
 #[cfg(test)]
 mod tests {
 
-    use Error;
-    use Revision;
-    use super::*;
-    use transport::{Action, MockResponse, MockTransport, RequestOptions, StatusCode, Transport};
+    use prelude_impl::*;
+    use super::DeleteDocument;
 
     #[test]
     fn make_request_default() {

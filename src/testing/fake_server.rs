@@ -1,4 +1,4 @@
-use Error;
+use prelude_impl::*;
 use regex;
 use std;
 use tempdir;

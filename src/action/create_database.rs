@@ -1,7 +1,4 @@
-use DatabasePathRef;
-use Error;
-use IntoDatabasePath;
-use transport::{Action, HyperTransport, RequestOptions, Response, StatusCode, Transport};
+use prelude_impl::*;
 
 pub struct CreateDatabase<'a, T: Transport + 'a> {
     transport: &'a T,
@@ -47,9 +44,8 @@ impl<'a, T: Transport + 'a> Action<T> for CreateDatabase<'a, T> {
 #[cfg(test)]
 mod tests {
 
-    use Error;
-    use super::*;
-    use transport::{Action, MockResponse, MockTransport, RequestOptions, StatusCode, Transport};
+    use prelude_impl::*;
+    use super::CreateDatabase;
 
     #[test]
     fn make_request_default() {

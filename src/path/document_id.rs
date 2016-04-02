@@ -1,6 +1,6 @@
+use prelude_impl::*;
 use serde;
 use std;
-use super::*;
 
 impl<'a> DocumentIdRef<'a> {}
 
@@ -228,8 +228,8 @@ impl serde::Deserialize for DocumentId {
 #[cfg(test)]
 mod tests {
 
+    use prelude_impl::*;
     use serde_json;
-    use super::super::*;
 
     #[test]
     fn document_id_ref_from_str_ref_normal() {

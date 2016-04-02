@@ -1,7 +1,5 @@
-use Error;
-use error::PathParseErrorKind;
+use prelude_impl::*;
 use super::PathExtractor;
-use super::*;
 
 fn view_prefix() -> &'static str {
     "_view"
@@ -248,9 +246,7 @@ impl<'a, T, U> IntoViewPath<'a> for (T, U)
 #[cfg(test)]
 mod tests {
 
-    use Error;
-    use error::PathParseErrorKind;
-    use super::super::*;
+    use prelude_impl::*;
 
     #[test]
     fn into_iter() {

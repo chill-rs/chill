@@ -1,9 +1,9 @@
 use hyper;
 use mime;
+use prelude_impl::*;
 use serde;
 use serde_json;
 use std;
-use transport::Response;
 use url;
 use uuid;
 
@@ -467,8 +467,8 @@ impl serde::Deserialize for ErrorResponse {
 #[cfg(test)]
 mod tests {
 
+    use prelude_impl::*;
     use serde_json;
-    use super::ErrorResponse;
 
     #[test]
     fn error_response_display() {

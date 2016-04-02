@@ -1,11 +1,9 @@
-use Error;
-use error::TransportErrorKind;
 use hyper;
+use prelude_impl::*;
 use serde;
 use serde_json;
+use super::{RequestAccept, RequestBody};
 use std;
-use super::{Action, Method, RequestAccept, RequestBody, RequestOptions, Response, StatusCode,
-            Transport};
 use url;
 
 #[derive(Debug)]
@@ -117,7 +115,7 @@ impl Transport for HyperTransport {
     type Request = HyperRequest;
 
     fn request<'a, B, P>(&self,
-                         method: Method,
+                         method: hyper::method::Method,
                          path: P,
                          options: RequestOptions<'a, B>)
                          -> Result<Self::Request, Error>
@@ -145,7 +143,7 @@ impl Transport for HyperTransport {
 
 #[derive(Debug)]
 pub struct HyperRequest {
-    method: Method,
+    method: hyper::method::Method,
     url: url::Url,
     headers: hyper::header::Headers,
     body: Vec<u8>,
@@ -180,10 +178,8 @@ impl Response for HyperResponse {
 mod tests {
 
     use hyper;
-    use Revision;
+    use prelude_impl::*;
     use serde_json;
-    use super::HyperTransport;
-    use transport::RequestOptions;
     use url;
 
     #[test]

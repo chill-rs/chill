@@ -1,11 +1,4 @@
-use DatabaseName;
-use Document;
-use DocumentPathRef;
-use document::JsonDecodableDocument;
-use Error;
-use IntoDocumentPath;
-use Revision;
-use transport::{Action, HyperTransport, RequestOptions, Response, StatusCode, Transport};
+use prelude_impl::*;
 
 pub struct ReadDocument<'a, T: Transport + 'a> {
     transport: &'a T,
@@ -70,14 +63,8 @@ impl<'a, T: Transport + 'a> Action<T> for ReadDocument<'a, T> {
 #[cfg(test)]
 mod tests {
 
-    use DatabaseName;
-    use DatabaseNameRef;
-    use DocumentIdRef;
-    use document::DocumentBuilder;
-    use Error;
-    use Revision;
-    use super::*;
-    use transport::{Action, MockResponse, MockTransport, RequestOptions, StatusCode, Transport};
+    use prelude_impl::*;
+    use super::ReadDocument;
 
     #[test]
     fn make_request_default() {

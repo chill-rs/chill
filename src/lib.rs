@@ -35,3 +35,20 @@ pub use path::{DatabaseName, DatabaseNameRef, DatabasePath, DatabasePathRef, Des
                ViewNameRef, ViewPath, ViewPathRef};
 pub use revision::Revision;
 pub use view::{ReducedView, UnreducedView, ViewResponse, ViewRow};
+
+mod prelude_impl {
+    pub use super::*;
+    pub use document::{JsonDecodableDocument, WriteDocumentResponse};
+    #[cfg(test)]
+    pub use document::DocumentBuilder;
+    pub use error::{PathParseErrorKind, TransportErrorKind};
+    pub use transport::{Action, RequestOptions, Response, Transport};
+    pub use transport::production::HyperTransport;
+    #[cfg(test)]
+    pub use transport::testing::{MockResponse, MockTransport};
+    pub use view::{ViewResponseJsonable, ViewResponseBuilder};
+
+    // The StatusCode type is too prevalent to exclude from the prelude--even
+    // though the type isn't ours.
+    pub use hyper::status::StatusCode;
+}

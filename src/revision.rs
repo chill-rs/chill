@@ -1,4 +1,4 @@
-use Error;
+use prelude_impl::*;
 use serde;
 use std;
 use uuid;
@@ -132,9 +132,8 @@ impl serde::Deserialize for Revision {
 #[cfg(test)]
 mod tests {
 
-    use Error;
+    use prelude_impl::*;
     use serde_json;
-    use super::Revision;
 
     #[test]
     fn parse_ok() {

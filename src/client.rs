@@ -1,13 +1,6 @@
-use action;
-use Document;
-use Error;
 use hyper;
-use IntoDatabasePath;
-use IntoDocumentPath;
-use IntoViewPath;
-use Revision;
+use prelude_impl::*;
 use serde;
-use transport::HyperTransport;
 
 /// Types that are convertible into a URL.
 pub trait IntoUrl: hyper::client::IntoUrl {
