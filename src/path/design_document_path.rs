@@ -1,5 +1,5 @@
 use prelude_impl::*;
-use super::PathExtractor;
+use super::{DESIGN_PREFIX, PathExtractor};
 
 impl<'a> DesignDocumentPathRef<'a> {
     pub fn database_name(&self) -> DatabaseNameRef<'a> {
@@ -111,8 +111,7 @@ impl<'a> Iterator for DesignDocumentPathIter<'a> {
                  DesignDocumentPathIter::DocumentPrefix(path))
             }
             &mut DesignDocumentPathIter::DocumentPrefix(path) => {
-                (DocumentId::design_prefix(),
-                 DesignDocumentPathIter::DocumentName(path))
+                (DESIGN_PREFIX, DesignDocumentPathIter::DocumentName(path))
             }
             &mut DesignDocumentPathIter::DocumentName(path) => {
                 (path.ddoc_name.inner, DesignDocumentPathIter::Done)
@@ -133,7 +132,7 @@ impl<'a> IntoDesignDocumentPath<'a> for &'static str {
         let mut path_extractor = PathExtractor::new(self);
         let db_name = try!(path_extractor.extract_nonfinal());
 
-        if DocumentId::design_prefix() != try!(path_extractor.extract_nonfinal()) {
+        if DESIGN_PREFIX != try!(path_extractor.extract_nonfinal()) {
             return Err(Error::PathParse(PathParseErrorKind::BadDesignPrefix));
         }
 

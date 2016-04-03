@@ -27,9 +27,10 @@ pub mod testing;
 pub use client::{Client, IntoUrl};
 pub use document::{Attachment, Document, SavedAttachment, UnsavedAttachment};
 pub use error::{Error, ErrorResponse};
-pub use path::{DatabaseName, DatabaseNameRef, DatabasePath, DatabasePathRef, DesignDocumentName,
+pub use path::{AttachmentName, AttachmentNameRef, AttachmentPath, AttachmentPathRef, DatabaseName,
+               DatabaseNameRef, DatabasePath, DatabasePathRef, DesignDocumentName,
                DesignDocumentNameRef, DesignDocumentPath, DesignDocumentPathRef, DocumentId,
-               DocumentIdRef, DocumentPath, DocumentPathRef, IntoDatabasePath,
+               DocumentIdRef, DocumentPath, DocumentPathRef, IntoAttachmentPath, IntoDatabasePath,
                IntoDesignDocumentPath, IntoDocumentPath, IntoViewPath, LocalDocumentName,
                LocalDocumentNameRef, NormalDocumentName, NormalDocumentNameRef, ViewName,
                ViewNameRef, ViewPath, ViewPathRef};

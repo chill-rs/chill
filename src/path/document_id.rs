@@ -1,16 +1,15 @@
 use prelude_impl::*;
 use serde;
 use std;
-
-impl<'a> DocumentIdRef<'a> {}
+use super::{DESIGN_PREFIX, LOCAL_PREFIX};
 
 impl<'a> DocumentIdRef<'a> {
     #[doc(hidden)]
     pub fn prefix(&self) -> Option<&'static str> {
         match self {
             &DocumentIdRef::Normal(..) => None,
-            &DocumentIdRef::Design(..) => Some(DocumentId::design_prefix()),
-            &DocumentIdRef::Local(..) => Some(DocumentId::local_prefix()),
+            &DocumentIdRef::Design(..) => Some(DESIGN_PREFIX),
+            &DocumentIdRef::Local(..) => Some(LOCAL_PREFIX),
         }
     }
 
@@ -25,16 +24,6 @@ impl<'a> DocumentIdRef<'a> {
 }
 
 impl DocumentId {
-    #[doc(hidden)]
-    pub fn design_prefix() -> &'static str {
-        "_design"
-    }
-
-    #[doc(hidden)]
-    pub fn local_prefix() -> &'static str {
-        "_local"
-    }
-
     pub fn as_ref(&self) -> DocumentIdRef {
         match self {
             &DocumentId::Normal(ref x) => DocumentIdRef::Normal(x.as_ref()),
@@ -48,8 +37,8 @@ impl<'a> std::fmt::Display for DocumentIdRef<'a> {
     fn fmt(&self, formatter: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
         match self {
             &DocumentIdRef::Normal(x) => x.fmt(formatter),
-            &DocumentIdRef::Design(x) => write!(formatter, "{}/{}", DocumentId::design_prefix(), x),
-            &DocumentIdRef::Local(x) => write!(formatter, "{}/{}", DocumentId::local_prefix(), x),
+            &DocumentIdRef::Design(x) => write!(formatter, "{}/{}", DESIGN_PREFIX, x),
+            &DocumentIdRef::Local(x) => write!(formatter, "{}/{}", LOCAL_PREFIX, x),
         }
     }
 }
@@ -63,13 +52,10 @@ impl std::fmt::Display for DocumentId {
 impl<'a> From<&'a str> for DocumentIdRef<'a> {
     fn from(s: &'a str) -> Self {
 
-        let design_prefix = DocumentId::design_prefix();
-        let local_prefix = DocumentId::local_prefix();
-
-        if s.starts_with(design_prefix) && s[design_prefix.len()..].starts_with('/') {
-            DocumentIdRef::Design(DesignDocumentNameRef::new(&s[design_prefix.len() + 1..]))
-        } else if s.starts_with(local_prefix) && s[local_prefix.len()..].starts_with('/') {
-            DocumentIdRef::Local(LocalDocumentNameRef::new(&s[local_prefix.len() + 1..]))
+        if s.starts_with(DESIGN_PREFIX) && s[DESIGN_PREFIX.len()..].starts_with('/') {
+            DocumentIdRef::Design(DesignDocumentNameRef::new(&s[DESIGN_PREFIX.len() + 1..]))
+        } else if s.starts_with(LOCAL_PREFIX) && s[LOCAL_PREFIX.len()..].starts_with('/') {
+            DocumentIdRef::Local(LocalDocumentNameRef::new(&s[LOCAL_PREFIX.len() + 1..]))
         } else {
             DocumentIdRef::Normal(NormalDocumentNameRef::new(s))
         }

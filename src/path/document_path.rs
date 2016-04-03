@@ -1,5 +1,5 @@
 use prelude_impl::*;
-use super::{PathExtraction, PathExtractor};
+use super::{PathExtractor, SegmentExtraction};
 
 impl<'a> DocumentPathRef<'a> {
     pub fn database_name(&self) -> DatabaseNameRef<'a> {
@@ -136,12 +136,12 @@ impl<'a> IntoDocumentPath<'a> for &'static str {
         let mut path_extractor = PathExtractor::new(self);
         let db_name = try!(path_extractor.extract_nonfinal());
 
-        let doc_id = match try!(path_extractor.extract_any()) {
-            PathExtraction::Final(segment) => DocumentIdRef::Normal(segment.into()),
-            PathExtraction::Nonfinal(path_extractor, "_design") => {
+        let doc_id = match try!(path_extractor.extract_segment()) {
+            SegmentExtraction::Final(segment) => DocumentIdRef::Normal(segment.into()),
+            SegmentExtraction::Nonfinal(path_extractor, "_design") => {
                 DocumentIdRef::Design(try!(path_extractor.extract_final()).into())
             }
-            PathExtraction::Nonfinal(path_extractor, "_local") => {
+            SegmentExtraction::Nonfinal(path_extractor, "_local") => {
                 DocumentIdRef::Local(try!(path_extractor.extract_final()).into())
             }
             _ => {

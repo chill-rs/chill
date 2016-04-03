@@ -5,8 +5,6 @@ use serde;
 use serde_json;
 use std;
 
-type AttachmentName = String;
-
 /// Contains a specific version of a document.
 ///
 /// A `Document` is an in-memory representation of a document, including its
@@ -716,8 +714,8 @@ mod tests {
     use prelude_impl::*;
     use serde_json;
     use std;
-    use super::{AttachmentEncodingInfo, AttachmentName, JsonDecodableBase64Blob,
-                JsonDecodableContentType, JsonEncodableBase64Blob, SavedAttachmentContent};
+    use super::{AttachmentEncodingInfo, JsonDecodableBase64Blob, JsonDecodableContentType,
+                JsonEncodableBase64Blob, SavedAttachmentContent};
 
     #[test]
     fn document_get_content_ok() {
@@ -923,7 +921,7 @@ mod tests {
             deleted: false,
             attachments: {
                 let mut map = std::collections::HashMap::new();
-                map.insert(String::from("attachment_1"),
+                map.insert(AttachmentName::from("attachment_1"),
                            Attachment::Saved(SavedAttachment {
                                content_type: mime!(Application / WwwFormUrlEncoded),
                                digest: "md5-XNdWXQ0FO9vPx7skS0GuYA==".to_string(),

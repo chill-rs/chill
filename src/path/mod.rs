@@ -253,17 +253,28 @@
 //! programmers should be mindful when converting from raw strings.
 
 use prelude_impl::*;
+use serde;
 use std;
 
-#[derive(Debug)]
+const DESIGN_PREFIX: &'static str = "_design";
+const LOCAL_PREFIX: &'static str = "_local";
+const VIEW_PREFIX: &'static str = "_view";
+
+#[derive(Debug, PartialEq)]
 struct PathExtractor<'a> {
     path: &'a str,
 }
 
-#[derive(Debug)]
-enum PathExtraction<'a> {
+#[derive(Debug, PartialEq)]
+enum SegmentExtraction<'a> {
     Final(&'a str),
     Nonfinal(PathExtractor<'a>, &'a str),
+}
+
+#[derive(Debug, PartialEq)]
+enum DocumentIdExtraction<'a> {
+    Final(DocumentIdRef<'a>),
+    Nonfinal(PathExtractor<'a>, DocumentIdRef<'a>),
 }
 
 impl<'a> PathExtractor<'a> {
@@ -303,13 +314,70 @@ impl<'a> PathExtractor<'a> {
         Ok(segment)
     }
 
-    fn extract_any(mut self) -> Result<PathExtraction<'a>, Error> {
+    fn extract_segment(mut self) -> Result<SegmentExtraction<'a>, Error> {
         match self.extract_nonfinal() {
-            Ok(segment) => Ok(PathExtraction::Nonfinal(self, segment)),
+            Ok(segment) => Ok(SegmentExtraction::Nonfinal(self, segment)),
             Err(Error::PathParse(PathParseErrorKind::TooFewSegments)) => {
-                self.extract_final().map(|x| PathExtraction::Final(x))
+                self.extract_final().map(|x| SegmentExtraction::Final(x))
             }
             Err(e) => Err(e),
+        }
+    }
+
+    fn extract_document_id(self) -> Result<DocumentIdExtraction<'a>, Error> {
+        Ok(match try!(self.extract_segment()) {
+
+            SegmentExtraction::Final(DESIGN_PREFIX) => {
+                return Err(Error::PathParse(PathParseErrorKind::TooFewSegments));
+            }
+
+            SegmentExtraction::Final(LOCAL_PREFIX) => {
+                return Err(Error::PathParse(PathParseErrorKind::TooFewSegments));
+            }
+
+            SegmentExtraction::Final(segment) => {
+                DocumentIdExtraction::Final(DocumentIdRef::Normal(segment.into()))
+            }
+
+            SegmentExtraction::Nonfinal(path_extractor, DESIGN_PREFIX) => {
+                match try!(path_extractor.extract_segment()) {
+                    SegmentExtraction::Final(segment) => {
+                        DocumentIdExtraction::Final(DocumentIdRef::Design(segment.into()))
+                    }
+                    SegmentExtraction::Nonfinal(path_extractor, segment) => {
+                        DocumentIdExtraction::Nonfinal(path_extractor,
+                                                       DocumentIdRef::Design(segment.into()))
+                    }
+                }
+            }
+
+            SegmentExtraction::Nonfinal(path_extractor, LOCAL_PREFIX) => {
+                match try!(path_extractor.extract_segment()) {
+                    SegmentExtraction::Final(segment) => {
+                        DocumentIdExtraction::Final(DocumentIdRef::Local(segment.into()))
+                    }
+                    SegmentExtraction::Nonfinal(path_extractor, segment) => {
+                        DocumentIdExtraction::Nonfinal(path_extractor,
+                                                       DocumentIdRef::Local(segment.into()))
+                    }
+                }
+            }
+
+            SegmentExtraction::Nonfinal(path_extractor, segment) => {
+                DocumentIdExtraction::Nonfinal(path_extractor,
+                                               DocumentIdRef::Normal(segment.into()))
+            }
+        })
+    }
+
+    fn extract_document_id_nonfinal(self) -> Result<(PathExtractor<'a>, DocumentIdRef<'a>), Error> {
+        match try!(self.extract_document_id()) {
+            DocumentIdExtraction::Final(..) => {
+                Err(Error::PathParse(PathParseErrorKind::TooFewSegments))
+            }
+            DocumentIdExtraction::Nonfinal(path_extractor, segment) => {
+                Ok((path_extractor, segment))
+            }
         }
     }
 }
@@ -318,7 +386,7 @@ impl<'a> PathExtractor<'a> {
 mod extractor_tests {
 
     use prelude_impl::*;
-    use super::{PathExtraction, PathExtractor};
+    use super::{DocumentIdExtraction, SegmentExtraction, PathExtractor};
 
     #[test]
     fn final_and_nonfinal_ok() {
@@ -331,16 +399,16 @@ mod extractor_tests {
     #[test]
     fn any_ok() {
         let p = PathExtractor::new("/foo/bar/qux");
-        let p = match p.extract_any() {
-            Ok(PathExtraction::Nonfinal(p, "foo")) => p,
+        let p = match p.extract_segment() {
+            Ok(SegmentExtraction::Nonfinal(p, "foo")) => p,
             x @ _ => unexpected_result!(x),
         };
-        let p = match p.extract_any() {
-            Ok(PathExtraction::Nonfinal(p, "bar")) => p,
+        let p = match p.extract_segment() {
+            Ok(SegmentExtraction::Nonfinal(p, "bar")) => p,
             x @ _ => unexpected_result!(x),
         };
-        match p.extract_any() {
-            Ok(PathExtraction::Final("qux")) => (),
+        match p.extract_segment() {
+            Ok(SegmentExtraction::Final("qux")) => (),
             x @ _ => unexpected_result!(x),
         };
     }
@@ -405,6 +473,114 @@ mod extractor_tests {
     fn final_nok_has_trailing_slash() {
         match PathExtractor::new("/foo/").extract_final() {
             Err(Error::PathParse(PathParseErrorKind::TrailingSlash)) => (),
+            x @ _ => unexpected_result!(x),
+        }
+    }
+
+    #[test]
+    fn document_id_ok_normal_final() {
+        let expected = DocumentIdRef::Normal("foo".into());
+        let p = PathExtractor::new("/foo");
+        match p.extract_document_id() {
+            Ok(DocumentIdExtraction::Final(doc_id)) if doc_id == expected => (),
+            x @ _ => unexpected_result!(x),
+        }
+    }
+
+    #[test]
+    fn document_id_ok_normal_nonfinal() {
+        let expected = DocumentIdExtraction::Nonfinal(PathExtractor::new("/bar"),
+                                                      DocumentIdRef::Normal("foo".into()));
+        let p = PathExtractor::new("/foo/bar");
+        match p.extract_document_id() {
+            Ok(ref x) if *x == expected => (),
+            x @ _ => unexpected_result!(x),
+        }
+    }
+
+    #[test]
+    fn document_id_ok_design_final() {
+        let expected = DocumentIdRef::Design("foo".into());
+        let p = PathExtractor::new("/_design/foo");
+        match p.extract_document_id() {
+            Ok(DocumentIdExtraction::Final(doc_id)) if doc_id == expected => (),
+            x @ _ => unexpected_result!(x),
+        }
+    }
+
+    #[test]
+    fn document_id_ok_design_nonfinal() {
+        let expected = DocumentIdExtraction::Nonfinal(PathExtractor::new("/bar"),
+                                                      DocumentIdRef::Design("foo".into()));
+        let p = PathExtractor::new("/_design/foo/bar");
+        match p.extract_document_id() {
+            Ok(ref x) if *x == expected => (),
+            x @ _ => unexpected_result!(x),
+        }
+    }
+
+    #[test]
+    fn document_id_ok_local_final() {
+        let expected = DocumentIdRef::Local("foo".into());
+        let p = PathExtractor::new("/_local/foo");
+        match p.extract_document_id() {
+            Ok(DocumentIdExtraction::Final(doc_id)) if doc_id == expected => (),
+            x @ _ => unexpected_result!(x),
+        }
+    }
+
+    #[test]
+    fn document_id_ok_local_nonfinal() {
+        let expected = DocumentIdExtraction::Nonfinal(PathExtractor::new("/bar"),
+                                                      DocumentIdRef::Local("foo".into()));
+        let p = PathExtractor::new("/_local/foo/bar");
+        match p.extract_document_id() {
+            Ok(ref x) if *x == expected => (),
+            x @ _ => unexpected_result!(x),
+        }
+    }
+
+    #[test]
+    fn document_id_nok_design_prefix_without_name() {
+        let p = PathExtractor::new("/_design");
+        match p.extract_document_id() {
+            Err(Error::PathParse(PathParseErrorKind::TooFewSegments)) => (),
+            x @ _ => unexpected_result!(x),
+        }
+    }
+
+    #[test]
+    fn document_id_nok_local_prefix_without_name() {
+        let p = PathExtractor::new("/_local");
+        match p.extract_document_id() {
+            Err(Error::PathParse(PathParseErrorKind::TooFewSegments)) => (),
+            x @ _ => unexpected_result!(x),
+        }
+    }
+
+    #[test]
+    fn document_id_nonfinal_nok_normal_is_final() {
+        let p = PathExtractor::new("/foo");
+        match p.extract_document_id_nonfinal() {
+            Err(Error::PathParse(PathParseErrorKind::TooFewSegments)) => (),
+            x @ _ => unexpected_result!(x),
+        }
+    }
+
+    #[test]
+    fn document_id_nonfinal_nok_design_is_final() {
+        let p = PathExtractor::new("/_design/foo");
+        match p.extract_document_id_nonfinal() {
+            Err(Error::PathParse(PathParseErrorKind::TooFewSegments)) => (),
+            x @ _ => unexpected_result!(x),
+        }
+    }
+
+    #[test]
+    fn document_id_nonfinal_nok_local_is_final() {
+        let p = PathExtractor::new("/_local/foo");
+        match p.extract_document_id_nonfinal() {
+            Err(Error::PathParse(PathParseErrorKind::TooFewSegments)) => (),
             x @ _ => unexpected_result!(x),
         }
     }
@@ -504,9 +680,31 @@ macro_rules! define_name_type_pair {
                 $owning_type::new($arg_name.inner.into())
             }
         }
+
+        #[doc(hidden)]
+        impl serde::Deserialize for $owning_type {
+            fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
+                where D: serde::Deserializer
+            {
+                struct Visitor;
+
+                impl serde::de::Visitor for Visitor {
+                    type Value = $owning_type;
+
+                    fn visit_str<E>(&mut self, v: &str) -> Result<Self::Value, E>
+                        where E: serde::de::Error
+                    {
+                        Ok($owning_type::from(v))
+                    }
+                }
+
+                deserializer.deserialize(Visitor)
+            }
+        }
     }
 }
 
+define_name_type_pair!(AttachmentName, AttachmentNameRef, db_name, /** attachment */);
 define_name_type_pair!(DatabaseName, DatabaseNameRef, db_name, /** database */);
 define_name_type_pair!(DesignDocumentName, DesignDocumentNameRef, db_name, /** design document */);
 define_name_type_pair!(LocalDocumentName, LocalDocumentNameRef, db_name, /** local document */);
@@ -601,11 +799,30 @@ pub trait IntoViewPath<'a> {
     fn into_view_path(self) -> Result<ViewPathRef<'a>, Error>;
 }
 
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct AttachmentPathRef<'a> {
+    db_name: DatabaseNameRef<'a>,
+    doc_id: DocumentIdRef<'a>,
+    att_name: AttachmentNameRef<'a>,
+}
+
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct AttachmentPath {
+    db_name: DatabaseName,
+    doc_id: DocumentId,
+    att_name: AttachmentName,
+}
+
+pub trait IntoAttachmentPath<'a> {
+    fn into_attachment_path(self) -> Result<AttachmentPathRef<'a>, Error>;
+}
+
 // The following submodules implement methods for the traits and types defined
 // above. The rationale for splitting across modules is so that the
 // documentation all appears in one place—this module—while allowing many of the
 // implementation details to reside elsewhere.
 
+mod attachment_path;
 mod database_path;
 mod design_document_path;
 mod document_id;
