@@ -167,9 +167,9 @@ pub struct ViewIsUnreduced;
 
 /// Builds a view response.
 ///
-/// A `ViewResponseBuilder` constructs a view response as though it originated
-/// from a CouchDB Server. This allows an application to mock a view response
-/// without using a production database.
+/// A `ViewResponseBuilder` constructs a view response as though the response
+/// originated from a CouchDB Server. This allows an application to mock a view
+/// response without using a production database.
 ///
 /// # Examples
 ///

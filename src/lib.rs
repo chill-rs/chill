@@ -13,6 +13,7 @@ extern crate uuid;
 #[macro_use]
 mod test_macro;
 
+mod attachment;
 mod client;
 mod document;
 mod error;
@@ -24,8 +25,9 @@ pub mod action;
 pub mod path;
 pub mod testing;
 
+pub use attachment::{Attachment, SavedAttachment, UnsavedAttachment};
 pub use client::{Client, IntoUrl};
-pub use document::{Attachment, Document, SavedAttachment, UnsavedAttachment};
+pub use document::Document;
 pub use error::{Error, ErrorResponse};
 pub use path::{AttachmentName, AttachmentNameRef, AttachmentPath, AttachmentPathRef, DatabaseName,
                DatabaseNameRef, DatabasePath, DatabasePathRef, DesignDocumentName,
@@ -39,6 +41,7 @@ pub use view::{ReducedView, UnreducedView, ViewResponse, ViewRow};
 
 mod prelude_impl {
     pub use super::*;
+    pub use attachment::AttachmentBuilder;
     pub use document::{JsonDecodableDocument, WriteDocumentResponse};
     #[cfg(test)]
     pub use document::DocumentBuilder;
