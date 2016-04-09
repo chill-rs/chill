@@ -1,4 +1,7 @@
+extern crate base64;
 extern crate chill;
+#[macro_use]
+extern crate mime;
 extern crate serde_json;
 
 macro_rules! unexpected_result {
@@ -158,8 +161,108 @@ fn read_document_nok_not_found() {
     }
 }
 
+
 #[test]
-fn update_document_ok() {
+fn read_document_ok_with_attachment_stubs() {
+
+    let (_server, client) = make_server_and_client();
+    client.create_database("/baseball").unwrap().run().unwrap();
+
+    // TODO: Create the attachment using strong types.
+
+    let up_content = serde_json::builder::ObjectBuilder::new()
+                         .insert("name", "Babe Ruth")
+                         .insert("nickname", "The Bambino")
+                         .insert_object("_attachments", |x| {
+                             x.insert_object("photo.png", |x| {
+                                 x.insert("content_type", "image/png")
+                                  .insert("data",
+                                          base64::encode("Pretend this is a PNG file.").unwrap())
+                             })
+                         })
+                         .unwrap();
+
+    let (doc_id, _rev) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
+
+    let doc = client.read_document(("/baseball", &doc_id))
+                    .unwrap()
+                    .run()
+                    .unwrap();
+
+    let expected_attachments = {
+        let mut m = std::collections::HashMap::<chill::AttachmentPath, (mime::Mime, u64)>::new();
+        let path = chill::AttachmentPath::from((doc.path().clone(),
+                                                chill::AttachmentName::from("photo.png")));
+        m.insert(path,
+                 (mime!(Image / Png),
+                  "Pretend this is a PNG file.".len() as u64));
+        m
+    };
+
+    let got_attachments = doc.attachments()
+                             .map(|(name, attachment)| {
+                                 let path = chill::AttachmentPath::from(name);
+                                 let content_type = attachment.content_type().clone();
+                                 let content_length = attachment.content_length();
+                                 (path, (content_type, content_length))
+                             })
+                             .collect();
+
+    assert_eq!(expected_attachments, got_attachments);
+}
+
+#[test]
+fn read_document_ok_with_attachment_content() {
+
+    let (_server, client) = make_server_and_client();
+    client.create_database("/baseball").unwrap().run().unwrap();
+
+    // TODO: Create the attachment using strong types.
+
+    let up_content = serde_json::builder::ObjectBuilder::new()
+                         .insert("name", "Babe Ruth")
+                         .insert("nickname", "The Bambino")
+                         .insert_object("_attachments", |x| {
+                             x.insert_object("photo.png", |x| {
+                                 x.insert("content_type", "image/png")
+                                  .insert("data",
+                                          base64::encode("Pretend this is a PNG file.").unwrap())
+                             })
+                         })
+                         .unwrap();
+
+    let (doc_id, _rev) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
+
+    let doc = client.read_document(("/baseball", &doc_id))
+                    .unwrap()
+                    .with_attachment_content(chill::action::read_document::AttachmentContent::All)
+                    .run()
+                    .unwrap();
+
+    let expected_attachments = {
+        let mut m =
+            std::collections::HashMap::<chill::AttachmentPath, (mime::Mime, Vec<u8>)>::new();
+        let path = chill::AttachmentPath::from((doc.path().clone(),
+                                                chill::AttachmentName::from("photo.png")));
+        m.insert(path,
+                 (mime!(Image / Png), Vec::from("Pretend this is a PNG file.")));
+        m
+    };
+
+    let got_attachments = doc.attachments()
+                             .map(|(name, attachment)| {
+                                 let path = chill::AttachmentPath::from(name);
+                                 let content_type = attachment.content_type().clone();
+                                 let content = attachment.content().unwrap().clone();
+                                 (path, (content_type, content))
+                             })
+                             .collect();
+
+    assert_eq!(expected_attachments, got_attachments);
+}
+
+#[test]
+fn update_document_ok_default() {
 
     let (_server, client) = make_server_and_client();
     client.create_database("/baseball").unwrap().run().unwrap();
@@ -198,6 +301,172 @@ fn update_document_ok() {
     let down_content: serde_json::Value = doc.get_content().unwrap();
     assert_eq!(up_content, down_content);
     assert_eq!(&updated_rev, doc.revision());
+}
+
+#[test]
+fn update_document_ok_create_attachment() {
+
+    let (_server, client) = make_server_and_client();
+    client.create_database("/baseball").unwrap().run().unwrap();
+
+    let up_content = serde_json::builder::ObjectBuilder::new()
+                         .insert("name", "Babe Ruth")
+                         .insert("nickname", "The Bambino")
+                         .unwrap();
+
+    let (doc_id, _rev) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
+
+    let mut doc = client.read_document(("/baseball", &doc_id))
+                        .unwrap()
+                        .run()
+                        .unwrap();
+
+    doc.insert_attachment("photo.png",
+                          mime!(Image / Png),
+                          Vec::from("Pretend this is a PNG file."));
+
+    client.update_document(&doc).unwrap().run().unwrap();
+
+    let doc = client.read_document(("/baseball", &doc_id))
+                    .unwrap()
+                    .with_attachment_content(chill::action::read_document::AttachmentContent::All)
+                    .run()
+                    .unwrap();
+
+    let expected_attachments = {
+        let mut m =
+            std::collections::HashMap::<chill::AttachmentPath, (mime::Mime, Vec<u8>)>::new();
+        let path = chill::AttachmentPath::from((doc.path().clone(),
+                                                chill::AttachmentName::from("photo.png")));
+        m.insert(path,
+                 (mime!(Image / Png), Vec::from("Pretend this is a PNG file.")));
+        m
+    };
+
+    let got_attachments = doc.attachments()
+                             .map(|(name, attachment)| {
+                                 let path = chill::AttachmentPath::from(name);
+                                 let content_type = attachment.content_type().clone();
+                                 let content = attachment.content().unwrap().clone();
+                                 (path, (content_type, content))
+                             })
+                             .collect();
+
+    assert_eq!(expected_attachments, got_attachments);
+}
+
+#[test]
+fn update_document_ok_update_attachment() {
+
+    let (_server, client) = make_server_and_client();
+    client.create_database("/baseball").unwrap().run().unwrap();
+
+    // TODO: Create the attachment using strong types.
+
+    let up_content = serde_json::builder::ObjectBuilder::new()
+                         .insert("name", "Babe Ruth")
+                         .insert("nickname", "The Bambino")
+                         .insert_object("_attachments", |x| {
+                             x.insert_object("photo.png", |x| {
+                                 x.insert("content_type", "image/png")
+                                  .insert("data",
+                                          base64::encode("Pretend this is a PNG file.").unwrap())
+                             })
+                         })
+                         .unwrap();
+
+    let (doc_id, _rev) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
+
+    let mut doc = client.read_document(("/baseball", &doc_id))
+                        .unwrap()
+                        .run()
+                        .unwrap();
+
+    doc.insert_attachment("photo.png",
+                          mime!(Image / Png),
+                          Vec::from("Pretend we updated the photo."));
+
+    client.update_document(&doc).unwrap().run().unwrap();
+
+    let doc = client.read_document(("/baseball", &doc_id))
+                    .unwrap()
+                    .with_attachment_content(chill::action::read_document::AttachmentContent::All)
+                    .run()
+                    .unwrap();
+
+    let expected_attachments = {
+        let mut m =
+            std::collections::HashMap::<chill::AttachmentPath, (mime::Mime, Vec<u8>)>::new();
+        let path = chill::AttachmentPath::from((doc.path().clone(),
+                                                chill::AttachmentName::from("photo.png")));
+        m.insert(path,
+                 (mime!(Image / Png),
+                  Vec::from("Pretend we updated the photo.")));
+        m
+    };
+
+    let got_attachments = doc.attachments()
+                             .map(|(name, attachment)| {
+                                 let path = chill::AttachmentPath::from(name);
+                                 let content_type = attachment.content_type().clone();
+                                 let content = attachment.content().unwrap().clone();
+                                 (path, (content_type, content))
+                             })
+                             .collect();
+
+    assert_eq!(expected_attachments, got_attachments);
+}
+
+#[test]
+fn update_document_ok_delete_attachment() {
+
+    let (_server, client) = make_server_and_client();
+    client.create_database("/baseball").unwrap().run().unwrap();
+
+    // TODO: Create the attachment using strong types.
+
+    let up_content = serde_json::builder::ObjectBuilder::new()
+                         .insert("name", "Babe Ruth")
+                         .insert("nickname", "The Bambino")
+                         .insert_object("_attachments", |x| {
+                             x.insert_object("photo.png", |x| {
+                                 x.insert("content_type", "image/png")
+                                  .insert("data",
+                                          base64::encode("Pretend this is a PNG file.").unwrap())
+                             })
+                         })
+                         .unwrap();
+
+    let (doc_id, _rev) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
+
+    let mut doc = client.read_document(("/baseball", &doc_id))
+                        .unwrap()
+                        .run()
+                        .unwrap();
+
+    doc.remove_attachment("photo.png");
+
+    client.update_document(&doc).unwrap().run().unwrap();
+
+    let doc = client.read_document(("/baseball", &doc_id))
+                    .unwrap()
+                    .with_attachment_content(chill::action::read_document::AttachmentContent::All)
+                    .run()
+                    .unwrap();
+
+    let expected_attachments = std::collections::HashMap::<chill::AttachmentPath,
+                                                           (mime::Mime, Vec<u8>)>::new();
+
+    let got_attachments = doc.attachments()
+                             .map(|(name, attachment)| {
+                                 let path = chill::AttachmentPath::from(name);
+                                 let content_type = attachment.content_type().clone();
+                                 let content = attachment.content().unwrap().clone();
+                                 (path, (content_type, content))
+                             })
+                             .collect();
+
+    assert_eq!(expected_attachments, got_attachments);
 }
 
 #[test]
@@ -253,7 +522,7 @@ fn execute_view_ok_unreduced() {
 
     let (hank_id, _) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
 
-    // FIXME: Make use of a Design type when available.
+    // TODO: Make use of a Design type when available.
 
     let up_content = serde_json::builder::ObjectBuilder::new()
                          .insert_object("views", |x| {
@@ -302,7 +571,7 @@ fn execute_view_ok_reduced() {
 
     client.create_document("/baseball", &up_content).unwrap().run().unwrap();
 
-    // FIXME: Make use of a Design type when available.
+    // TODO: Make use of a Design type when available.
 
     let up_content = serde_json::builder::ObjectBuilder::new()
                          .insert_object("views", |x| {

@@ -39,6 +39,7 @@ impl Transport for MockTransport {
                 None => None,
                 Some(RequestAccept::Json) => Some(MockRequestAccept::Json),
             },
+            attachments_query: options.attachments_query,
             revision_query: options.revision_query.map(|revision| revision.clone()),
             body: match options.body {
                 None => None,
@@ -101,6 +102,7 @@ pub struct MockRequest {
     method: hyper::method::Method,
     path: Vec<String>,
     accept: Option<MockRequestAccept>,
+    attachments_query: Option<bool>,
     revision_query: Option<Revision>,
     body: Option<MockRequestBody>,
 }

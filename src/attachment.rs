@@ -4,19 +4,94 @@ use prelude_impl::*;
 use serde;
 use std;
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 struct AttachmentEncodingInfo {
     encoded_length: u64,
     encoding: String,
 }
 
-#[doc(hidden)]
-#[derive(Debug, PartialEq)]
+/// Contains the meta-information and, optionally, content of an attachment.
+///
+// FIXME: Should Chill expose the distinction between "saved" and "unsaved"
+// attachments? It would be nice *not* to, but it'll probably be necessary if
+// Chill exposes AttachmentBuilder. Should Chill expose AttachmentBuilder? For
+// now, Chill exposes the minimum--we can always expose more later.
+//
+// Old doc commentary for Attachment:
+//
+// Chill distinguishes between two forms of attachments: **saved attachments**
+// and **unsaved attachments**. A saved attachment is an attachment that the
+// client has read from the CouchDB server, either as an **attachment stub**
+// containing no content or as a **full attachment** containing content.
+// Whereas, an unsaved attachment is an attachment originating from the client,
+// not the server.
+//
+// One may think of saved attachments as attachments that the server knows
+// about and unsaved attachments as attachments that the server does not yet
+// know about. However, strictly speaking, this is false because when the
+// client updates a document containing an unsaved attachment, the attachment
+// becomes stored on the server but the document is immutable, meaning the
+// attachment remains of the unsaved type. In practice, this subtlety shouldn't
+// affect applications. The distinction between saved and unsaved attachments
+// is an optimization that allows Chill to send attachment stubs instead of
+// full content to conserve network throughput when updating documents.
+//
+#[derive(Clone, Debug, PartialEq)]
 pub enum Attachment {
+    #[doc(hidden)]
     Saved(SavedAttachment),
+
+    #[doc(hidden)]
     Unsaved(UnsavedAttachment),
 }
 
+impl Attachment {
+    /// Returns the attachment's content type.
+    pub fn content_type(&self) -> &mime::Mime {
+        match self {
+            &Attachment::Saved(ref inner) => &inner.content_type,
+            &Attachment::Unsaved(ref inner) => &inner.content_type,
+        }
+    }
+
+    /// Returns the attachment's content size, in bytes.
+    pub fn content_length(&self) -> u64 {
+        match self {
+            &Attachment::Saved(ref inner) => {
+                match inner.content {
+                    SavedAttachmentContent::LengthOnly(len) => len,
+                    SavedAttachmentContent::Bytes(ref bytes) => bytes.len() as u64,
+                }
+            }
+            &Attachment::Unsaved(ref inner) => inner.content.len() as u64,
+        }
+    }
+
+    /// Returns the attachment's content, if available.
+    ///
+    /// An attachment's content is available if and only if the attachment is
+    /// _not_ a stub. By default, the CouchDB server sends attachment stubs as
+    /// part of a document when the client reads the document. The client may
+    /// explicitly request the attachment content when reading the document to
+    /// receive a full attachment, in which case this method will return `Some`
+    /// instead of `None`. Also, if the client inserted the attachment via the
+    /// `Document::insert_attachment` method, then the attachment contains
+    /// content and this method will return `Some`.
+    ///
+    pub fn content(&self) -> Option<&Vec<u8>> {
+        match self {
+            &Attachment::Saved(ref inner) => {
+                match inner.content {
+                    SavedAttachmentContent::LengthOnly(..) => None,
+                    SavedAttachmentContent::Bytes(ref bytes) => Some(bytes),
+                }
+            }
+            &Attachment::Unsaved(ref inner) => Some(&inner.content),
+        }
+    }
+}
+
+#[doc(hidden)]
 impl serde::Serialize for Attachment {
     fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
         where S: serde::Serializer
@@ -29,6 +104,7 @@ impl serde::Serialize for Attachment {
     }
 }
 
+#[doc(hidden)]
 impl serde::Deserialize for Attachment {
     fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
         where D: serde::Deserializer
@@ -37,25 +113,14 @@ impl serde::Deserialize for Attachment {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 enum SavedAttachmentContent {
     LengthOnly(u64),
     Bytes(Vec<u8>),
 }
 
-/// Contains a saved attachment.
-///
-/// A **saved attachment** is an attachment that persists on the CouchDB
-/// server—i.e., it's an attachment that the CouchDB server knows about.
-///
-/// Saved attachments come in two forms: as a **stub** and **in full**. A stub
-/// attachment specifies its content length without containing the content
-/// itself. Whereas, a full attachment contains the content. By default, the
-/// CouchDB server returns stub attachments when the client reads a document so
-/// as to conserve throughput.
-///
 #[doc(hidden)]
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct SavedAttachment {
     content_type: mime::Mime,
     digest: String,
@@ -270,22 +335,8 @@ impl serde::Deserialize for SavedAttachment {
     }
 }
 
-/// Contains an unsaved attachment.
-///
-/// An **unsaved attachment** is an attachment that does not persist on the
-/// CouchDB server—i.e., it's an attachment that the CouchDB server does not yet
-/// know about.
-///
-/// The application may save an unsaved attachment by updating a document
-/// containing the attachment or by creating the attachment directly, though, as
-/// of Chill v0.1.0, this latter functionality is not implemented.
-///
-/// An unsaved attachment is a Chill concept that enables Chill to automatically
-/// conserve throughput by sending attachment stubs for unmodified attachments
-/// when the application updates a document.
-///
 #[doc(hidden)]
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct UnsavedAttachment {
     content_type: mime::Mime,
     content: Vec<u8>,
@@ -304,7 +355,7 @@ impl serde::Serialize for UnsavedAttachment {
                 let &mut Visitor(attachment) = self;
                 let content_type = attachment.content_type.clone();
                 try!(serializer.serialize_struct_elt("content_type", &content_type));
-                try!(serializer.serialize_struct_elt("content",
+                try!(serializer.serialize_struct_elt("data",
                                                      &Base64JsonEncodable(&attachment.content)));
                 Ok(None)
             }
@@ -389,11 +440,14 @@ pub struct AttachmentBuilder<M> {
 }
 
 /// Marks that an attachment is saved.
+#[allow(dead_code)]
 pub struct AttachmentIsSaved;
 
 /// Marks that an attachment is unsaved.
+#[allow(dead_code)]
 pub struct AttachmentIsUnsaved;
 
+#[allow(dead_code)]
 impl AttachmentBuilder<AttachmentIsSaved> {
     /// Constructs a saved attachment as a stub.
     ///
@@ -509,7 +563,7 @@ mod tests {
 
         let expected = serde_json::builder::ObjectBuilder::new()
                            .insert("content_type", "text/plain")
-                           .insert("content", base64::encode(content).unwrap())
+                           .insert("data", base64::encode(content).unwrap())
                            .unwrap();
 
         let got = serde_json::from_str(&encoded).unwrap();
@@ -701,7 +755,7 @@ mod tests {
 
         let expected = serde_json::builder::ObjectBuilder::new()
                            .insert("content_type", "text/plain")
-                           .insert("content", base64::encode(content).unwrap())
+                           .insert("data", base64::encode(content).unwrap())
                            .unwrap();
 
         let got = serde_json::from_str(&encoded).unwrap();

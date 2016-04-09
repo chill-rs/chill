@@ -1,8 +1,10 @@
+// FIXME: Make all modules public.
+
 mod create_database;
 mod create_document;
 mod delete_document;
 mod execute_view;
-mod read_document;
+pub mod read_document;
 mod update_document;
 
 pub use self::create_database::CreateDatabase;

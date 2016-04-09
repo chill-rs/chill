@@ -1,3 +1,4 @@
+use mime;
 use prelude_impl::*;
 use serde;
 use serde_json;
@@ -81,6 +82,55 @@ impl Document {
         self.content = serde_json::to_value(new_content);
         Ok(())
     }
+
+    /// Returns the document's attachment of a given name, if the attachment
+    /// exists.
+    pub fn get_attachment<'a, A>(&self, name: A) -> Option<&Attachment>
+        where A: Into<AttachmentNameRef<'a>>
+    {
+        // FIXME: Implement Borrow to eliminate this heap-allocated temporary.
+        let owned_name = AttachmentName::from(name.into());
+        self.attachments.get(&owned_name)
+    }
+
+    /// Creates or replaces the document's attachment of a given name.
+    ///
+    /// This method does _not_ change state on the CouchDB server, and the newly
+    /// created attachment exists only in memory on the client-side. To store
+    /// the document on the CouchDB server, the client must execute an action to
+    /// update the document, at which time the client will send the attachment
+    /// to the server.
+    ///
+    pub fn insert_attachment<'a, A>(&mut self, name: A, content_type: mime::Mime, content: Vec<u8>)
+        where A: Into<AttachmentNameRef<'a>>
+    {
+        let owned_name = AttachmentName::from(name.into());
+        self.attachments.insert(owned_name,
+                                AttachmentBuilder::new_unsaved(content_type, content).unwrap());
+    }
+
+    /// Deletes the document's attachment of a given name, if the attachment
+    /// exists.
+    ///
+    /// This method does _not_ change state on the CouchDB server, and the newly
+    /// deleted attachment will continue to exist on the CouchDB server until
+    /// the client executes an action to update the document.
+    ///
+    pub fn remove_attachment<'a, A>(&mut self, name: A)
+        where A: Into<AttachmentNameRef<'a>>
+    {
+        // FIXME: Implement Borrow to eliminate this heap-allocated temporary.
+        let owned_name = AttachmentName::from(name.into());
+        self.attachments.remove(&owned_name);
+    }
+
+    /// Returns an iterator to all attachments to the document.
+    pub fn attachments(&self) -> AttachmentIter {
+        AttachmentIter {
+            doc_path: DocumentPathRef::from(&self.doc_path),
+            inner: self.attachments.iter(),
+        }
+    }
 }
 
 #[doc(hidden)]
@@ -110,6 +160,370 @@ impl serde::Serialize for Document {
         }
 
         value.serialize(serializer)
+    }
+}
+
+// FIXME: Need to scope the AttachmentIter type so that it doesn't pollute the
+// root module.
+/// Iterates through a document's attachments.
+pub struct AttachmentIter<'a> {
+    doc_path: DocumentPathRef<'a>,
+    inner: std::collections::hash_map::Iter<'a, AttachmentName, Attachment>,
+}
+
+impl<'a> Iterator for AttachmentIter<'a> {
+    type Item = (AttachmentPathRef<'a>, &'a Attachment);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.inner.next() {
+            None => None,
+            Some((name, attachment)) => {
+                Some((AttachmentPathRef::from((self.doc_path, name)), attachment))
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod document_tests {
+
+    use base64;
+    use prelude_impl::*;
+    use serde_json;
+    use std;
+
+    #[test]
+    fn get_content_ok() {
+
+        let content = serde_json::builder::ObjectBuilder::new()
+                          .insert("field_1", 42)
+                          .insert("field_2", "foo")
+                          .unwrap();
+
+        let doc = Document {
+            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
+            revision: "1-1234567890abcdef1234567890abcdef".parse().unwrap(),
+            deleted: false,
+            attachments: std::collections::HashMap::new(),
+            content: content.clone(),
+        };
+
+        let expected = content;
+        let got = doc.get_content().unwrap();
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn get_content_ok_document_is_deleted() {
+
+        let content = serde_json::builder::ObjectBuilder::new().unwrap();
+
+        let doc = Document {
+            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
+            revision: "1-1234567890abcdef1234567890abcdef".parse().unwrap(),
+            deleted: true,
+            attachments: std::collections::HashMap::new(),
+            content: content.clone(),
+        };
+
+        let expected = content;
+        let got = doc.get_content().unwrap();
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn get_content_nok_decode_error() {
+
+        let doc = Document {
+            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
+            revision: "1-1234567890abcdef1234567890abcdef".parse().unwrap(),
+            deleted: false,
+            attachments: std::collections::HashMap::new(),
+            content: serde_json::builder::ObjectBuilder::new().unwrap(),
+        };
+
+        match doc.get_content::<i32>() {
+            Err(Error::JsonDecode { .. }) => (),
+            x @ _ => unexpected_result!(x),
+        }
+    }
+
+    #[test]
+    fn serialize_empty() {
+
+        let document = Document {
+            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
+            revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
+            deleted: true, // This value should have no effect.
+            attachments: std::collections::HashMap::new(),
+            content: serde_json::builder::ObjectBuilder::new().unwrap(),
+        };
+
+        let encoded = serde_json::to_string(&document).unwrap();
+        let expected = serde_json::builder::ObjectBuilder::new().unwrap();
+        let got = serde_json::from_str(&encoded).unwrap();
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn serialize_with_content_and_attachments() {
+
+        let document = Document {
+            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
+            revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
+            deleted: true, // This value should have no effect.
+            attachments: {
+                let mut m = std::collections::HashMap::new();
+                m.insert(AttachmentName::from("attachment_1"),
+                         AttachmentBuilder::new_saved_with_content(mime!(Text / Plain),
+                                                                   "md5-XNdWXQ0FO9vPx7skS0GuYA==",
+                                                                   17,
+                                                                   "Blah blah blah")
+                             .unwrap());
+                m.insert(AttachmentName::from("attachment_2"),
+                         AttachmentBuilder::new_unsaved(mime!(Text / Html),
+                                                        "<p>Yak yak yak</p>"
+                                                            .to_string()
+                                                            .into_bytes())
+                             .unwrap());
+                m
+            },
+            content: serde_json::builder::ObjectBuilder::new()
+                         .insert("field_1", 17)
+                         .insert("field_2", "hello")
+                         .unwrap(),
+        };
+
+        let encoded = serde_json::to_string(&document).unwrap();
+
+        let expected = serde_json::builder::ObjectBuilder::new()
+                           .insert("field_1", 17)
+                           .insert("field_2", "hello")
+                           .insert_object("_attachments", |x| {
+                               x.insert_object("attachment_1", |x| x.insert("stub", true))
+                                .insert_object("attachment_2", |x| {
+                                    x.insert("content_type", "text/html")
+                                     .insert("data", base64::encode("<p>Yak yak yak</p>").unwrap())
+                                })
+                           })
+                           .unwrap();
+
+        let got = serde_json::from_str(&encoded).unwrap();
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn get_attachment_exists() {
+
+        let attachment_1 = AttachmentBuilder::new_saved_with_content(mime!(Text / Plain),
+                                                                     "md5-XNdWXQ0FO9vPx7skS0GuYA=\
+                                                                      =",
+                                                                     17,
+                                                                     "Blah blah blah")
+                               .unwrap();
+
+        let document = Document {
+            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
+            revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
+            deleted: false,
+            attachments: {
+                let mut m = std::collections::HashMap::new();
+                m.insert(AttachmentName::from("attachment_1"), attachment_1.clone());
+                m
+            },
+            content: serde_json::builder::ObjectBuilder::new().unwrap(),
+        };
+
+        let got = document.get_attachment("attachment_1");
+        assert_eq!(Some(&attachment_1), got);
+    }
+
+    #[test]
+    fn get_attachment_no_exist() {
+
+        let document = Document {
+            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
+            revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
+            deleted: false,
+            attachments: std::collections::HashMap::new(),
+            content: serde_json::builder::ObjectBuilder::new().unwrap(),
+        };
+
+        let got = document.get_attachment("attachment_1");
+        assert_eq!(None, got);
+    }
+
+    #[test]
+    fn insert_attachment_new() {
+
+        let mut document = Document {
+            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
+            revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
+            deleted: false,
+            attachments: std::collections::HashMap::new(),
+            content: serde_json::builder::ObjectBuilder::new().unwrap(),
+        };
+
+        document.insert_attachment("foo", mime!(Text / Plain), "This is the content.".into());
+        document.insert_attachment("bar",
+                                   mime!(Text / Plain),
+                                   "This is the second attachment.".into());
+
+        let expected = Document {
+            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
+            revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
+            deleted: false,
+            attachments: {
+                let mut m = std::collections::HashMap::new();
+                m.insert(AttachmentName::from("foo"),
+                         AttachmentBuilder::new_unsaved(mime!(Text / Plain),
+                                                        "This is the content.")
+                             .unwrap());
+                m.insert(AttachmentName::from("bar"),
+                         AttachmentBuilder::new_unsaved(mime!(Text / Plain),
+                                                        "This is the second attachment.")
+                             .unwrap());
+                m
+            },
+            content: serde_json::builder::ObjectBuilder::new().unwrap(),
+        };
+
+        assert_eq!(expected, document);
+    }
+
+    #[test]
+    fn insert_attachment_replace() {
+
+        let mut document = Document {
+            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
+            revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
+            deleted: false,
+            attachments: std::collections::HashMap::new(),
+            content: serde_json::builder::ObjectBuilder::new().unwrap(),
+        };
+
+        document.insert_attachment("foo", mime!(Text / Plain), "This is the content.".into());
+        document.insert_attachment("foo",
+                                   mime!(Text / Plain),
+                                   "This is the second attachment.".into());
+
+        let expected = Document {
+            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
+            revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
+            deleted: false,
+            attachments: {
+                let mut m = std::collections::HashMap::new();
+                m.insert(AttachmentName::from("foo"),
+                         AttachmentBuilder::new_unsaved(mime!(Text / Plain),
+                                                        "This is the second attachment.")
+                             .unwrap());
+                m
+            },
+            content: serde_json::builder::ObjectBuilder::new().unwrap(),
+        };
+
+        assert_eq!(expected, document);
+    }
+
+    #[test]
+    fn remove_attachment_exists() {
+
+        let mut document = Document {
+            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
+            revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
+            deleted: false,
+            attachments: {
+                let mut m = std::collections::HashMap::new();
+                m.insert(AttachmentName::from("foo"),
+                         AttachmentBuilder::new_unsaved(mime!(Text / Plain),
+                                                        "This is the content.")
+                             .unwrap());
+                m
+            },
+            content: serde_json::builder::ObjectBuilder::new().unwrap(),
+        };
+
+        document.remove_attachment("foo");
+
+        let expected = Document {
+            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
+            revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
+            deleted: false,
+            attachments: std::collections::HashMap::new(),
+            content: serde_json::builder::ObjectBuilder::new().unwrap(),
+        };
+
+        assert_eq!(expected, document);
+    }
+
+    #[test]
+    fn remove_attachment_no_exist() {
+
+        let mut document = Document {
+            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
+            revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
+            deleted: false,
+            attachments: {
+                let mut m = std::collections::HashMap::new();
+                m.insert(AttachmentName::from("foo"),
+                         AttachmentBuilder::new_unsaved(mime!(Text / Plain),
+                                                        "This is the content.")
+                             .unwrap());
+                m
+            },
+            content: serde_json::builder::ObjectBuilder::new().unwrap(),
+        };
+
+        document.remove_attachment("bar");
+
+        let expected = Document {
+            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
+            revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
+            deleted: false,
+            attachments: {
+                let mut m = std::collections::HashMap::new();
+                m.insert(AttachmentName::from("foo"),
+                         AttachmentBuilder::new_unsaved(mime!(Text / Plain),
+                                                        "This is the content.")
+                             .unwrap());
+                m
+            },
+            content: serde_json::builder::ObjectBuilder::new().unwrap(),
+        };
+
+        assert_eq!(expected, document);
+    }
+
+    #[test]
+    fn iterate_through_attachments() {
+
+        let attachments = {
+            let mut m = std::collections::HashMap::new();
+            m.insert(AttachmentName::from("foo"),
+                     AttachmentBuilder::new_unsaved(mime!(Text / Plain), "This is the content.")
+                         .unwrap());
+            m.insert(AttachmentName::from("bar"),
+                     AttachmentBuilder::new_unsaved(mime!(Text / Plain),
+                                                    "This is the second attachment.")
+                         .unwrap());
+            m
+        };
+
+        let document = Document {
+            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
+            revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
+            deleted: false,
+            attachments: attachments.clone(),
+            content: serde_json::builder::ObjectBuilder::new().unwrap(),
+        };
+
+        let got = document.attachments()
+                          .map(|(path, attachment)| {
+                              (AttachmentName::from(path.attachment_name()),
+                               attachment.clone())
+                          })
+                          .collect();
+        assert_eq!(attachments, got);
     }
 }
 
@@ -224,44 +638,6 @@ impl serde::Deserialize for JsonDecodableDocument {
     }
 }
 
-#[cfg(test)]
-#[derive(Debug)]
-pub struct DocumentBuilder(Document);
-
-#[cfg(test)]
-impl DocumentBuilder {
-    pub fn new<'a, P>(doc_path: P, revision: Revision) -> Self
-        where P: IntoDocumentPath<'a>
-    {
-        DocumentBuilder(Document {
-            doc_path: doc_path.into_document_path().unwrap().into(),
-            revision: revision,
-            deleted: false,
-            attachments: std::collections::HashMap::new(),
-            content: serde_json::builder::ObjectBuilder::new().unwrap(),
-        })
-    }
-
-    pub fn unwrap(self) -> Document {
-        let DocumentBuilder(doc) = self;
-        doc
-    }
-
-    pub fn with_content<C: serde::Serialize>(mut self, new_content: &C) -> Self {
-        {
-            let DocumentBuilder(ref mut doc) = self;
-            doc.content = serde_json::to_value(new_content);
-        }
-        self
-    }
-
-    pub fn build_content<F>(self, f: F) -> Self
-        where F: FnOnce(serde_json::builder::ObjectBuilder) -> serde_json::builder::ObjectBuilder
-    {
-        self.with_content(&f(serde_json::builder::ObjectBuilder::new()).unwrap())
-    }
-}
-
 #[derive(Debug, PartialEq)]
 pub struct WriteDocumentResponse {
     pub ok: bool,
@@ -357,133 +733,49 @@ impl serde::Deserialize for WriteDocumentResponse {
 }
 
 #[cfg(test)]
+#[derive(Debug)]
+pub struct DocumentBuilder(Document);
+
+#[cfg(test)]
+impl DocumentBuilder {
+    pub fn new<'a, P>(doc_path: P, revision: Revision) -> Self
+        where P: IntoDocumentPath<'a>
+    {
+        DocumentBuilder(Document {
+            doc_path: doc_path.into_document_path().unwrap().into(),
+            revision: revision,
+            deleted: false,
+            attachments: std::collections::HashMap::new(),
+            content: serde_json::builder::ObjectBuilder::new().unwrap(),
+        })
+    }
+
+    pub fn unwrap(self) -> Document {
+        let DocumentBuilder(doc) = self;
+        doc
+    }
+
+    pub fn with_content<C: serde::Serialize>(mut self, new_content: &C) -> Self {
+        {
+            let DocumentBuilder(ref mut doc) = self;
+            doc.content = serde_json::to_value(new_content);
+        }
+        self
+    }
+
+    pub fn build_content<F>(self, f: F) -> Self
+        where F: FnOnce(serde_json::builder::ObjectBuilder) -> serde_json::builder::ObjectBuilder
+    {
+        self.with_content(&f(serde_json::builder::ObjectBuilder::new()).unwrap())
+    }
+}
+
+#[cfg(test)]
 mod tests {
 
-    use base64;
     use prelude_impl::*;
     use serde_json;
     use std;
-
-    #[test]
-    fn document_get_content_ok() {
-
-        let content = serde_json::builder::ObjectBuilder::new()
-                          .insert("field_1", 42)
-                          .insert("field_2", "foo")
-                          .unwrap();
-
-        let doc = Document {
-            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
-            revision: "1-1234567890abcdef1234567890abcdef".parse().unwrap(),
-            deleted: false,
-            attachments: std::collections::HashMap::new(),
-            content: content.clone(),
-        };
-
-        let expected = content;
-        let got = doc.get_content().unwrap();
-        assert_eq!(expected, got);
-    }
-
-    #[test]
-    fn document_get_content_ok_document_is_deleted() {
-
-        let content = serde_json::builder::ObjectBuilder::new().unwrap();
-
-        let doc = Document {
-            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
-            revision: "1-1234567890abcdef1234567890abcdef".parse().unwrap(),
-            deleted: true,
-            attachments: std::collections::HashMap::new(),
-            content: content.clone(),
-        };
-
-        let expected = content;
-        let got = doc.get_content().unwrap();
-        assert_eq!(expected, got);
-    }
-
-    #[test]
-    fn document_get_content_nok_decode_error() {
-
-        let doc = Document {
-            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
-            revision: "1-1234567890abcdef1234567890abcdef".parse().unwrap(),
-            deleted: false,
-            attachments: std::collections::HashMap::new(),
-            content: serde_json::builder::ObjectBuilder::new().unwrap(),
-        };
-
-        match doc.get_content::<i32>() {
-            Err(Error::JsonDecode { .. }) => (),
-            x @ _ => unexpected_result!(x),
-        }
-    }
-
-    #[test]
-    fn document_serialize_empty() {
-
-        let document = Document {
-            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
-            revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
-            deleted: true, // This value should have no effect.
-            attachments: std::collections::HashMap::new(),
-            content: serde_json::builder::ObjectBuilder::new().unwrap(),
-        };
-
-        let encoded = serde_json::to_string(&document).unwrap();
-        let expected = serde_json::builder::ObjectBuilder::new().unwrap();
-        let got = serde_json::from_str(&encoded).unwrap();
-        assert_eq!(expected, got);
-    }
-
-    #[test]
-    fn document_serialize_with_content_and_attachments() {
-
-        let document = Document {
-            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
-            revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
-            deleted: true, // This value should have no effect.
-            attachments: {
-                let mut m = std::collections::HashMap::new();
-                m.insert(AttachmentName::from("attachment_1"),
-                         AttachmentBuilder::new_saved_with_content(mime!(Text / Plain),
-                                                                   "md5-XNdWXQ0FO9vPx7skS0GuYA==",
-                                                                   17,
-                                                                   "Blah blah blah")
-                             .unwrap());
-                m.insert(AttachmentName::from("attachment_2"),
-                         AttachmentBuilder::new_unsaved(mime!(Text / Html),
-                                                        "<p>Yak yak yak</p>"
-                                                            .to_string()
-                                                            .into_bytes())
-                             .unwrap());
-                m
-            },
-            content: serde_json::builder::ObjectBuilder::new()
-                         .insert("field_1", 17)
-                         .insert("field_2", "hello")
-                         .unwrap(),
-        };
-
-        let encoded = serde_json::to_string(&document).unwrap();
-
-        let expected = serde_json::builder::ObjectBuilder::new()
-                           .insert("field_1", 17)
-                           .insert("field_2", "hello")
-                           .insert_object("_attachments", |x| {
-                               x.insert_object("attachment_1", |x| x.insert("stub", true))
-                                .insert_object("attachment_2", |x| {
-                                    x.insert("content_type", "text/html")
-                                     .insert("content",
-                                             base64::encode("<p>Yak yak yak</p>").unwrap())
-                                })
-                           })
-                           .unwrap();
-
-        let got = serde_json::from_str(&encoded).unwrap();
-        assert_eq!(expected, got);
-    }
 
     #[test]
     fn json_decodable_document_deserialize_ok_as_minimum() {
