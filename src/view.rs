@@ -49,7 +49,6 @@ impl<K: serde::Deserialize, V: serde::Deserialize> ViewResponse<K, V> {
                 }
             };
 
-            let db_name = std::rc::Rc::new(DatabaseName::from(db_name));
             let rows = try!(response.rows
                                     .into_iter()
                                     .map(|x| ViewRow::new_from_decoded(db_name.clone(), x))
@@ -96,6 +95,21 @@ impl<K: serde::Deserialize, V: serde::Deserialize> ViewResponse<K, V> {
             &mut ViewResponse::Unreduced(ref mut x) => x,
             _ => panic!("Expected an unreduced view response, got a reduced view response"),
         }
+    }
+}
+
+#[cfg(test)]
+mod view_response_tests {
+
+    use prelude_impl::*;
+
+    #[test]
+    fn impls_send() {
+        fn f<T: Send>(_: T) {}
+        f(ViewResponse::Reduced::<(), i32>(ReducedView {
+            update_seq: None,
+            value: 42,
+        }));
     }
 }
 
@@ -165,222 +179,6 @@ pub struct ViewIsReduced;
 ///
 pub struct ViewIsUnreduced;
 
-/// Builds a view response.
-///
-/// A `ViewResponseBuilder` constructs a view response as though the response
-/// originated from a CouchDB Server. This allows an application to mock a view
-/// response without using a production database.
-///
-/// # Examples
-///
-/// One point of inconvenience when using a `ViewResponseBuilder` is that type
-/// inference doesn't work when building an unreduced view response, so
-/// applications should use the turbofish (`::<Key, Value, _>`) to specify the
-/// key and value types, like so:
-///
-/// ```
-/// use chill::testing::ViewResponseBuilder;
-///
-/// ViewResponseBuilder::<String, i32, _>::new_unreduced(123,       // `total_rows`
-///                                                      0,         // `offset`
-///                                                      "baseball" // database name
-///                                                     )
-///     .with_row("Hammerin' Hank", 755, "hank_aaron_doc_id") 
-///     .with_row("The Bambino", 714, "babe_ruth_doc_id")
-///     .unwrap();
-/// ```
-///
-/// Reduced views are easier because type inference _does_ work.
-///
-/// ```
-/// use chill::testing::ViewResponseBuilder;
-///
-/// // The view response key is inferred as () because reduced views have no
-/// // key.
-/// ViewResponseBuilder::new_reduced(1469).unwrap();
-/// ```
-///
-#[derive(Debug)]
-pub struct ViewResponseBuilder<K: serde::Deserialize, V: serde::Deserialize, M> {
-    phantom: std::marker::PhantomData<M>,
-    db_name: Option<std::rc::Rc<DatabaseName>>,
-    target: ViewResponse<K, V>,
-}
-
-impl<V: serde::Deserialize> ViewResponseBuilder<(), V, ViewIsReduced> {
-    /// Constructs a reduced view response.
-    pub fn new_reduced(value: V) -> Self {
-        ViewResponseBuilder {
-            phantom: std::marker::PhantomData,
-            db_name: None,
-            target: ViewResponse::Reduced(ReducedView {
-                update_seq: None,
-                value: value,
-            }),
-        }
-    }
-
-    /// Sets the update sequence number for the view response.
-    ///
-    /// The **update sequence number** corresponds to the `update_seq` field in
-    /// the view response. By default, its value is `None`.
-    ///
-    pub fn with_update_sequence_number(mut self, update_seq: u64) -> Self {
-        self.target.as_reduced_mut().update_seq = Some(update_seq);
-        self
-    }
-
-    /// Returns the builder's view response.
-    pub fn unwrap(self) -> ViewResponse<(), V> {
-        self.target
-    }
-}
-
-impl<K: serde::Deserialize, V: serde::Deserialize> ViewResponseBuilder<K, V, ViewIsUnreduced> {
-    /// Constructs an unreduced view response.
-    ///
-    /// Any rows added via the `with_row` method will use the given database
-    /// name as part of their document path.
-    ///
-    pub fn new_unreduced<D: Into<DatabaseName>>(total_rows: u64, offset: u64, db_name: D) -> Self {
-        ViewResponseBuilder {
-            phantom: std::marker::PhantomData,
-            db_name: Some(std::rc::Rc::new(db_name.into())),
-            target: ViewResponse::Unreduced(UnreducedView {
-                total_rows: total_rows,
-                offset: offset,
-                update_seq: None,
-                rows: Vec::new(),
-            }),
-        }
-    }
-
-    /// Appends a new row into the view response.
-    pub fn with_row<D, IntoK, IntoV>(mut self, key: IntoK, value: IntoV, doc_id: D) -> Self
-        where D: Into<DocumentId>,
-              IntoK: Into<K>,
-              IntoV: Into<V>
-    {
-        let row = ViewRow {
-            key: key.into(),
-            value: value.into(),
-            db_name: self.db_name.clone().unwrap(),
-            doc_id: doc_id.into(),
-        };
-
-        {
-            self.target.as_unreduced_mut().rows.push(row);
-        }
-        self
-    }
-
-    /// Sets the update sequence number for the view response.
-    ///
-    /// The **update sequence number** corresponds to the `update_seq` field in
-    /// the view response. By default, its value is `None`.
-    ///
-    pub fn with_update_sequence_number(mut self, update_seq: u64) -> Self {
-        self.target.as_unreduced_mut().update_seq = Some(update_seq);
-        self
-    }
-
-    /// Returns the builder's view response.
-    pub fn unwrap(self) -> ViewResponse<K, V> {
-        self.target
-    }
-}
-
-impl<K: serde::Deserialize, M, V: serde::Deserialize> ViewResponseBuilder<K, V, M> {}
-
-#[cfg(test)]
-mod view_response_builder_tests {
-
-    use prelude_impl::*;
-    use std;
-
-    #[test]
-    fn reduced_required() {
-        let expected = ViewResponse::Reduced({
-            ReducedView {
-                update_seq: None,
-                value: 42,
-            }
-        });
-        let got = ViewResponseBuilder::new_reduced(42).unwrap();
-        assert_eq!(expected, got);
-    }
-
-    #[test]
-    fn reduced_with_update_sequence_number() {
-        let expected = ViewResponse::Reduced({
-            ReducedView {
-                update_seq: Some(517),
-                value: 42,
-            }
-        });
-        let got = ViewResponseBuilder::new_reduced(42).with_update_sequence_number(517).unwrap();
-        assert_eq!(expected, got);
-    }
-
-    #[test]
-    fn unreduced_required() {
-        let expected = ViewResponse::Unreduced({
-            UnreducedView::<String, i32> {
-                total_rows: 20,
-                offset: 10,
-                update_seq: None,
-                rows: Vec::new(),
-            }
-        });
-        let got = ViewResponseBuilder::new_unreduced(20, 10, "foo").unwrap();
-        assert_eq!(expected, got);
-    }
-
-    #[test]
-    fn unreduced_with_update_sequence_number() {
-        let expected = ViewResponse::Unreduced({
-            UnreducedView::<String, i32> {
-                total_rows: 20,
-                offset: 10,
-                update_seq: Some(517),
-                rows: Vec::new(),
-            }
-        });
-        let got = ViewResponseBuilder::new_unreduced(20, 10, "foo")
-                      .with_update_sequence_number(517)
-                      .unwrap();
-        assert_eq!(expected, got);
-    }
-
-    #[test]
-    fn unreduced_with_row() {
-        let expected = ViewResponse::Unreduced({
-            UnreducedView::<String, i32> {
-                total_rows: 20,
-                offset: 10,
-                update_seq: None,
-                rows: vec![ViewRow {
-                               key: String::from("Babe Ruth"),
-                               value: 714,
-                               db_name: std::rc::Rc::new(DatabaseName::from("baseball")),
-                               doc_id: DocumentId::from("babe_ruth"),
-                           },
-                           ViewRow {
-                               key: String::from("Hank Aaron"),
-                               value: 755,
-                               db_name: std::rc::Rc::new(DatabaseName::from("baseball")),
-                               doc_id: DocumentId::from("hank_aaron"),
-                           }],
-            }
-        });
-        let got = ViewResponseBuilder::new_unreduced(20, 10, "baseball")
-                      .with_row("Babe Ruth", 714, "babe_ruth")
-                      .with_row("Hank Aaron", 755, "hank_aaron")
-                      .unwrap();
-        assert_eq!(expected, got);
-    }
-}
-
 /// Contains a single row in an unreduced view response.
 ///
 /// See the CouchDB documentation for more details about view rows.
@@ -397,7 +195,7 @@ mod view_response_builder_tests {
 pub struct ViewRow<K: serde::Deserialize, V: serde::Deserialize> {
     key: K,
     value: V,
-    db_name: std::rc::Rc<DatabaseName>,
+    db_name: DatabaseName,
     doc_id: DocumentId,
 }
 
@@ -405,9 +203,7 @@ impl<K, V> ViewRow<K, V>
     where K: serde::Deserialize,
           V: serde::Deserialize
 {
-    fn new_from_decoded(db_name: std::rc::Rc<DatabaseName>,
-                        row: ViewRowJsonable<K, V>)
-                        -> Result<Self, Error> {
+    fn new_from_decoded(db_name: DatabaseName, row: ViewRowJsonable<K, V>) -> Result<Self, Error> {
 
         let key = match row.key {
             Some(x) => x,
@@ -443,8 +239,7 @@ impl<K, V> ViewRow<K, V>
 
     /// Returns the path of the row's document.
     pub fn document_path(&self) -> DocumentPathRef {
-        use std::ops::Deref;
-        DocumentPathRef::from((self.db_name.deref(), &self.doc_id))
+        DocumentPathRef::from((&self.db_name, &self.doc_id))
     }
 }
 
@@ -845,5 +640,220 @@ mod view_row_jsonable_tests {
                             .unwrap();
         let got = serde_json::from_str::<ViewRowJsonable<String, i32>>(&json_text);
         expect_json_error_missing_field!(got, "value");
+    }
+}
+
+/// Builds a view response.
+///
+/// A `ViewResponseBuilder` constructs a view response as though the response
+/// originated from a CouchDB Server. This allows an application to mock a view
+/// response without using a production database.
+///
+/// # Examples
+///
+/// One point of inconvenience when using a `ViewResponseBuilder` is that type
+/// inference doesn't work when building an unreduced view response, so
+/// applications should use the turbofish (`::<Key, Value, _>`) to specify the
+/// key and value types, like so:
+///
+/// ```
+/// use chill::testing::ViewResponseBuilder;
+///
+/// ViewResponseBuilder::<String, i32, _>::new_unreduced(123,       // `total_rows`
+///                                                      0,         // `offset`
+///                                                      "baseball" // database name
+///                                                     )
+///     .with_row("Hammerin' Hank", 755, "hank_aaron_doc_id")
+///     .with_row("The Bambino", 714, "babe_ruth_doc_id")
+///     .unwrap();
+/// ```
+///
+/// Reduced views are easier because type inference _does_ work.
+///
+/// ```
+/// use chill::testing::ViewResponseBuilder;
+///
+/// // The view response key is inferred as () because reduced views have no
+/// // key.
+/// ViewResponseBuilder::new_reduced(1469).unwrap();
+/// ```
+///
+#[derive(Debug)]
+pub struct ViewResponseBuilder<K: serde::Deserialize, V: serde::Deserialize, M> {
+    phantom: std::marker::PhantomData<M>,
+    db_name: Option<DatabaseName>,
+    target: ViewResponse<K, V>,
+}
+
+impl<V: serde::Deserialize> ViewResponseBuilder<(), V, ViewIsReduced> {
+    /// Constructs a reduced view response.
+    pub fn new_reduced(value: V) -> Self {
+        ViewResponseBuilder {
+            phantom: std::marker::PhantomData,
+            db_name: None,
+            target: ViewResponse::Reduced(ReducedView {
+                update_seq: None,
+                value: value,
+            }),
+        }
+    }
+
+    /// Sets the update sequence number for the view response.
+    ///
+    /// The **update sequence number** corresponds to the `update_seq` field in
+    /// the view response. By default, its value is `None`.
+    ///
+    pub fn with_update_sequence_number(mut self, update_seq: u64) -> Self {
+        self.target.as_reduced_mut().update_seq = Some(update_seq);
+        self
+    }
+
+    /// Returns the builder's view response.
+    pub fn unwrap(self) -> ViewResponse<(), V> {
+        self.target
+    }
+}
+
+impl<K: serde::Deserialize, V: serde::Deserialize> ViewResponseBuilder<K, V, ViewIsUnreduced> {
+    /// Constructs an unreduced view response.
+    ///
+    /// Any rows added via the `with_row` method will use the given database
+    /// name as part of their document path.
+    ///
+    pub fn new_unreduced<D: Into<DatabaseName>>(total_rows: u64, offset: u64, db_name: D) -> Self {
+        ViewResponseBuilder {
+            phantom: std::marker::PhantomData,
+            db_name: Some(db_name.into()),
+            target: ViewResponse::Unreduced(UnreducedView {
+                total_rows: total_rows,
+                offset: offset,
+                update_seq: None,
+                rows: Vec::new(),
+            }),
+        }
+    }
+
+    /// Appends a new row into the view response.
+    pub fn with_row<D, IntoK, IntoV>(mut self, key: IntoK, value: IntoV, doc_id: D) -> Self
+        where D: Into<DocumentId>,
+              IntoK: Into<K>,
+              IntoV: Into<V>
+    {
+        let row = ViewRow {
+            key: key.into(),
+            value: value.into(),
+            db_name: self.db_name.clone().unwrap(),
+            doc_id: doc_id.into(),
+        };
+
+        {
+            self.target.as_unreduced_mut().rows.push(row);
+        }
+        self
+    }
+
+    /// Sets the update sequence number for the view response.
+    ///
+    /// The **update sequence number** corresponds to the `update_seq` field in
+    /// the view response. By default, its value is `None`.
+    ///
+    pub fn with_update_sequence_number(mut self, update_seq: u64) -> Self {
+        self.target.as_unreduced_mut().update_seq = Some(update_seq);
+        self
+    }
+
+    /// Returns the builder's view response.
+    pub fn unwrap(self) -> ViewResponse<K, V> {
+        self.target
+    }
+}
+
+impl<K: serde::Deserialize, M, V: serde::Deserialize> ViewResponseBuilder<K, V, M> {}
+
+#[cfg(test)]
+mod view_response_builder_tests {
+
+    use prelude_impl::*;
+
+    #[test]
+    fn reduced_required() {
+        let expected = ViewResponse::Reduced({
+            ReducedView {
+                update_seq: None,
+                value: 42,
+            }
+        });
+        let got = ViewResponseBuilder::new_reduced(42).unwrap();
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn reduced_with_update_sequence_number() {
+        let expected = ViewResponse::Reduced({
+            ReducedView {
+                update_seq: Some(517),
+                value: 42,
+            }
+        });
+        let got = ViewResponseBuilder::new_reduced(42).with_update_sequence_number(517).unwrap();
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn unreduced_required() {
+        let expected = ViewResponse::Unreduced({
+            UnreducedView::<String, i32> {
+                total_rows: 20,
+                offset: 10,
+                update_seq: None,
+                rows: Vec::new(),
+            }
+        });
+        let got = ViewResponseBuilder::new_unreduced(20, 10, "foo").unwrap();
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn unreduced_with_update_sequence_number() {
+        let expected = ViewResponse::Unreduced({
+            UnreducedView::<String, i32> {
+                total_rows: 20,
+                offset: 10,
+                update_seq: Some(517),
+                rows: Vec::new(),
+            }
+        });
+        let got = ViewResponseBuilder::new_unreduced(20, 10, "foo")
+                      .with_update_sequence_number(517)
+                      .unwrap();
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn unreduced_with_row() {
+        let expected = ViewResponse::Unreduced({
+            UnreducedView::<String, i32> {
+                total_rows: 20,
+                offset: 10,
+                update_seq: None,
+                rows: vec![ViewRow {
+                               key: String::from("Babe Ruth"),
+                               value: 714,
+                               db_name: DatabaseName::from("baseball"),
+                               doc_id: DocumentId::from("babe_ruth"),
+                           },
+                           ViewRow {
+                               key: String::from("Hank Aaron"),
+                               value: 755,
+                               db_name: DatabaseName::from("baseball"),
+                               doc_id: DocumentId::from("hank_aaron"),
+                           }],
+            }
+        });
+        let got = ViewResponseBuilder::new_unreduced(20, 10, "baseball")
+                      .with_row("Babe Ruth", 714, "babe_ruth")
+                      .with_row("Hank Aaron", 755, "hank_aaron")
+                      .unwrap();
+        assert_eq!(expected, got);
     }
 }
