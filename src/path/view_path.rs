@@ -1,9 +1,5 @@
 use prelude_impl::*;
-use super::{DESIGN_PREFIX, PathExtractor};
-
-fn view_prefix() -> &'static str {
-    "_view"
-}
+use super::{DESIGN_PREFIX, PathExtractor, VIEW_PREFIX};
 
 impl<'a> ViewPathRef<'a> {
     pub fn database_name(&self) -> DatabaseNameRef<'a> {
@@ -164,7 +160,7 @@ impl<'a> Iterator for ViewPathIter<'a> {
             &mut ViewPathIter::DocumentName(path) => {
                 (path.ddoc_name.inner, ViewPathIter::ViewPrefix(path))
             }
-            &mut ViewPathIter::ViewPrefix(path) => (view_prefix(), ViewPathIter::ViewName(path)),
+            &mut ViewPathIter::ViewPrefix(path) => (VIEW_PREFIX, ViewPathIter::ViewName(path)),
             &mut ViewPathIter::ViewName(path) => (path.view_name.inner, ViewPathIter::Done),
             &mut ViewPathIter::Done => {
                 return None;
@@ -188,7 +184,7 @@ impl<'a> IntoViewPath<'a> for &'static str {
 
         let ddoc_name = try!(path_extractor.extract_nonfinal());
 
-        if view_prefix() != try!(path_extractor.extract_nonfinal()) {
+        if VIEW_PREFIX != try!(path_extractor.extract_nonfinal()) {
             return Err(Error::PathParse(PathParseErrorKind::BadViewPrefix));
         }
 

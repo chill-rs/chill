@@ -256,9 +256,9 @@ use prelude_impl::*;
 use serde;
 use std;
 
-const DESIGN_PREFIX: &'static str = "_design";
-const LOCAL_PREFIX: &'static str = "_local";
-const VIEW_PREFIX: &'static str = "_view";
+pub const DESIGN_PREFIX: &'static str = "_design";
+pub const LOCAL_PREFIX: &'static str = "_local";
+pub const VIEW_PREFIX: &'static str = "_view";
 
 #[derive(Debug, PartialEq)]
 struct PathExtractor<'a> {
