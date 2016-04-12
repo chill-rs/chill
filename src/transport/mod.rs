@@ -68,6 +68,7 @@ pub trait Response {
 pub struct RequestOptions<'a, B: serde::Serialize + 'a> {
     accept: Option<RequestAccept>,
     attachments_query: Option<bool>,
+    descending_query: Option<bool>,
     revision_query: Option<&'a Revision>,
     body: Option<RequestBody<'a, B>>,
 }
@@ -81,6 +82,7 @@ impl<'a> RequestOptions<'a, ()> {
         RequestOptions {
             accept: self.accept,
             attachments_query: self.attachments_query,
+            descending_query: self.descending_query,
             revision_query: self.revision_query,
             body: Some(RequestBody::Json(body)),
         }
@@ -93,13 +95,18 @@ impl<'a, B: serde::Serialize + 'a> RequestOptions<'a, B> {
         self
     }
 
-    pub fn with_revision_query(mut self, revision: &'a Revision) -> Self {
-        self.revision_query = Some(revision);
+    pub fn with_attachments_query(mut self, yes_or_no: bool) -> Self {
+        self.attachments_query = Some(yes_or_no);
         self
     }
 
-    pub fn with_attachments_query(mut self, yes_or_no: bool) -> Self {
-        self.attachments_query = Some(yes_or_no);
+    pub fn with_descending_query(mut self, yes_or_no: bool) -> Self {
+        self.descending_query = Some(yes_or_no);
+        self
+    }
+
+    pub fn with_revision_query(mut self, revision: &'a Revision) -> Self {
+        self.revision_query = Some(revision);
         self
     }
 }

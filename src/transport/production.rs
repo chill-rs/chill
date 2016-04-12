@@ -74,12 +74,19 @@ impl HyperTransport {
 
         let query_pairs = {
             let mut pairs = std::collections::HashMap::new();
+
             if let Some(yes_or_no) = options.attachments_query {
                 pairs.insert("attachments".to_string(), yes_or_no.to_string());
             }
+
+            if let Some(yes_or_no) = options.descending_query {
+                pairs.insert("descending".to_string(), yes_or_no.to_string());
+            }
+
             if let Some(revision) = options.revision_query {
                 pairs.insert("rev".to_string(), revision.to_string());
             }
+
             pairs
         };
 

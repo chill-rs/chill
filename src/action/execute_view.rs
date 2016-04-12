@@ -11,6 +11,7 @@ pub struct ExecuteView<'a, T, K, V>
     view_path: ViewPathRef<'a>,
     phantom_key: std::marker::PhantomData<K>,
     phantom_value: std::marker::PhantomData<V>,
+    descending: Option<bool>,
 }
 
 impl<'a, K, T, V> ExecuteView<'a, T, K, V>
@@ -25,7 +26,23 @@ impl<'a, K, T, V> ExecuteView<'a, T, K, V>
             view_path: try!(view_path.into_view_path()),
             phantom_key: std::marker::PhantomData,
             phantom_value: std::marker::PhantomData,
+            descending: None,
         })
+    }
+
+    /// Modifies the action to retrieve the view rows in descending order.
+    ///
+    /// The `with_descending` method abstracts CouchDB's `descending` query
+    /// parameter. By default, the CouchDB server sends the rows of an unreduced
+    /// view in ascending order, sorted by key. Whereas, if the `descending`
+    /// query parameter is `true`, then the server sends the rows in reverse
+    /// order.
+    ///
+    /// This method has no effect if the view is reduced.
+    ///
+    pub fn with_descending(mut self, descending: bool) -> Self {
+        self.descending = Some(descending);
+        self
     }
 }
 
@@ -48,6 +65,12 @@ impl<'a, T, K, V> Action<T> for ExecuteView<'a, T, K, V>
 
     fn make_request(&mut self) -> Result<(T::Request, Self::State), Error> {
         let options = RequestOptions::new().with_accept_json();
+
+        let options = match self.descending {
+            None => options,
+            Some(value) => options.with_descending_query(value),
+        };
+
         let db_name = DatabaseName::from(self.view_path.database_name());
         let request = try!(self.transport.get(self.view_path, options));
         Ok((request, db_name))
@@ -89,6 +112,27 @@ mod tests {
             let mut action = ExecuteView::<_, String, i32>::new(&transport,
                                                                 "/foo/_design/bar/_view/qux")
                                  .unwrap();
+            action.make_request().unwrap()
+        };
+
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn make_request_with_descending() {
+        let transport = MockTransport::new();
+
+        let expected = ({
+            let options = RequestOptions::new().with_descending_query(true).with_accept_json();
+            transport.get(vec!["foo", "_design", "bar", "_view", "qux"], options).unwrap()
+        },
+                        DatabaseName::from("foo"));
+
+        let got = {
+            let mut action = ExecuteView::<_, String, i32>::new(&transport,
+                                                                "/foo/_design/bar/_view/qux")
+                                 .unwrap()
+                                 .with_descending(true);
             action.make_request().unwrap()
         };
 
