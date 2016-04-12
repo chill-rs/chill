@@ -65,35 +65,39 @@ impl<K: serde::Deserialize, V: serde::Deserialize> ViewResponse<K, V> {
         }
     }
 
-    #[doc(hidden)]
-    pub fn unwrap_reduced(self) -> ReducedView<V> {
+    /// Returns the view response in its reduced form, if the response is
+    /// reduced.
+    pub fn as_reduced(&self) -> Option<&ReducedView<V>> {
         match self {
-            ViewResponse::Reduced(x) => x,
-            _ => panic!("Expected a reduced view response, got an unreduced view response"),
+            &ViewResponse::Reduced(ref x) => Some(x),
+            _ => None,
         }
     }
 
-    #[doc(hidden)]
-    pub fn unwrap_unreduced(self) -> UnreducedView<K, V> {
+    /// Returns the view response in its reduced form, if the response is
+    /// reduced.
+    pub fn as_reduced_mut(&mut self) -> Option<&mut ReducedView<V>> {
         match self {
-            ViewResponse::Unreduced(x) => x,
-            _ => panic!("Expected an unreduced view response, got a reduced view response"),
+            &mut ViewResponse::Reduced(ref mut x) => Some(x),
+            _ => None,
         }
     }
 
-    #[doc(hidden)]
-    pub fn as_reduced_mut(&mut self) -> &mut ReducedView<V> {
+    /// Returns the view response in its unreduced form, if the response is
+    /// unreduced.
+    pub fn as_unreduced(&self) -> Option<&UnreducedView<K, V>> {
         match self {
-            &mut ViewResponse::Reduced(ref mut x) => x,
-            _ => panic!("Expected a reduced view response, got an unreduced view response"),
+            &ViewResponse::Unreduced(ref x) => Some(x),
+            _ => None,
         }
     }
 
-    #[doc(hidden)]
-    pub fn as_unreduced_mut(&mut self) -> &mut UnreducedView<K, V> {
+    /// Returns the view response in its unreduced form, if the response is
+    /// unreduced.
+    pub fn as_unreduced_mut(&mut self) -> Option<&mut UnreducedView<K, V>> {
         match self {
-            &mut ViewResponse::Unreduced(ref mut x) => x,
-            _ => panic!("Expected an unreduced view response, got a reduced view response"),
+            &mut ViewResponse::Unreduced(ref mut x) => Some(x),
+            _ => None,
         }
     }
 }
@@ -704,7 +708,7 @@ impl<V: serde::Deserialize> ViewResponseBuilder<(), V, ViewIsReduced> {
     /// the view response. By default, its value is `None`.
     ///
     pub fn with_update_sequence_number(mut self, update_seq: u64) -> Self {
-        self.target.as_reduced_mut().update_seq = Some(update_seq);
+        self.target.as_reduced_mut().unwrap().update_seq = Some(update_seq);
         self
     }
 
@@ -746,9 +750,7 @@ impl<K: serde::Deserialize, V: serde::Deserialize> ViewResponseBuilder<K, V, Vie
             doc_id: doc_id.into(),
         };
 
-        {
-            self.target.as_unreduced_mut().rows.push(row);
-        }
+        self.target.as_unreduced_mut().unwrap().rows.push(row);
         self
     }
 
@@ -758,7 +760,7 @@ impl<K: serde::Deserialize, V: serde::Deserialize> ViewResponseBuilder<K, V, Vie
     /// the view response. By default, its value is `None`.
     ///
     pub fn with_update_sequence_number(mut self, update_seq: u64) -> Self {
-        self.target.as_unreduced_mut().update_seq = Some(update_seq);
+        self.target.as_unreduced_mut().unwrap().update_seq = Some(update_seq);
         self
     }
 
