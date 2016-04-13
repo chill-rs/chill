@@ -5,6 +5,7 @@ pub mod testing;
 use hyper;
 use prelude_impl::*;
 use serde;
+use serde_json;
 
 pub trait Action<T: Transport> {
     type Output;
@@ -69,7 +70,10 @@ pub struct RequestOptions<'a, B: serde::Serialize + 'a> {
     accept: Option<RequestAccept>,
     attachments_query: Option<bool>,
     descending_query: Option<bool>,
+    end_key_query: Option<String>,
+    inclusive_end_query: Option<bool>,
     revision_query: Option<&'a Revision>,
+    start_key_query: Option<String>,
     body: Option<RequestBody<'a, B>>,
 }
 
@@ -83,7 +87,10 @@ impl<'a> RequestOptions<'a, ()> {
             accept: self.accept,
             attachments_query: self.attachments_query,
             descending_query: self.descending_query,
+            end_key_query: self.end_key_query,
+            inclusive_end_query: self.inclusive_end_query,
             revision_query: self.revision_query,
+            start_key_query: self.start_key_query,
             body: Some(RequestBody::Json(body)),
         }
     }
@@ -105,9 +112,26 @@ impl<'a, B: serde::Serialize + 'a> RequestOptions<'a, B> {
         self
     }
 
+    pub fn with_end_key<K: serde::Serialize>(mut self, key: &K) -> Result<Self, Error> {
+        self.end_key_query = Some(try!(serde_json::to_string(key)
+                                           .map_err(|e| Error::JsonEncode { cause: e })));
+        Ok(self)
+    }
+
+    pub fn with_inclusive_end(mut self, yes_or_no: bool) -> Self {
+        self.inclusive_end_query = Some(yes_or_no);
+        self
+    }
+
     pub fn with_revision_query(mut self, revision: &'a Revision) -> Self {
         self.revision_query = Some(revision);
         self
+    }
+
+    pub fn with_start_key<K: serde::Serialize>(mut self, key: &K) -> Result<Self, Error> {
+        self.start_key_query = Some(try!(serde_json::to_string(key)
+                                             .map_err(|e| Error::JsonEncode { cause: e })));
+        Ok(self)
     }
 }
 

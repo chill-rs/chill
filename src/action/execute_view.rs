@@ -2,8 +2,13 @@ use prelude_impl::*;
 use serde;
 use std;
 
+enum Inclusivity {
+    Exclusive,
+    Inclusive,
+}
+
 pub struct ExecuteView<'a, T, K, V>
-    where K: serde::Deserialize + serde::Serialize,
+    where K: serde::Deserialize + serde::Serialize + 'a,
           T: Transport + 'a,
           V: serde::Deserialize
 {
@@ -11,6 +16,8 @@ pub struct ExecuteView<'a, T, K, V>
     view_path: ViewPathRef<'a>,
     phantom_key: std::marker::PhantomData<K>,
     phantom_value: std::marker::PhantomData<V>,
+    start_key: Option<&'a K>,
+    end_key: Option<(&'a K, Inclusivity)>,
     descending: Option<bool>,
 }
 
@@ -26,8 +33,44 @@ impl<'a, K, T, V> ExecuteView<'a, T, K, V>
             view_path: try!(view_path.into_view_path()),
             phantom_key: std::marker::PhantomData,
             phantom_value: std::marker::PhantomData,
+            start_key: None,
+            end_key: None,
             descending: None,
         })
+    }
+
+    /// Modified the action to include only records with a key greater than or
+    /// equal to a given key.
+    ///
+    /// The `with_start_key` method abstracts CouchDB's `startkey` query
+    /// parameter. By default, the CouchDB server includes all records.
+    ///
+    pub fn with_start_key(mut self, start_key: &'a K) -> Self {
+        self.start_key = Some(start_key);
+        self
+    }
+
+    /// Modified the action to include only records with a key less than or
+    /// equal to a given key.
+    ///
+    /// The `with_end_key_inclusive` method abstracts CouchDB's `endkey` query
+    /// parameter. By default, the CouchDB server includes all records.
+    ///
+    pub fn with_end_key_inclusive(mut self, end_key: &'a K) -> Self {
+        self.end_key = Some((end_key, Inclusivity::Inclusive));
+        self
+    }
+
+    /// Modified the action to include only records with a key less than a given
+    /// key.
+    ///
+    /// The `with_end_key_exclusive` method abstracts CouchDB's `endkey` and
+    /// `inclusive_end` query parameters. By default, the CouchDB server
+    /// includes all records.
+    ///
+    pub fn with_end_key_exclusive(mut self, end_key: &'a K) -> Self {
+        self.end_key = Some((end_key, Inclusivity::Exclusive));
+        self
     }
 
     /// Modifies the action to retrieve the view rows in descending order.
@@ -65,6 +108,19 @@ impl<'a, T, K, V> Action<T> for ExecuteView<'a, T, K, V>
 
     fn make_request(&mut self) -> Result<(T::Request, Self::State), Error> {
         let options = RequestOptions::new().with_accept_json();
+
+        let options = match self.start_key {
+            None => options,
+            Some(value) => try!(options.with_start_key(value)),
+        };
+
+        let options = match self.end_key {
+            None => options,
+            Some((key_value, Inclusivity::Inclusive)) => try!(options.with_end_key(key_value)),
+            Some((key_value, Inclusivity::Exclusive)) => {
+                try!(options.with_end_key(key_value)).with_inclusive_end(false)
+            }
+        };
 
         let options = match self.descending {
             None => options,
@@ -133,6 +189,85 @@ mod tests {
                                                                 "/foo/_design/bar/_view/qux")
                                  .unwrap()
                                  .with_descending(true);
+            action.make_request().unwrap()
+        };
+
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn make_request_with_end_key_exclusive() {
+        let transport = MockTransport::new();
+
+        let end_key = String::from("my key");
+
+        let expected = ({
+            let options = RequestOptions::new()
+                              .with_end_key(&end_key)
+                              .unwrap()
+                              .with_inclusive_end(false)
+                              .with_accept_json();
+            transport.get(vec!["foo", "_design", "bar", "_view", "qux"], options).unwrap()
+        },
+                        DatabaseName::from("foo"));
+
+        let got = {
+            let mut action = ExecuteView::<_, String, i32>::new(&transport,
+                                                                "/foo/_design/bar/_view/qux")
+                                 .unwrap()
+                                 .with_end_key_exclusive(&end_key);
+            action.make_request().unwrap()
+        };
+
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn make_request_with_end_key_inclusive() {
+        let transport = MockTransport::new();
+
+        let end_key = String::from("my key");
+
+        let expected = ({
+            let options = RequestOptions::new()
+                              .with_end_key(&end_key)
+                              .unwrap()
+                              .with_accept_json();
+            transport.get(vec!["foo", "_design", "bar", "_view", "qux"], options).unwrap()
+        },
+                        DatabaseName::from("foo"));
+
+        let got = {
+            let mut action = ExecuteView::<_, String, i32>::new(&transport,
+                                                                "/foo/_design/bar/_view/qux")
+                                 .unwrap()
+                                 .with_end_key_inclusive(&end_key);
+            action.make_request().unwrap()
+        };
+
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn make_request_with_start_key() {
+        let transport = MockTransport::new();
+
+        let start_key = String::from("my key");
+
+        let expected = ({
+            let options = RequestOptions::new()
+                              .with_start_key(&start_key)
+                              .unwrap()
+                              .with_accept_json();
+            transport.get(vec!["foo", "_design", "bar", "_view", "qux"], options).unwrap()
+        },
+                        DatabaseName::from("foo"));
+
+        let got = {
+            let mut action = ExecuteView::<_, String, i32>::new(&transport,
+                                                                "/foo/_design/bar/_view/qux")
+                                 .unwrap()
+                                 .with_start_key(&start_key);
             action.make_request().unwrap()
         };
 

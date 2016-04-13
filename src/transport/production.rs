@@ -76,15 +76,27 @@ impl HyperTransport {
             let mut pairs = std::collections::HashMap::new();
 
             if let Some(yes_or_no) = options.attachments_query {
-                pairs.insert("attachments".to_string(), yes_or_no.to_string());
+                pairs.insert(String::from("attachments"), yes_or_no.to_string());
             }
 
             if let Some(yes_or_no) = options.descending_query {
-                pairs.insert("descending".to_string(), yes_or_no.to_string());
+                pairs.insert(String::from("descending"), yes_or_no.to_string());
+            }
+
+            if let Some(ref key_value) = options.end_key_query {
+                pairs.insert(String::from("endkey"), key_value.clone());
+            }
+
+            if let Some(yes_or_no) = options.inclusive_end_query {
+                pairs.insert(String::from("inclusive_end"), yes_or_no.to_string());
             }
 
             if let Some(revision) = options.revision_query {
-                pairs.insert("rev".to_string(), revision.to_string());
+                pairs.insert(String::from("rev"), revision.to_string());
+            }
+
+            if let Some(ref key_value) = options.start_key_query {
+                pairs.insert(String::from("startkey"), key_value.clone());
             }
 
             pairs
