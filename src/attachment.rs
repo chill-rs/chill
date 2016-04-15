@@ -1,6 +1,5 @@
 use base64;
 use mime;
-use prelude_impl::*;
 use serde;
 use std;
 
