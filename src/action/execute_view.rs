@@ -1,3 +1,5 @@
+//! Defines an action for executing a view.
+
 use prelude_impl::*;
 use serde;
 use std;
@@ -7,6 +9,96 @@ enum Inclusivity {
     Inclusive,
 }
 
+/// Executes a view on the CouchDB server and returns the result.
+///
+/// Chill executes the view by sending an HTTP request to the CouchDB server to
+/// `GET` from or `POST` to the view's path. For more details about executing
+/// views, please see the CouchDB documentation.
+///
+/// # Errors
+///
+/// The following are _some_ errors that may occur when executing a view.
+///
+/// <table>
+/// <tr>
+///  <td><code>Error::NotFound</code></td>
+///  <td>The database, design document, or view does not exist.</td>
+/// </tr>
+/// <tr>
+///  <td><code>Error::Unauthorized</code></td>
+///  <td>The client lacks permission to execute the view.</td>
+/// </tr>
+/// </table>
+///
+/// # Examples
+///
+/// The following program demonstrates view execution.
+///
+/// ```
+/// extern crate chill;
+/// extern crate serde_json;
+///
+/// let server = chill::testing::FakeServer::new().unwrap();
+/// let client = chill::Client::new(server.uri()).unwrap();
+///
+/// // Create a database and populate it with some documents.
+///
+/// client.create_database("/baseball").unwrap().run().unwrap();
+///
+/// let create_player = |name, home_runs| {
+///     client.create_document("/baseball",
+///                            &serde_json::builder::ObjectBuilder::new()
+///                                 .insert("name", name)
+///                                 .insert("home_runs", home_runs)
+///                                 .unwrap())
+///           .unwrap()
+///           .run()
+///           .unwrap();
+/// };
+///
+/// create_player("Babe Ruth", 714);
+/// create_player("Hank Aaron", 755);
+/// create_player("Willie Mays", 660);
+///
+/// client.create_document("/baseball", {
+///           &serde_json::builder::ObjectBuilder::new()
+///                .insert_object("views", |x| {
+///                    x.insert_object("home_run", |x| {
+///                        x.insert("map", r#"function(doc) { emit(doc.home_runs, doc.name); }"#)
+///                    })
+///                })
+///                .unwrap()
+///       })
+///       .unwrap()
+///       .with_document_id("_design/stat")
+///       .run()
+///       .unwrap();
+///
+/// // Execute a view to get players with at least 700 home runs.
+///
+/// let view_response = client.execute_view::<i32, String, _>(
+///                               "/baseball/_design/stat/_view/home_run")
+///                           .unwrap()
+///                           .with_descending(true)
+///                           .with_end_key_inclusive(&700)
+///                           .run()
+///                           .unwrap();
+///
+/// let expected = vec![
+///     (755, "Hank Aaron"),
+///     (714, "Babe Ruth"),
+/// ];
+///
+/// let got = view_response.as_unreduced()
+///                        .expect("View response is not unreduced")
+///                        .rows()
+///                        .iter()
+///                        .map(|x| (*x.key(), x.value().as_ref()))
+///                        .collect::<Vec<(i32, &str)>>();
+///
+/// assert_eq!(expected, got);
+/// ```
+///
 pub struct ExecuteView<'a, T, K, V>
     where K: serde::Deserialize + serde::Serialize + 'a,
           T: Transport + 'a,

@@ -3,7 +3,7 @@
 mod create_database;
 mod create_document;
 mod delete_document;
-mod execute_view;
+pub mod execute_view;
 pub mod read_document;
 mod update_document;
 

@@ -1,13 +1,59 @@
-//! Definitions for reading a document from the CouchDB server.
+//! Defines an action for reading a document from the CouchDB server.
 
 use prelude_impl::*;
 
-/// Reads a single document from the CouchDB server.
+/// Reads a document from the CouchDB server and returns the result.
 ///
-/// `ReadDocument` sends the HTTP request `GET /db/docid` to the CouchDB server.
-/// The document id may be of any document type: normal, design, or local.
+/// Chill reads the document by sending an HTTP request to `GET` from the
+/// document's path. For more details about documents and how to read them,
+/// please see the CouchDB documentation.
 ///
-/// Applications should use a `Client` to construct a `ReadDocument`.
+/// # Errors
+///
+/// The following are _some_ errors that may occur when reading a document.
+///
+/// <table>
+/// <tr>
+///  <td><code>Error::NotFound</code></td>
+///  <td>The database or document does not exist.</td>
+/// </tr>
+/// <tr>
+///  <td><code>Error::Unauthorized</code></td>
+///  <td>The client lacks permission to read the document.</td>
+/// </tr>
+/// </table>
+///
+/// # Examples
+///
+/// The following program demonstrates reading a document.
+///
+/// ```
+/// extern crate chill;
+/// extern crate serde_json;
+///
+/// let server = chill::testing::FakeServer::new().unwrap();
+/// let client = chill::Client::new(server.uri()).unwrap();
+///
+/// client.create_database("/baseball").unwrap().run().unwrap();
+///
+/// let content = serde_json::builder::ObjectBuilder::new()
+///                   .insert("name", "Babe Ruth")
+///                   .insert("nickname", "The Bambino")
+///                   .unwrap();
+///
+/// let (doc_id, rev) = client.create_document("/baseball", &content)
+///                            .unwrap()
+///                            .run()
+///                            .unwrap();
+///
+/// let doc = client.read_document(("/baseball", &doc_id))
+///                 .unwrap()
+///                 .run()
+///                 .unwrap();
+///
+/// assert_eq!(1, rev.sequence_number());
+/// assert_eq!(content, doc.get_content::<serde_json::Value>().unwrap());
+/// ```
 ///
 pub struct ReadDocument<'a, T: Transport + 'a> {
     transport: &'a T,
