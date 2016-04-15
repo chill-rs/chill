@@ -16,6 +16,7 @@ pub struct ExecuteView<'a, T, K, V>
     view_path: ViewPathRef<'a>,
     phantom_key: std::marker::PhantomData<K>,
     phantom_value: std::marker::PhantomData<V>,
+    reduce: Option<bool>,
     start_key: Option<&'a K>,
     end_key: Option<(&'a K, Inclusivity)>,
     descending: Option<bool>,
@@ -33,13 +34,26 @@ impl<'a, K, T, V> ExecuteView<'a, T, K, V>
             view_path: try!(view_path.into_view_path()),
             phantom_key: std::marker::PhantomData,
             phantom_value: std::marker::PhantomData,
+            reduce: None,
             start_key: None,
             end_key: None,
             descending: None,
         })
     }
 
-    /// Modified the action to include only records with a key greater than or
+    /// Modifies the action to explicitly reduce or not reduce the view.
+    ///
+    /// The `with_reduce` method abstracts CouchDB's `reduce` query parameter.
+    /// By default, CouchDB reduces a view if and only if the view contains a
+    /// reduction function. Consequently, an application may use this method to
+    /// disable reduction of a view that contains a reduction function.
+    ///
+    pub fn with_reduce(mut self, reduce: bool) -> Self {
+        self.reduce = Some(reduce);
+        self
+    }
+
+    /// Modifies the action to include only records with a key greater than or
     /// equal to a given key.
     ///
     /// The `with_start_key` method abstracts CouchDB's `startkey` query
@@ -50,7 +64,7 @@ impl<'a, K, T, V> ExecuteView<'a, T, K, V>
         self
     }
 
-    /// Modified the action to include only records with a key less than or
+    /// Modifies the action to include only records with a key less than or
     /// equal to a given key.
     ///
     /// The `with_end_key_inclusive` method abstracts CouchDB's `endkey` query
@@ -61,7 +75,7 @@ impl<'a, K, T, V> ExecuteView<'a, T, K, V>
         self
     }
 
-    /// Modified the action to include only records with a key less than a given
+    /// Modifies the action to include only records with a key less than a given
     /// key.
     ///
     /// The `with_end_key_exclusive` method abstracts CouchDB's `endkey` and
@@ -108,6 +122,11 @@ impl<'a, T, K, V> Action<T> for ExecuteView<'a, T, K, V>
 
     fn make_request(&mut self) -> Result<(T::Request, Self::State), Error> {
         let options = RequestOptions::new().with_accept_json();
+
+        let options = match self.reduce {
+            None => options,
+            Some(value) => options.with_reduce_query(value),
+        };
 
         let options = match self.start_key {
             None => options,
@@ -242,6 +261,27 @@ mod tests {
                                                                 "/foo/_design/bar/_view/qux")
                                  .unwrap()
                                  .with_end_key_inclusive(&end_key);
+            action.make_request().unwrap()
+        };
+
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn make_request_with_reduce() {
+        let transport = MockTransport::new();
+
+        let expected = ({
+            let options = RequestOptions::new().with_reduce_query(false).with_accept_json();
+            transport.get(vec!["foo", "_design", "bar", "_view", "qux"], options).unwrap()
+        },
+                        DatabaseName::from("foo"));
+
+        let got = {
+            let mut action = ExecuteView::<_, String, i32>::new(&transport,
+                                                                "/foo/_design/bar/_view/qux")
+                                 .unwrap()
+                                 .with_reduce(false);
             action.make_request().unwrap()
         };
 

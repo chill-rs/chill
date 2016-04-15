@@ -43,6 +43,7 @@ impl Transport for MockTransport {
             descending_query: options.descending_query,
             end_key_query: options.end_key_query,
             inclusive_end_query: options.inclusive_end_query,
+            reduce_query: options.reduce_query,
             revision_query: options.revision_query.map(|revision| revision.clone()),
             start_key_query: options.start_key_query,
             body: match options.body {
@@ -110,6 +111,7 @@ pub struct MockRequest {
     descending_query: Option<bool>,
     end_key_query: Option<String>,
     inclusive_end_query: Option<bool>,
+    reduce_query: Option<bool>,
     revision_query: Option<Revision>,
     start_key_query: Option<String>,
     body: Option<MockRequestBody>,

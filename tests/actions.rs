@@ -749,6 +749,64 @@ fn execute_view_ok_unreduced_with_start_key() {
 }
 
 #[test]
+fn execute_view_ok_unreduced_with_reduce_false() {
+
+    let (_server, client) = make_server_and_client();
+    client.create_database("/baseball").unwrap().run().unwrap();
+
+    let up_content = serde_json::builder::ObjectBuilder::new()
+                         .insert("name", "Babe Ruth")
+                         .insert("home_runs", 714)
+                         .unwrap();
+
+    let (babe_id, _rev) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
+
+    let up_content = serde_json::builder::ObjectBuilder::new()
+                         .insert("name", "Hank Aaron")
+                         .insert("home_runs", 755)
+                         .unwrap();
+
+    let (hank_id, _rev) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
+
+    // TODO: Make use of a Design type when available.
+
+    let up_content = serde_json::builder::ObjectBuilder::new()
+                         .insert_object("views", |x| {
+                             x.insert_object("home_runs", |x| {
+                                 x.insert("map",
+                                          r#"function(doc) { emit(doc.home_runs, doc.home_runs) }"#)
+                                  .insert("reduce",
+                                          r#"function(keys, values) {
+                                               var c = 0;
+                                               for (var i = 0; i < values.length; i++) {
+                                                 c += values[i];
+                                               }
+                                               return c;
+                                             }"#)
+                             })
+                         })
+                         .unwrap();
+    client.create_document("/baseball", &up_content)
+          .unwrap()
+          .with_document_id("_design/stats")
+          .run()
+          .unwrap();
+
+    let expected = chill::testing::ViewResponseBuilder::new_unreduced(2, 0, "baseball")
+                       .with_row(714, 714, babe_id)
+                       .with_row(755, 755, hank_id)
+                       .unwrap();
+
+    let got = client.execute_view::<i32, i32, _>("/baseball/_design/stats/_view/home_runs")
+                    .unwrap()
+                    .with_reduce(false)
+                    .run()
+                    .unwrap();
+
+    assert_eq!(expected, got);
+}
+
+#[test]
 fn execute_view_ok_reduced() {
 
     let (_server, client) = make_server_and_client();
