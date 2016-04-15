@@ -84,7 +84,7 @@ impl<'a, T: Transport + 'a> ReadDocument<'a, T> {
     /// Modifies the action to read the document of the given revision.
     ///
     /// The `with_revision` method abstracts the `rev` query parameter of the
-    /// HTTP request `GET /db/docid`. By default, the CouchDB 
+    /// HTTP request `GET /db/docid`.
     ///
     pub fn with_revision(mut self, revision: &'a Revision) -> Self {
         self.revision = Some(revision);

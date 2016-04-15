@@ -753,6 +753,22 @@ pub trait IntoDatabasePath<'a> {
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct DatabaseViewPathRef<'a> {
+    db_name: DatabaseNameRef<'a>,
+    view_name: ViewNameRef<'a>,
+}
+
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct DatabaseViewPath {
+    db_name: DatabaseName,
+    view_name: ViewName,
+}
+
+pub trait IntoDatabaseViewPath<'a> {
+    fn into_database_view_path(self) -> Result<DatabaseViewPathRef<'a>, Error>;
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct DocumentPathRef<'a> {
     db_name: DatabaseNameRef<'a>,
     doc_id: DocumentIdRef<'a>,
@@ -827,6 +843,7 @@ pub trait IntoAttachmentPath<'a> {
 
 mod attachment_path;
 mod database_path;
+mod database_view_path;
 mod design_document_path;
 mod document_id;
 mod document_path;

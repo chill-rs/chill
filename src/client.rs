@@ -82,6 +82,16 @@ impl Client {
         action::CreateDocument::new(&self.transport, db_path, content)
     }
 
+    /// Builds an action to read all documents in a database.
+    pub fn read_all_documents<'a, P>(&'a self,
+                                db_path: P)
+                                -> Result<action::ReadAllDocuments<'a, HyperTransport>, Error>
+        where P: IntoDatabasePath<'a>
+
+    {
+        action::ReadAllDocuments::new(&self.transport, db_path)
+    }
+
     /// Builds an action to read a document.
     pub fn read_document<'a, P>(&'a self,
                                 doc_path: P)

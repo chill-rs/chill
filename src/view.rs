@@ -4,6 +4,7 @@ use DocumentPathRef;
 use Error;
 use serde;
 use std;
+use Revision;
 
 /// Contains the response from the CouchDB server as a result of successfully
 /// executing a view.
@@ -862,5 +863,89 @@ mod view_response_builder_tests {
                       .with_row("Hank Aaron", 755, "hank_aaron")
                       .unwrap();
         assert_eq!(expected, got);
+    }
+}
+
+pub struct AllDocumentsViewValue {
+    rev: Revision,
+}
+
+impl AllDocumentsViewValue {
+    pub fn revision(&self) -> &Revision {
+        &self.rev
+    }
+}
+
+impl serde::Serialize for AllDocumentsViewValue {
+    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
+        where S: serde::Serializer
+    {
+        Ok(try!(serializer.serialize_struct_elt("rev", &self.rev)))
+    }
+}
+
+impl serde::Deserialize for AllDocumentsViewValue {
+    fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
+        where D: serde::Deserializer
+    {
+
+        enum Field {
+            Rev,
+        }
+
+        impl serde::Deserialize for Field {
+            fn deserialize<D>(deserializer: &mut D) -> Result<Field, D::Error>
+                where D: serde::de::Deserializer
+            {
+                struct FieldVisitor;
+
+                impl serde::de::Visitor for FieldVisitor {
+                    type Value = Field;
+
+                    fn visit_str<E>(&mut self, value: &str) -> Result<Field, E>
+                        where E: serde::de::Error
+                    {
+                        match value {
+                            "rev" => Ok(Field::Rev),
+                            _ => Err(E::unknown_field(value)),
+                        }
+                    }
+                }
+
+                deserializer.deserialize(FieldVisitor)
+            }
+        }
+
+        struct Visitor;
+
+        impl serde::de::Visitor for Visitor {
+            type Value = AllDocumentsViewValue;
+
+            fn visit_map<V>(&mut self, mut visitor: V) -> Result<AllDocumentsViewValue, V::Error>
+                where V: serde::de::MapVisitor
+            {
+                let mut rev = None;
+
+                loop {
+                    match try!(visitor.visit_key()) {
+                        Some(Field::Rev) => { rev = Some(try!(visitor.visit_value())); }
+                        None => { break; }
+                    }
+                }
+
+                let rev = match rev {
+                    Some(rev) => rev,
+                    None => try!(visitor.missing_field("rev")),
+                };
+
+                try!(visitor.end());
+
+                Ok(AllDocumentsViewValue { rev: rev })
+            }
+        }
+
+
+        static FIELDS: &'static [&'static str] = &["rev"];
+        deserializer.deserialize_struct("value", FIELDS, Visitor)
     }
 }
