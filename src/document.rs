@@ -36,9 +36,8 @@ impl Document {
         self.doc_path.database_name()
     }
 
-    // FIXME: Should this be deprecated? Should we expose only paths, not ids?
-    // What's the value in exposing an id instead of a path?
-    /// Returns the document's id.
+    // DEPRECATED: See issue #42 (https://github.com/chill-rs/chill/issues/42).
+    #[doc(hidden)]
     pub fn id(&self) -> &DocumentId {
         self.doc_path.document_id()
     }
@@ -88,7 +87,8 @@ impl Document {
     pub fn get_attachment<'a, A>(&self, name: A) -> Option<&Attachment>
         where A: Into<AttachmentNameRef<'a>>
     {
-        // FIXME: Implement Borrow to eliminate this heap-allocated temporary.
+        // TODO: Implement Borrow to eliminate this heap-allocated temporary.
+        // See issue #33 for a possible long-term solution.
         let owned_name = AttachmentName::from(name.into());
         self.attachments.get(&owned_name)
     }
@@ -119,7 +119,8 @@ impl Document {
     pub fn remove_attachment<'a, A>(&mut self, name: A)
         where A: Into<AttachmentNameRef<'a>>
     {
-        // FIXME: Implement Borrow to eliminate this heap-allocated temporary.
+        // TODO: Implement Borrow to eliminate this heap-allocated temporary.
+        // See issue #33 for a possible long-term solution.
         let owned_name = AttachmentName::from(name.into());
         self.attachments.remove(&owned_name);
     }
@@ -163,8 +164,6 @@ impl serde::Serialize for Document {
     }
 }
 
-// FIXME: Need to scope the AttachmentIter type so that it doesn't pollute the
-// root module.
 /// Iterates through a document's attachments.
 pub struct AttachmentIter<'a> {
     doc_path: DocumentPathRef<'a>,

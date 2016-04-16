@@ -1,5 +1,3 @@
-// FIXME: Make all modules public.
-
 pub mod create_database;
 pub mod create_document;
 pub mod delete_document;

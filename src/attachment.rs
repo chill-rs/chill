@@ -11,30 +11,6 @@ struct AttachmentEncodingInfo {
 
 /// Contains the meta-information and, optionally, content of an attachment.
 ///
-// FIXME: Should Chill expose the distinction between "saved" and "unsaved"
-// attachments? It would be nice *not* to, but it'll probably be necessary if
-// Chill exposes AttachmentBuilder. Should Chill expose AttachmentBuilder? For
-// now, Chill exposes the minimum--we can always expose more later.
-//
-// Old doc commentary for Attachment:
-//
-// Chill distinguishes between two forms of attachments: **saved attachments**
-// and **unsaved attachments**. A saved attachment is an attachment that the
-// client has read from the CouchDB server, either as an **attachment stub**
-// containing no content or as a **full attachment** containing content.
-// Whereas, an unsaved attachment is an attachment originating from the client,
-// not the server.
-//
-// One may think of saved attachments as attachments that the server knows
-// about and unsaved attachments as attachments that the server does not yet
-// know about. However, strictly speaking, this is false because when the
-// client updates a document containing an unsaved attachment, the attachment
-// becomes stored on the server but the document is immutable, meaning the
-// attachment remains of the unsaved type. In practice, this subtlety shouldn't
-// affect applications. The distinction between saved and unsaved attachments
-// is an optimization that allows Chill to send attachment stubs instead of
-// full content to conserve network throughput when updating documents.
-//
 #[derive(Clone, Debug, PartialEq)]
 pub enum Attachment {
     #[doc(hidden)]
