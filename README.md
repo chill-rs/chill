@@ -3,8 +3,8 @@
 Chill is a client-side CouchDB library for the Rust programming
 language, available on [crates.io][chill_crates_io].
 
-Chill's three chief design goals, in decreasing order of importance, are
-**convenience**, **safety**, and **efficiency**.
+Chill's three chief design goals are **convenience**, **safety**, and
+**efficiency**.
 
 You can read more about its design here:
 
@@ -12,19 +12,19 @@ You can read more about its design here:
 
 ## Roadmap
 
-Chill's most recent release is **v0.1.0**, made on 2016-03-26.
+Chill's most recent release is **v0.1.1**, made on 2016-04-16.
 
-* [v0.1.0 change log][v0_1_0_change_log]
-* [v0.1.0 documentation][v0_1_0_documentation]
-* [v0.1.0 issues][v0_1_0_issues]
-* [v0.1.0 crates.io page][v0_1_0_crates_io]
+* [v0.1.1 change log][v0_1_1_change_log]
+* [v0.1.1 documentation][v0_1_1_documentation]
+* [v0.1.1 issues][v0_1_1_issues]
+* [v0.1.1 crates.io page][v0_1_1_crates_io]
 
-The next release will probably be **v0.1.1** and is scheduled for
-mid-April. It will extend coverage of the CouchDB API. You can peek at
-upcoming changes by following these links:
+The next release will probably be **v0.1.2** and is scheduled for
+2016-05-07. Its focus is to extend Chill's coverage of the CouchDB API.
+You can peek at upcoming changes by following these links:
 
 * [master branch change log][master_change_log]
-* [v0.1.1 issues][v0_1_1_issues]
+* [v0.1.2 issues][v0_1_2_issues]
 
 ## License
 
@@ -45,8 +45,8 @@ feedback][feedback_email]!
 [cv_rethinking_couchdb]: https://cmbrandenburg.github.io/post/2016-02-23-rethinking_couchdb_in_rust/
 [feedback_email]: mailto:c.m.brandenburg@gmail.com
 [master_change_log]: https://github.com/chill-rs/chill/blob/master/CHANGELOG.md
-[v0_1_0_change_log]: https://github.com/chill-rs/chill/blob/v0.1.0/CHANGELOG.md
-[v0_1_0_crates_io]: https://crates.io/crates/chill/0.1.0
-[v0_1_0_documentation]: https://chill-rs.github.io/chill/doc/v0.1.0/chill/
-[v0_1_0_issues]: https://github.com/chill-rs/chill/issues?q=milestone%3Av0.1.0
+[v0_1_1_change_log]: https://github.com/chill-rs/chill/blob/v0.1.1/CHANGELOG.md
+[v0_1_1_crates_io]: https://crates.io/crates/chill/0.1.1
+[v0_1_1_documentation]: https://chill-rs.github.io/chill/doc/v0.1.1/chill/
 [v0_1_1_issues]: https://github.com/chill-rs/chill/issues?q=milestone%3Av0.1.1
+[v0_1_2_issues]: https://github.com/chill-rs/chill/issues?q=milestone%3Av0.1.2
