@@ -1,5 +1,9 @@
 # Chill-rs Change Log
 
+## v0.1.2 (unreleased)
+
+No changes yet!
+
 ## v0.1.1 (2016-04-16)
 
 The v0.1.1 release extends Chill's coverage of the CouchDB API.
