@@ -164,7 +164,6 @@ impl serde::Serialize for Document {
     }
 }
 
-/// Iterates through a document's attachments.
 pub struct AttachmentIter<'a> {
     doc_path: DocumentPathRef<'a>,
     inner: std::collections::hash_map::Iter<'a, AttachmentName, Attachment>,
