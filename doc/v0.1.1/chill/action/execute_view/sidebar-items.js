@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["ExecuteView","Executes a view on the CouchDB server and returns the result."]]});

@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["Client","Manages all communication with a CouchDB server."]],"trait":[["IntoUrl","Types that are convertible into a URL."]]});

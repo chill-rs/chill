@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["FakeServer","Runs a CouchDB server process suitable for testing."],["ViewIsReduced","Marks that a view is reduced."],["ViewIsUnreduced","Marks that a view is unreduced."],["ViewResponseBuilder","Builds a view response."]]});

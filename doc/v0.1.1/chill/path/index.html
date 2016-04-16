@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `path` mod in crate `chill`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, path">
+
+    <title>chill::path - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../../rustdoc.css">
+    <link rel="stylesheet" type="text/css" href="../../main.css">
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <nav class="sidebar">
+        
+        <p class='location'><a href='../index.html'>chill</a></p><script>window.sidebarCurrent = {name: 'path', ty: 'mod', relpath: '../'};</script><script defer src="../sidebar-items.js"></script>
+    </nav>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press ‘S’ to search, ‘?’ for more options…"
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content mod">
+<h1 class='fqn'><span class='in-band'>Module <a href='../index.html'>chill</a>::<wbr><a class='mod' href=''>path</a></span><span class='out-of-band'><span id='render-detail'>
+            <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                [<span class='inner'>&#x2212;</span>]
+            </a>
+        </span><a id='src-2964' class='srclink' href='../../src/chill/src/path/mod.rs.html#1-830' title='goto source code'>[src]</a></span></h1>
+<div class='docblock'><p>Types and traits for specifying databases, documents, views, etc.</p>
+
+<p>Chill provides a rich set of types with which an application may specify
+CouchDB documents, views, attachments, and other database resources. By
+using special types—and not plain strings—the application programmer
+benefits from compile-time checks against many mundane mistakes, such as:</p>
+
+<ul>
+<li>Misspellings,</li>
+<li>Invalid percent-encodings, and,</li>
+<li>Wrong types, such as specifying a normal document instead of a design
+document by omitting the <code>_design</code> path segment.</li>
+</ul>
+
+<p>This page explains these types and their underlying design principles. Let&#39;s
+start with Chill&#39;s distinction between names, ids, and paths.</p>
+
+<h1 id='names-ids-and-paths' class='section-header'><a href='#names-ids-and-paths'>Names, ids, and paths</a></h1>
+<p>Chill has three categories of types for specifying CouchDB resources:
+<strong>names</strong>, <strong>ids</strong>, and <strong>paths</strong>. Knowing the differences between these
+three categories is critical for using Chill effectively.</p>
+
+<ul>
+<li><p>A <strong>name</strong> is a single URL path segment for a resource. For example, given
+the URL path <code>/foo/_design/bar/_view/qux</code> for a view, <code>foo</code> is the
+<strong>database name</strong>, <code>bar</code> is the <strong>document name</strong>, and <code>qux</code> is the
+<strong>view name</strong>.</p></li>
+<li><p>An <strong>id</strong> uniquely describes a resource within a given database. For
+example, given the URL path <code>/foo/_design/bar/_view/qux</code> for a view,
+<code>_design/bar</code> is the <strong>document id</strong> and <code>bar/qux</code> is the <strong>view id</strong>. A
+document id combines a document type (i.e., <em>normal</em>, <em>design</em>, or
+<em>local</em>) with a document name, and a view id combines a (design) document
+name with a view name.</p></li>
+<li><p>A <strong>path</strong> specifies the full path of a resource. For example, the URL
+path <code>/foo/_design/bar/_view/qux</code> is a <strong>view path</strong>.</p></li>
+</ul>
+
+<p>Each name, id, and path is further divided into an owning type and a
+borrowing type.</p>
+
+<h1 id='owning-vs-borrowing-types' class='section-header'><a href='#owning-vs-borrowing-types'>Owning vs borrowing types</a></h1>
+<p>For each name, id, and path, Chill provides an <strong>owning type</strong> and a
+<strong>borrowing type</strong>. This distinction is similar to the <code>PathBuf</code> and <code>Path</code>
+types in the Rust standard library. However, in Chill, the borrowing types
+end with a -<code>Ref</code> suffix (e.g., <code>DatabaseNameRef</code>, <code>DocumentPathRef</code>), and
+the owning types lack a suffix (e.g., <code>DatabaseName</code> and <code>DocumentPath</code>).</p>
+
+<pre class='rust rust-example-rendered'>
+<span class='kw'>use</span> <span class='ident'>chill</span>::<span class='op'>*</span>;
+
+<span class='comment'>// Statically allocated:</span>
+<span class='kw'>let</span> <span class='ident'>borrowing</span> <span class='op'>=</span> <span class='ident'>DatabaseNameRef</span>::<span class='ident'>from</span>(<span class='string'>&quot;foo&quot;</span>);
+<span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='string'>&quot;foo&quot;</span>, <span class='ident'>borrowing</span>.<span class='ident'>to_string</span>());
+
+<span class='comment'>// Heap-allocated copy of `borrowing`:</span>
+<span class='kw'>let</span> <span class='ident'>owning</span> <span class='op'>=</span> <span class='ident'>DatabaseName</span>::<span class='ident'>from</span>(<span class='ident'>borrowing</span>);
+<span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='string'>&quot;foo&quot;</span>, <span class='ident'>owning</span>.<span class='ident'>to_string</span>());
+
+<span class='comment'>// Borrowed from the heap, with a lifetime equivalent to `owning`:</span>
+<span class='kw'>let</span> <span class='ident'>also_borrowing</span> <span class='op'>=</span> <span class='ident'>DatabaseNameRef</span>::<span class='ident'>from</span>(<span class='kw-2'>&amp;</span><span class='ident'>owning</span>);
+<span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='string'>&quot;foo&quot;</span>, <span class='ident'>also_borrowing</span>.<span class='ident'>to_string</span>());</pre>
+
+<p>Another difference between Chill&#39;s borrowing types and the <code>Path</code> type in
+the Standard Library is that Chill&#39;s borrowing types are <em>sized types</em>. This
+means they don&#39;t need to be used behind a pointer such as <code>&amp;</code> or <code>Box</code>.
+However, because they implement <code>Copy</code> and have borrowing semantics, in many
+ways they act like references. Consult the types&#39; individual documentation
+for details.</p>
+
+<p>By providing owning and borrowing types, Chill allows applications to
+eliminate heap allocations in many cases. Most methods in Chill that have a
+name, id, or path parameter use the borrowing type for that parameter,
+meaning no allocation is necessary. Conversion traits make this happen
+conveniently.</p>
+
+<h1 id='conversion-traits' class='section-header'><a href='#conversion-traits'>Conversion traits</a></h1>
+<p>The basic conversion traits are <code>From</code> and <code>Into</code> in the Standard Library.
+Names and ids—regardless whether they&#39;re owning or borrowing—implement
+<code>From</code> liberally, whereas paths implement <code>From</code> conservatively. Each path
+provides a custom conversion trait because path-parsing is fallible and may
+return a parse error.</p>
+
+<p>Here are some examples:</p>
+
+<pre class='rust rust-example-rendered'>
+<span class='kw'>use</span> <span class='ident'>chill</span>::<span class='op'>*</span>;
+
+<span class='comment'>// Construct a name or id from a &amp;str:</span>
+<span class='kw'>let</span> <span class='ident'>db_name</span> <span class='op'>=</span> <span class='ident'>DatabaseNameRef</span>::<span class='ident'>from</span>(<span class='string'>&quot;foo&quot;</span>);
+<span class='kw'>let</span> <span class='ident'>db_name</span> <span class='op'>=</span> <span class='ident'>DatabaseName</span>::<span class='ident'>from</span>(<span class='string'>&quot;foo&quot;</span>);
+<span class='kw'>let</span> <span class='ident'>doc_id</span> <span class='op'>=</span> <span class='ident'>DocumentIdRef</span>::<span class='ident'>from</span>(<span class='string'>&quot;_design/bar&quot;</span>);
+<span class='kw'>let</span> <span class='ident'>doc_id</span> <span class='op'>=</span> <span class='ident'>DocumentId</span>::<span class='ident'>from</span>(<span class='string'>&quot;_design/bar&quot;</span>);
+
+<span class='comment'>// Construct an owning name or id by moving a String into it:</span>
+<span class='kw'>let</span> <span class='ident'>db_name</span> <span class='op'>=</span> <span class='ident'>DatabaseName</span>::<span class='ident'>from</span>(<span class='ident'>String</span>::<span class='ident'>from</span>(<span class='string'>&quot;foo&quot;</span>));
+<span class='kw'>let</span> <span class='ident'>doc_id</span> <span class='op'>=</span> <span class='ident'>DocumentId</span>::<span class='ident'>from</span>(<span class='ident'>String</span>::<span class='ident'>from</span>(<span class='string'>&quot;_design/bar&quot;</span>));
+
+<span class='comment'>// Convert between owning and borrowing types:</span>
+<span class='kw'>let</span> <span class='ident'>a</span> <span class='op'>=</span> <span class='ident'>DatabaseNameRef</span>::<span class='ident'>from</span>(<span class='string'>&quot;foo&quot;</span>); <span class='comment'>// does not allocate</span>
+<span class='kw'>let</span> <span class='ident'>b</span> <span class='op'>=</span> <span class='ident'>DatabaseName</span>::<span class='ident'>from</span>(<span class='ident'>a</span>);        <span class='comment'>// allocates on the heap</span>
+<span class='kw'>let</span> <span class='ident'>c</span> <span class='op'>=</span> <span class='ident'>DatabaseNameRef</span>::<span class='ident'>from</span>(<span class='kw-2'>&amp;</span><span class='ident'>b</span>);    <span class='comment'>// does not allocate</span>
+
+<span class='comment'>// Document names are split into three subtypes: normal, design, and local.</span>
+<span class='kw'>let</span> <span class='ident'>normal</span> <span class='op'>=</span> <span class='ident'>NormalDocumentNameRef</span>::<span class='ident'>from</span>(<span class='string'>&quot;foo&quot;</span>);
+<span class='kw'>let</span> <span class='ident'>design</span> <span class='op'>=</span> <span class='ident'>DesignDocumentNameRef</span>::<span class='ident'>from</span>(<span class='string'>&quot;foo&quot;</span>);
+<span class='kw'>let</span> <span class='ident'>local</span> <span class='op'>=</span> <span class='ident'>LocalDocumentNameRef</span>::<span class='ident'>from</span>(<span class='string'>&quot;foo&quot;</span>);
+
+<span class='comment'>// Take advantage of the document subtypes to enforce the correct //</span>
+<span class='comment'>// path-segment prefix (with zero heap allocations!):</span>
+<span class='kw'>let</span> <span class='ident'>doc_id</span> <span class='op'>=</span> <span class='ident'>DocumentIdRef</span>::<span class='ident'>from</span>(<span class='ident'>normal</span>);
+<span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='string'>&quot;foo&quot;</span>, <span class='ident'>doc_id</span>.<span class='ident'>to_string</span>());
+<span class='kw'>let</span> <span class='ident'>doc_id</span> <span class='op'>=</span> <span class='ident'>DocumentIdRef</span>::<span class='ident'>from</span>(<span class='ident'>design</span>);
+<span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='string'>&quot;_design/foo&quot;</span>, <span class='ident'>doc_id</span>.<span class='ident'>to_string</span>());
+<span class='kw'>let</span> <span class='ident'>doc_id</span> <span class='op'>=</span> <span class='ident'>DocumentIdRef</span>::<span class='ident'>from</span>(<span class='ident'>local</span>);
+<span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='string'>&quot;_local/foo&quot;</span>, <span class='ident'>doc_id</span>.<span class='ident'>to_string</span>());
+
+<span class='comment'>// Paths may be converted from a string literal and must begin with a slash.</span>
+<span class='kw'>let</span> <span class='ident'>db_path</span> <span class='op'>=</span> <span class='string'>&quot;/foo&quot;</span>.<span class='ident'>into_database_path</span>().<span class='ident'>unwrap</span>();
+<span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='string'>&quot;foo&quot;</span>, <span class='ident'>db_path</span>.<span class='ident'>database_name</span>().<span class='ident'>to_string</span>());
+<span class='kw'>let</span> <span class='ident'>doc_path</span> <span class='op'>=</span> <span class='string'>&quot;/foo/_design/bar&quot;</span>.<span class='ident'>into_document_path</span>().<span class='ident'>unwrap</span>();
+<span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='string'>&quot;foo&quot;</span>, <span class='ident'>doc_path</span>.<span class='ident'>database_name</span>().<span class='ident'>to_string</span>());
+<span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='string'>&quot;_design/bar&quot;</span>, <span class='ident'>doc_path</span>.<span class='ident'>document_id</span>().<span class='ident'>to_string</span>());
+
+<span class='comment'>// Path conversions may fail:</span>
+<span class='string'>&quot;foo&quot;</span>.<span class='ident'>into_database_path</span>().<span class='ident'>unwrap_err</span>();      <span class='comment'>// no leading slash</span>
+<span class='string'>&quot;/foo/bar&quot;</span>.<span class='ident'>into_database_path</span>().<span class='ident'>unwrap_err</span>(); <span class='comment'>// too many segments</span>
+<span class='string'>&quot;/foo&quot;</span>.<span class='ident'>into_document_path</span>().<span class='ident'>unwrap_err</span>();     <span class='comment'>// too few segments</span></pre>
+
+<p>Path conversions are special and deserve their own attention.</p>
+
+<h1 id='path-conversions' class='section-header'><a href='#path-conversions'>Path conversions</a></h1>
+<p>Unlike with names and ids, an application may construct a path from a static
+string but not from a runtime string. Instead, each path type provides a
+custom conversion trait (e.g., <code>IntoDocumentPath</code>) that allows the
+application to construct a path from constituent parts.</p>
+
+<pre class='rust rust-example-rendered'>
+<span class='kw'>use</span> <span class='ident'>chill</span>::<span class='op'>*</span>;
+
+<span class='comment'>// From a static string:</span>
+<span class='kw'>let</span> <span class='ident'>source</span> <span class='op'>=</span> <span class='string'>&quot;/foo/_design/bar&quot;</span>;
+<span class='kw'>let</span> <span class='ident'>doc_path</span> <span class='op'>=</span> <span class='ident'>source</span>.<span class='ident'>into_document_path</span>().<span class='ident'>unwrap</span>();
+<span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='string'>&quot;foo&quot;</span>, <span class='ident'>doc_path</span>.<span class='ident'>database_name</span>().<span class='ident'>to_string</span>());
+<span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='string'>&quot;_design/bar&quot;</span>, <span class='ident'>doc_path</span>.<span class='ident'>document_id</span>().<span class='ident'>to_string</span>());
+
+<span class='comment'>// From constituent parts:</span>
+<span class='kw'>let</span> <span class='ident'>source</span> <span class='op'>=</span> (<span class='ident'>DatabaseNameRef</span>::<span class='ident'>from</span>(<span class='string'>&quot;foo&quot;</span>),
+              <span class='ident'>DesignDocumentNameRef</span>::<span class='ident'>from</span>(<span class='string'>&quot;bar&quot;</span>));
+<span class='kw'>let</span> <span class='ident'>doc_path</span> <span class='op'>=</span> <span class='ident'>source</span>.<span class='ident'>into_document_path</span>().<span class='ident'>unwrap</span>();
+<span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='string'>&quot;foo&quot;</span>, <span class='ident'>doc_path</span>.<span class='ident'>database_name</span>().<span class='ident'>to_string</span>());
+<span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='string'>&quot;_design/bar&quot;</span>, <span class='ident'>doc_path</span>.<span class='ident'>document_id</span>().<span class='ident'>to_string</span>());
+
+<span class='comment'>// From constituent parts, which can be strings:</span>
+<span class='kw'>let</span> <span class='ident'>source</span> <span class='op'>=</span> (<span class='string'>&quot;/foo&quot;</span>, <span class='string'>&quot;_design/bar&quot;</span>);
+<span class='kw'>let</span> <span class='ident'>doc_path</span> <span class='op'>=</span> <span class='ident'>source</span>.<span class='ident'>into_document_path</span>().<span class='ident'>unwrap</span>();
+<span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='string'>&quot;foo&quot;</span>, <span class='ident'>doc_path</span>.<span class='ident'>database_name</span>().<span class='ident'>to_string</span>());
+<span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='string'>&quot;_design/bar&quot;</span>, <span class='ident'>doc_path</span>.<span class='ident'>document_id</span>().<span class='ident'>to_string</span>());</pre>
+
+<p>The idea here is that Chill prevents the application from concatenating URL
+path segments to form a path. This eliminates corner cases related to
+percent-encoding. Consider this example:</p>
+
+<pre class='rust rust-example-rendered'>
+<span class='kw'>use</span> <span class='ident'>chill</span>::<span class='op'>*</span>;
+
+<span class='kw'>let</span> <span class='ident'>source</span> <span class='op'>=</span> (<span class='string'>&quot;/foo&quot;</span>, <span class='string'>&quot;bar/qux&quot;</span>);
+<span class='kw'>let</span> <span class='ident'>db_path</span> <span class='op'>=</span> <span class='ident'>source</span>.<span class='ident'>into_document_path</span>().<span class='ident'>unwrap</span>();
+
+<span class='comment'>// URI path: /foo/bar%2Fqux</span></pre>
+
+<p>CouchDB allows <code>/</code> as a valid character in a document name, though it must
+be percent-encoded as <code>%2F</code> when serialized in the request line of an HTTP
+request.</p>
+
+<p>By forcing the application to construct the path from constituent parts,
+Chill guarantees that percent-encoding is correct. But what happens when
+parsing a static string?</p>
+
+<pre class='rust rust-example-rendered'>
+<span class='kw'>use</span> <span class='ident'>chill</span>::<span class='op'>*</span>;
+
+<span class='kw'>let</span> <span class='ident'>source</span> <span class='op'>=</span> <span class='string'>&quot;/foo/bar%2Fqux&quot;</span>;
+<span class='kw'>let</span> <span class='ident'>db_path</span> <span class='op'>=</span> <span class='ident'>source</span>.<span class='ident'>into_document_path</span>().<span class='ident'>unwrap</span>();
+
+<span class='comment'>// URI path: /foo/bar%252Fqux</span></pre>
+
+<p>The program compiles but doesn&#39;t do what&#39;s expected. Instead, it
+percent-encodes the <code>%</code> character (as <code>%25</code>) because <code>%</code> is also a valid
+character for document names and Chill has no way to disambiguate.</p>
+
+<p>Chill could make static-string-conversions illegal and eliminate this corner
+case, but Chill&#39;s API would be less ergonomic. This is a case where
+convenience trumps type-safety. Instead, the application programmer must
+abide this one simple rule:</p>
+
+<blockquote>
+<p><strong>The application never observes a percent-encoded character.</strong></p>
+</blockquote>
+
+<p>If the programmer had followed this rule then they wouldn&#39;t have tried to
+manually percent-encode the path. But what if they tried this:</p>
+
+<pre class='rust rust-example-rendered'>
+<span class='kw'>use</span> <span class='ident'>chill</span>::<span class='op'>*</span>;
+
+<span class='kw'>let</span> <span class='ident'>source</span> <span class='op'>=</span> <span class='string'>&quot;/foo/bar/qux&quot;</span>;
+<span class='kw'>let</span> <span class='ident'>db_path</span> <span class='op'>=</span> <span class='ident'>source</span>.<span class='ident'>into_document_path</span>().<span class='ident'>unwrap</span>(); <span class='comment'>// Panics!</span></pre>
+
+<p>The string <code>&quot;/foo/bar/qux&quot;</code> is an invalid document path because it contains
+too many path segments. It turns out some paths cannot be expressed as
+static strings and must instead be constructed from constituent parts.
+However, such cases are rare.</p>
+
+<h1 id='invalid-names-ids-and-paths' class='section-header'><a href='#invalid-names-ids-and-paths'>Invalid names, ids, and paths</a></h1>
+<p>CouchDB imposes many restrictions on resource names, and though Chill
+catches some parse errors when constructing paths, Chill doesn&#39;t enforce
+<em>validity</em>. For example, CouchDB requires all database names to begin with a
+letter, but Chill will allow the following:</p>
+
+<pre class='rust rust-example-rendered'>
+<span class='kw'>use</span> <span class='ident'>chill</span>::<span class='op'>*</span>;
+<span class='kw'>let</span> <span class='ident'>db_name</span> <span class='op'>=</span> <span class='ident'>DatabaseNameRef</span>::<span class='ident'>from</span>(<span class='string'>&quot;_not_a_valid_name&quot;</span>);</pre>
+
+<p>This compiles, but if the application uses the database name in a CouchDB
+action, then it will receive an error from the server.</p>
+
+<p>This is true for all names, ids, and paths. The rationale is that the
+CouchDB server is the source of truth for validity, and Chill makes no
+attempt to duplicate this functionality.</p>
+
+<p>It&#39;s also possible to do something like this:</p>
+
+<pre class='rust rust-example-rendered'>
+<span class='kw'>use</span> <span class='ident'>chill</span>::<span class='op'>*</span>;
+<span class='kw'>let</span> <span class='ident'>source</span> <span class='op'>=</span> (<span class='string'>&quot;/foo&quot;</span>, <span class='ident'>NormalDocumentNameRef</span>::<span class='ident'>from</span>(<span class='string'>&quot;_design/bar&quot;</span>));
+<span class='kw'>let</span> <span class='ident'>doc_path</span> <span class='op'>=</span> <span class='ident'>source</span>.<span class='ident'>into_document_path</span>().<span class='ident'>unwrap</span>();
+
+<span class='comment'>// URI path: /foo/_design%2Fbar</span></pre>
+
+<p>In this example, the application may have intended to construct a path for a
+normal document, but Chill unambiguously constructed a path for a design
+document. This is a loophole in the Chill type system and further shows how
+Chill allows convenience to trump type-safety in some cases. Application
+programmers should be mindful when converting from raw strings.</p>
+</div><h2 id='structs' class='section-header'><a href="#structs">Structs</a></h2>
+<table>
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.AttachmentName.html'
+                               title='chill::path::AttachmentName'>AttachmentName</a></td>
+                        <td class='docblock short'>
+                             <p>A heap-allocated
+attachment 
+name, owned and managed internally.</p>
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.AttachmentNameRef.html'
+                               title='chill::path::AttachmentNameRef'>AttachmentNameRef</a></td>
+                        <td class='docblock short'>
+                             <p>A reference to a
+attachment 
+name, owned elsewhere.</p>
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.AttachmentPath.html'
+                               title='chill::path::AttachmentPath'>AttachmentPath</a></td>
+                        <td class='docblock short'>
+                             
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.AttachmentPathRef.html'
+                               title='chill::path::AttachmentPathRef'>AttachmentPathRef</a></td>
+                        <td class='docblock short'>
+                             
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.DatabaseName.html'
+                               title='chill::path::DatabaseName'>DatabaseName</a></td>
+                        <td class='docblock short'>
+                             <p>A heap-allocated
+database 
+name, owned and managed internally.</p>
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.DatabaseNameRef.html'
+                               title='chill::path::DatabaseNameRef'>DatabaseNameRef</a></td>
+                        <td class='docblock short'>
+                             <p>A reference to a
+database 
+name, owned elsewhere.</p>
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.DatabasePath.html'
+                               title='chill::path::DatabasePath'>DatabasePath</a></td>
+                        <td class='docblock short'>
+                             
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.DatabasePathRef.html'
+                               title='chill::path::DatabasePathRef'>DatabasePathRef</a></td>
+                        <td class='docblock short'>
+                             
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.DesignDocumentName.html'
+                               title='chill::path::DesignDocumentName'>DesignDocumentName</a></td>
+                        <td class='docblock short'>
+                             <p>A heap-allocated
+design document 
+name, owned and managed internally.</p>
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.DesignDocumentNameRef.html'
+                               title='chill::path::DesignDocumentNameRef'>DesignDocumentNameRef</a></td>
+                        <td class='docblock short'>
+                             <p>A reference to a
+design document 
+name, owned elsewhere.</p>
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.DesignDocumentPath.html'
+                               title='chill::path::DesignDocumentPath'>DesignDocumentPath</a></td>
+                        <td class='docblock short'>
+                             
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.DesignDocumentPathRef.html'
+                               title='chill::path::DesignDocumentPathRef'>DesignDocumentPathRef</a></td>
+                        <td class='docblock short'>
+                             
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.DocumentPath.html'
+                               title='chill::path::DocumentPath'>DocumentPath</a></td>
+                        <td class='docblock short'>
+                             
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.DocumentPathRef.html'
+                               title='chill::path::DocumentPathRef'>DocumentPathRef</a></td>
+                        <td class='docblock short'>
+                             
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.LocalDocumentName.html'
+                               title='chill::path::LocalDocumentName'>LocalDocumentName</a></td>
+                        <td class='docblock short'>
+                             <p>A heap-allocated
+local document 
+name, owned and managed internally.</p>
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.LocalDocumentNameRef.html'
+                               title='chill::path::LocalDocumentNameRef'>LocalDocumentNameRef</a></td>
+                        <td class='docblock short'>
+                             <p>A reference to a
+local document 
+name, owned elsewhere.</p>
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.NormalDocumentName.html'
+                               title='chill::path::NormalDocumentName'>NormalDocumentName</a></td>
+                        <td class='docblock short'>
+                             <p>A heap-allocated
+normal document 
+name, owned and managed internally.</p>
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.NormalDocumentNameRef.html'
+                               title='chill::path::NormalDocumentNameRef'>NormalDocumentNameRef</a></td>
+                        <td class='docblock short'>
+                             <p>A reference to a
+normal document 
+name, owned elsewhere.</p>
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.ViewName.html'
+                               title='chill::path::ViewName'>ViewName</a></td>
+                        <td class='docblock short'>
+                             <p>A heap-allocated
+view 
+name, owned and managed internally.</p>
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.ViewNameRef.html'
+                               title='chill::path::ViewNameRef'>ViewNameRef</a></td>
+                        <td class='docblock short'>
+                             <p>A reference to a
+view 
+name, owned elsewhere.</p>
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.ViewPath.html'
+                               title='chill::path::ViewPath'>ViewPath</a></td>
+                        <td class='docblock short'>
+                             
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.ViewPathRef.html'
+                               title='chill::path::ViewPathRef'>ViewPathRef</a></td>
+                        <td class='docblock short'>
+                             
+                        </td>
+                    </tr>
+                </table><h2 id='enums' class='section-header'><a href="#enums">Enums</a></h2>
+<table>
+                    <tr class=' module-item'>
+                        <td><a class='enum' href='enum.DocumentId.html'
+                               title='chill::path::DocumentId'>DocumentId</a></td>
+                        <td class='docblock short'>
+                             
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='enum' href='enum.DocumentIdRef.html'
+                               title='chill::path::DocumentIdRef'>DocumentIdRef</a></td>
+                        <td class='docblock short'>
+                             
+                        </td>
+                    </tr>
+                </table><h2 id='constants' class='section-header'><a href="#constants">Constants</a></h2>
+<table>
+                    <tr class=' module-item'>
+                        <td><a class='constant' href='constant.DESIGN_PREFIX.html'
+                               title='chill::path::DESIGN_PREFIX'>DESIGN_PREFIX</a></td>
+                        <td class='docblock short'>
+                             
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='constant' href='constant.LOCAL_PREFIX.html'
+                               title='chill::path::LOCAL_PREFIX'>LOCAL_PREFIX</a></td>
+                        <td class='docblock short'>
+                             
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='constant' href='constant.VIEW_PREFIX.html'
+                               title='chill::path::VIEW_PREFIX'>VIEW_PREFIX</a></td>
+                        <td class='docblock short'>
+                             
+                        </td>
+                    </tr>
+                </table><h2 id='traits' class='section-header'><a href="#traits">Traits</a></h2>
+<table>
+                    <tr class=' module-item'>
+                        <td><a class='trait' href='trait.IntoAttachmentPath.html'
+                               title='chill::path::IntoAttachmentPath'>IntoAttachmentPath</a></td>
+                        <td class='docblock short'>
+                             
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='trait' href='trait.IntoDatabasePath.html'
+                               title='chill::path::IntoDatabasePath'>IntoDatabasePath</a></td>
+                        <td class='docblock short'>
+                             
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='trait' href='trait.IntoDesignDocumentPath.html'
+                               title='chill::path::IntoDesignDocumentPath'>IntoDesignDocumentPath</a></td>
+                        <td class='docblock short'>
+                             
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='trait' href='trait.IntoDocumentPath.html'
+                               title='chill::path::IntoDocumentPath'>IntoDocumentPath</a></td>
+                        <td class='docblock short'>
+                             
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='trait' href='trait.IntoViewPath.html'
+                               title='chill::path::IntoViewPath'>IntoViewPath</a></td>
+                        <td class='docblock short'>
+                             
+                        </td>
+                    </tr>
+                </table></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <aside id="help" class="hidden">
+        <div>
+            <h1 class="hidden">Help</h1>
+
+            <div class="shortcuts">
+                <h2>Keyboard Shortcuts</h2>
+
+                <dl>
+                    <dt>?</dt>
+                    <dd>Show this help dialog</dd>
+                    <dt>S</dt>
+                    <dd>Focus the search field</dd>
+                    <dt>&larrb;</dt>
+                    <dd>Move up in search results</dd>
+                    <dt>&rarrb;</dt>
+                    <dd>Move down in search results</dd>
+                    <dt>&#9166;</dt>
+                    <dd>Go to active search result</dd>
+                </dl>
+            </div>
+
+            <div class="infos">
+                <h2>Search Tricks</h2>
+
+                <p>
+                    Prefix searches with a type followed by a colon (e.g.
+                    <code>fn:</code>) to restrict the search to a given type.
+                </p>
+
+                <p>
+                    Accepted types are: <code>fn</code>, <code>mod</code>,
+                    <code>struct</code>, <code>enum</code>,
+                    <code>trait</code>, <code>type</code>, <code>macro</code>,
+                    and <code>const</code>.
+                </p>
+
+                <p>
+                    Search functions by type signature (e.g.
+                    <code>vec -> usize</code> or <code>* -> vec</code>)
+                </p>
+            </div>
+        </div>
+    </aside>
+
+    
+
+    <script>
+        window.rootPath = "../../";
+        window.currentCrate = "chill";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../../jquery.js"></script>
+    <script src="../../main.js"></script>
+    
+    <script defer src="../../search-index.js"></script>
+</body>
+</html>

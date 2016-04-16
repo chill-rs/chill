@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `ViewResponseBuilder` struct in crate `chill`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, ViewResponseBuilder">
+
+    <title>chill::testing::ViewResponseBuilder - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../../rustdoc.css">
+    <link rel="stylesheet" type="text/css" href="../../main.css">
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <nav class="sidebar">
+        
+        <p class='location'><a href='../index.html'>chill</a>::<wbr><a href='index.html'>testing</a></p><script>window.sidebarCurrent = {name: 'ViewResponseBuilder', ty: 'struct', relpath: ''};</script><script defer src="sidebar-items.js"></script>
+    </nav>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press ‘S’ to search, ‘?’ for more options…"
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content struct">
+<h1 class='fqn'><span class='in-band'>Struct <a href='../index.html'>chill</a>::<wbr><a href='index.html'>testing</a>::<wbr><a class='struct' href=''>ViewResponseBuilder</a></span><span class='out-of-band'><span id='render-detail'>
+            <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                [<span class='inner'>&#x2212;</span>]
+            </a>
+        </span><a id='src-2577' class='srclink' href='../../src/chill/src/view.rs.html#686-690' title='goto source code'>[src]</a></span></h1>
+<pre class='rust struct'>pub struct ViewResponseBuilder&lt;K: <a class='trait' href='https://serde-rs.github.io/serde/serde/serde/de/trait.Deserialize.html' title='serde::de::Deserialize'>Deserialize</a>, V: <a class='trait' href='https://serde-rs.github.io/serde/serde/serde/de/trait.Deserialize.html' title='serde::de::Deserialize'>Deserialize</a>, M&gt; {
+    // some fields omitted
+}</pre><div class='docblock'><p>Builds a view response.</p>
+
+<p>A <code>ViewResponseBuilder</code> constructs a view response as though the response
+originated from a CouchDB Server. This allows an application to mock a view
+response without using a production database.</p>
+
+<h1 id='examples' class='section-header'><a href='#examples'>Examples</a></h1>
+<p>One point of inconvenience when using a <code>ViewResponseBuilder</code> is that type
+inference doesn&#39;t work when building an unreduced view response, so
+applications should use the turbofish (<code>::&lt;Key, Value, _&gt;</code>) to specify the
+key and value types, like so:</p>
+
+<pre class='rust rust-example-rendered'>
+<span class='kw'>use</span> <span class='ident'>chill</span>::<span class='ident'>testing</span>::<span class='ident'>ViewResponseBuilder</span>;
+
+<span class='ident'>ViewResponseBuilder</span>::<span class='op'>&lt;</span><span class='ident'>String</span>, <span class='ident'>i32</span>, _<span class='op'>&gt;</span>::<span class='ident'>new_unreduced</span>(<span class='number'>123</span>,       <span class='comment'>// `total_rows`</span>
+                                                     <span class='number'>0</span>,         <span class='comment'>// `offset`</span>
+                                                     <span class='string'>&quot;baseball&quot;</span> <span class='comment'>// database name</span>
+                                                    )
+    .<span class='ident'>with_row</span>(<span class='string'>&quot;Hammerin&#39; Hank&quot;</span>, <span class='number'>755</span>, <span class='string'>&quot;hank_aaron_doc_id&quot;</span>)
+    .<span class='ident'>with_row</span>(<span class='string'>&quot;The Bambino&quot;</span>, <span class='number'>714</span>, <span class='string'>&quot;babe_ruth_doc_id&quot;</span>)
+    .<span class='ident'>unwrap</span>();</pre>
+
+<p>Reduced views are easier because type inference <em>does</em> work.</p>
+
+<pre class='rust rust-example-rendered'>
+<span class='kw'>use</span> <span class='ident'>chill</span>::<span class='ident'>testing</span>::<span class='ident'>ViewResponseBuilder</span>;
+
+<span class='comment'>// The view response key is inferred as () because reduced views have no</span>
+<span class='comment'>// key.</span>
+<span class='ident'>ViewResponseBuilder</span>::<span class='ident'>new_reduced</span>(<span class='number'>1469</span>).<span class='ident'>unwrap</span>();</pre>
+</div><h2 id='methods'>Methods</h2><h3 class='impl'><code>impl&lt;V: <a class='trait' href='https://serde-rs.github.io/serde/serde/serde/de/trait.Deserialize.html' title='serde::de::Deserialize'>Deserialize</a>&gt; <a class='struct' href='../../chill/testing/struct.ViewResponseBuilder.html' title='chill::testing::ViewResponseBuilder'>ViewResponseBuilder</a>&lt;<a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.tuple.html'>()</a>, V, <a class='struct' href='../../chill/testing/struct.ViewIsReduced.html' title='chill::testing::ViewIsReduced'>ViewIsReduced</a>&gt;</code></h3><div class='impl-items'><h4 id='method.new_reduced' class='method'><code>fn <a href='#method.new_reduced' class='fnname'>new_reduced</a>(value: V) -&gt; Self</code></h4>
+<div class='docblock'><p>Constructs a reduced view response.</p>
+</div><h4 id='method.with_update_sequence_number' class='method'><code>fn <a href='#method.with_update_sequence_number' class='fnname'>with_update_sequence_number</a>(self, update_seq: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.u64.html'>u64</a>) -&gt; Self</code></h4>
+<div class='docblock'><p>Sets the update sequence number for the view response.</p>
+
+<p>The <strong>update sequence number</strong> corresponds to the <code>update_seq</code> field in
+the view response. By default, its value is <code>None</code>.</p>
+</div><h4 id='method.unwrap' class='method'><code>fn <a href='#method.unwrap' class='fnname'>unwrap</a>(self) -&gt; <a class='enum' href='../../chill/enum.ViewResponse.html' title='chill::ViewResponse'>ViewResponse</a>&lt;<a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.tuple.html'>()</a>, V&gt;</code></h4>
+<div class='docblock'><p>Returns the builder&#39;s view response.</p>
+</div></div><h3 class='impl'><code>impl&lt;K: <a class='trait' href='https://serde-rs.github.io/serde/serde/serde/de/trait.Deserialize.html' title='serde::de::Deserialize'>Deserialize</a>, V: <a class='trait' href='https://serde-rs.github.io/serde/serde/serde/de/trait.Deserialize.html' title='serde::de::Deserialize'>Deserialize</a>&gt; <a class='struct' href='../../chill/testing/struct.ViewResponseBuilder.html' title='chill::testing::ViewResponseBuilder'>ViewResponseBuilder</a>&lt;K, V, <a class='struct' href='../../chill/testing/struct.ViewIsUnreduced.html' title='chill::testing::ViewIsUnreduced'>ViewIsUnreduced</a>&gt;</code></h3><div class='impl-items'><h4 id='method.new_unreduced' class='method'><code>fn <a href='#method.new_unreduced' class='fnname'>new_unreduced</a>&lt;D: <a class='trait' href='https://doc.rust-lang.org/nightly/core/convert/trait.Into.html' title='core::convert::Into'>Into</a>&lt;<a class='struct' href='../../chill/path/struct.DatabaseName.html' title='chill::path::DatabaseName'>DatabaseName</a>&gt;&gt;(total_rows: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.u64.html'>u64</a>, offset: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.u64.html'>u64</a>, db_name: D) -&gt; Self</code></h4>
+<div class='docblock'><p>Constructs an unreduced view response.</p>
+
+<p>Any rows added via the <code>with_row</code> method will use the given database
+name as part of their document path.</p>
+</div><h4 id='method.with_row' class='method'><code>fn <a href='#method.with_row' class='fnname'>with_row</a>&lt;D, IntoK, IntoV&gt;(self, key: IntoK, value: IntoV, doc_id: D) -&gt; Self <span class='where'>where D: <a class='trait' href='https://doc.rust-lang.org/nightly/core/convert/trait.Into.html' title='core::convert::Into'>Into</a>&lt;<a class='enum' href='../../chill/path/enum.DocumentId.html' title='chill::path::DocumentId'>DocumentId</a>&gt;, IntoK: <a class='trait' href='https://doc.rust-lang.org/nightly/core/convert/trait.Into.html' title='core::convert::Into'>Into</a>&lt;K&gt;, IntoV: <a class='trait' href='https://doc.rust-lang.org/nightly/core/convert/trait.Into.html' title='core::convert::Into'>Into</a>&lt;V&gt;</span></code></h4>
+<div class='docblock'><p>Appends a new row into the view response.</p>
+</div><h4 id='method.with_update_sequence_number-1' class='method'><code>fn <a href='#method.with_update_sequence_number' class='fnname'>with_update_sequence_number</a>(self, update_seq: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.u64.html'>u64</a>) -&gt; Self</code></h4>
+<div class='docblock'><p>Sets the update sequence number for the view response.</p>
+
+<p>The <strong>update sequence number</strong> corresponds to the <code>update_seq</code> field in
+the view response. By default, its value is <code>None</code>.</p>
+</div><h4 id='method.unwrap-1' class='method'><code>fn <a href='#method.unwrap' class='fnname'>unwrap</a>(self) -&gt; <a class='enum' href='../../chill/enum.ViewResponse.html' title='chill::ViewResponse'>ViewResponse</a>&lt;K, V&gt;</code></h4>
+<div class='docblock'><p>Returns the builder&#39;s view response.</p>
+</div></div><h2 id='implementations'>Trait Implementations</h2><h3 id='derived_implementations'>Derived Implementations </h3><h3 class='impl'><code>impl&lt;K: <a class='trait' href='https://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html' title='core::fmt::Debug'>Debug</a> + <a class='trait' href='https://serde-rs.github.io/serde/serde/serde/de/trait.Deserialize.html' title='serde::de::Deserialize'>Deserialize</a>, V: <a class='trait' href='https://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html' title='core::fmt::Debug'>Debug</a> + <a class='trait' href='https://serde-rs.github.io/serde/serde/serde/de/trait.Deserialize.html' title='serde::de::Deserialize'>Deserialize</a>, M: <a class='trait' href='https://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html' title='core::fmt::Debug'>Debug</a>&gt; <a class='trait' href='https://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html' title='core::fmt::Debug'>Debug</a> for <a class='struct' href='../../chill/testing/struct.ViewResponseBuilder.html' title='chill::testing::ViewResponseBuilder'>ViewResponseBuilder</a>&lt;K, V, M&gt;</code></h3><div class='impl-items'><h4 id='method.fmt' class='method'><code>fn <a href='https://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html#method.fmt' class='fnname'>fmt</a>(&amp;self, __arg_0: &amp;mut <a class='struct' href='https://doc.rust-lang.org/nightly/core/fmt/struct.Formatter.html' title='core::fmt::Formatter'>Formatter</a>) -&gt; <a class='type' href='https://doc.rust-lang.org/nightly/core/fmt/type.Result.html' title='core::fmt::Result'>Result</a></code></h4>
+</div></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <aside id="help" class="hidden">
+        <div>
+            <h1 class="hidden">Help</h1>
+
+            <div class="shortcuts">
+                <h2>Keyboard Shortcuts</h2>
+
+                <dl>
+                    <dt>?</dt>
+                    <dd>Show this help dialog</dd>
+                    <dt>S</dt>
+                    <dd>Focus the search field</dd>
+                    <dt>&larrb;</dt>
+                    <dd>Move up in search results</dd>
+                    <dt>&rarrb;</dt>
+                    <dd>Move down in search results</dd>
+                    <dt>&#9166;</dt>
+                    <dd>Go to active search result</dd>
+                </dl>
+            </div>
+
+            <div class="infos">
+                <h2>Search Tricks</h2>
+
+                <p>
+                    Prefix searches with a type followed by a colon (e.g.
+                    <code>fn:</code>) to restrict the search to a given type.
+                </p>
+
+                <p>
+                    Accepted types are: <code>fn</code>, <code>mod</code>,
+                    <code>struct</code>, <code>enum</code>,
+                    <code>trait</code>, <code>type</code>, <code>macro</code>,
+                    and <code>const</code>.
+                </p>
+
+                <p>
+                    Search functions by type signature (e.g.
+                    <code>vec -> usize</code> or <code>* -> vec</code>)
+                </p>
+            </div>
+        </div>
+    </aside>
+
+    
+
+    <script>
+        window.rootPath = "../../";
+        window.currentCrate = "chill";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../../jquery.js"></script>
+    <script src="../../main.js"></script>
+    
+    <script defer src="../../search-index.js"></script>
+</body>
+</html>

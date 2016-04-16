@@ -1,0 +1,1 @@
+initSidebarItems({"enum":[["AttachmentContent","Specifies the attachments, if any, for which the CouchDB server should send content."]],"struct":[["ReadDocument","Reads a document from the CouchDB server and returns the result."]]});

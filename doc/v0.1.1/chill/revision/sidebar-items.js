@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["Revision","A document revision, which uniquely identifies a version of a document."]]});
