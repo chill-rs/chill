@@ -42,7 +42,6 @@ impl Document {
         self.doc_path.document_id()
     }
 
-    #[doc(hidden)]
     pub fn path(&self) -> &DocumentPath {
         &self.doc_path
     }
