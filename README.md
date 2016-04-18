@@ -6,9 +6,10 @@ language, available on [crates.io][chill_crates_io].
 Chill's three chief design goals are **convenience**, **safety**, and
 **efficiency**.
 
-You can read more about its design here:
+You can read more about its design and development here:
 
-* [Rethinking CouchDB in Rust][cv_rethinking_couchdb]
+* [Rethinking CouchDB in Rust][cv_rethinking_couchdb] (2016-02-23)
+* [Announcing Chill v0.1.1][cv_announcing_chill_v0_1_1] (2016-04-18)
 
 ## Roadmap
 
@@ -42,6 +43,7 @@ feedback][feedback_email]!
 
 [couchdb_github]: https://github.com/couchdb-rs/couchdb
 [chill_crates_io]: https://crates.io/crates/chill
+[cv_announcing_chill_v0_1_1]: https://cmbrandenburg.github.io/post/2016-04-18-chill_v0.1.1/
 [cv_rethinking_couchdb]: https://cmbrandenburg.github.io/post/2016-02-23-rethinking_couchdb_in_rust/
 [feedback_email]: mailto:c.m.brandenburg@gmail.com
 [master_change_log]: https://github.com/chill-rs/chill/blob/master/CHANGELOG.md
