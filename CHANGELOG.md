@@ -2,7 +2,7 @@
 
 ## v0.1.2 (unreleased)
 
-No changes yet!
+* Deprecate the `Document::id` method, use `Document::path` instead.
 
 ## v0.1.1 (2016-04-16)
 
