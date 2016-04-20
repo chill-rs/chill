@@ -25,5 +25,5 @@ version = "0.8"
 features = ["serde-serialization"]
 
 [dependencies.uuid]
-version = "0.1"
+version = "0.2"
 features = ["serde"]
