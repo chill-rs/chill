@@ -3,6 +3,7 @@
 ## v0.1.2 (unreleased)
 
 * Deprecate the `Document::id` method, use `Document::path` instead.
+* New support for `limit` query parameter when executing a view.
 
 ## v0.1.1 (2016-04-16)
 

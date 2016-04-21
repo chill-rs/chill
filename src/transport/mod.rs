@@ -72,6 +72,7 @@ pub struct RequestOptions<'a, B: serde::Serialize + 'a> {
     descending_query: Option<bool>,
     end_key_query: Option<String>,
     inclusive_end_query: Option<bool>,
+    limit: Option<u64>,
     reduce_query: Option<bool>,
     revision_query: Option<&'a Revision>,
     start_key_query: Option<String>,
@@ -90,6 +91,7 @@ impl<'a> RequestOptions<'a, ()> {
             descending_query: self.descending_query,
             end_key_query: self.end_key_query,
             inclusive_end_query: self.inclusive_end_query,
+            limit: self.limit,
             reduce_query: self.reduce_query,
             revision_query: self.revision_query,
             start_key_query: self.start_key_query,
@@ -122,6 +124,11 @@ impl<'a, B: serde::Serialize + 'a> RequestOptions<'a, B> {
 
     pub fn with_inclusive_end(mut self, yes_or_no: bool) -> Self {
         self.inclusive_end_query = Some(yes_or_no);
+        self
+    }
+
+    pub fn with_limit(mut self, limit: u64) -> Self {
+        self.limit = Some(limit);
         self
     }
 

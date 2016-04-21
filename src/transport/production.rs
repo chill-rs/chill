@@ -91,6 +91,10 @@ impl HyperTransport {
                 pairs.insert(String::from("inclusive_end"), yes_or_no.to_string());
             }
 
+            if let Some(limit) = options.limit {
+                pairs.insert(String::from("limit"), limit.to_string());
+            }
+
             if let Some(yes_or_no) = options.reduce_query {
                 pairs.insert(String::from("reduce"), yes_or_no.to_string());
             }

@@ -111,6 +111,7 @@ pub struct ExecuteView<'a, T, K, V>
     reduce: Option<bool>,
     start_key: Option<&'a K>,
     end_key: Option<(&'a K, Inclusivity)>,
+    limit: Option<u64>,
     descending: Option<bool>,
 }
 
@@ -129,6 +130,7 @@ impl<'a, K, T, V> ExecuteView<'a, T, K, V>
             reduce: None,
             start_key: None,
             end_key: None,
+            limit: None,
             descending: None,
         })
     }
@@ -176,6 +178,18 @@ impl<'a, K, T, V> ExecuteView<'a, T, K, V>
     ///
     pub fn with_end_key_exclusive(mut self, end_key: &'a K) -> Self {
         self.end_key = Some((end_key, Inclusivity::Exclusive));
+        self
+    }
+
+    /// Modifies the action to retrieve at most a given number of documents.
+    ///
+    /// The `with_limit` method abstracts CouchDB's `limit` query parameter. By
+    /// default, the CouchDB server sends all rows.
+    ///
+    /// This method has no effect if the view is reduced.
+    ///
+    pub fn with_limit(mut self, limit: u64) -> Self {
+        self.limit = Some(limit);
         self
     }
 
@@ -231,6 +245,11 @@ impl<'a, T, K, V> Action<T> for ExecuteView<'a, T, K, V>
             Some((key_value, Inclusivity::Exclusive)) => {
                 try!(options.with_end_key(key_value)).with_inclusive_end(false)
             }
+        };
+
+        let options = match self.limit {
+            None => options,
+            Some(value) => options.with_limit(value),
         };
 
         let options = match self.descending {
@@ -353,6 +372,29 @@ mod tests {
                                                                 "/foo/_design/bar/_view/qux")
                                  .unwrap()
                                  .with_end_key_inclusive(&end_key);
+            action.make_request().unwrap()
+        };
+
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn make_request_with_limit() {
+        let transport = MockTransport::new();
+
+        let expected = ({
+            let options = RequestOptions::new()
+                              .with_limit(42)
+                              .with_accept_json();
+            transport.get(vec!["foo", "_design", "bar", "_view", "qux"], options).unwrap()
+        },
+                        DatabaseName::from("foo"));
+
+        let got = {
+            let mut action = ExecuteView::<_, String, i32>::new(&transport,
+                                                                "/foo/_design/bar/_view/qux")
+                                 .unwrap()
+                                 .with_limit(42);
             action.make_request().unwrap()
         };
 

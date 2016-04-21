@@ -807,6 +807,55 @@ fn execute_view_ok_unreduced_with_reduce_false() {
 }
 
 #[test]
+fn execute_view_ok_unreduced_with_limit() {
+
+    let (_server, client) = make_server_and_client();
+    client.create_database("/baseball").unwrap().run().unwrap();
+
+    let up_content = serde_json::builder::ObjectBuilder::new()
+                         .insert("name", "Babe Ruth")
+                         .insert("home_runs", 714)
+                         .unwrap();
+
+    let (babe_id, _rev) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
+
+    let up_content = serde_json::builder::ObjectBuilder::new()
+                         .insert("name", "Hank Aaron")
+                         .insert("home_runs", 755)
+                         .unwrap();
+
+    client.create_document("/baseball", &up_content).unwrap().run().unwrap();
+
+    // TODO: Make use of a Design type when available.
+
+    let up_content = serde_json::builder::ObjectBuilder::new()
+                         .insert_object("views", |x| {
+                             x.insert_object("home_runs", |x| {
+                                 x.insert("map",
+                                          r#"function(doc) { emit(doc.home_runs, doc.home_runs) }"#)
+                             })
+                         })
+                         .unwrap();
+    client.create_document("/baseball", &up_content)
+          .unwrap()
+          .with_document_id("_design/stats")
+          .run()
+          .unwrap();
+
+    let expected = chill::testing::ViewResponseBuilder::new_unreduced(2, 0, "baseball")
+                       .with_row(714, 714, babe_id)
+                       .unwrap();
+
+    let got = client.execute_view::<i32, i32, _>("/baseball/_design/stats/_view/home_runs")
+                    .unwrap()
+                    .with_limit(1)
+                    .run()
+                    .unwrap();
+
+    assert_eq!(expected, got);
+}
+
+#[test]
 fn execute_view_ok_reduced() {
 
     let (_server, client) = make_server_and_client();
