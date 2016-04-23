@@ -3,8 +3,7 @@ use prelude_impl::*;
 use serde;
 
 /// Types that are convertible into a URL.
-pub trait IntoUrl: hyper::client::IntoUrl {
-}
+pub trait IntoUrl: hyper::client::IntoUrl {}
 
 impl<T: hyper::client::IntoUrl> IntoUrl for T {}
 

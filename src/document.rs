@@ -516,8 +516,7 @@ mod document_tests {
 
         let got = document.attachments()
                           .map(|(path, attachment)| {
-                              (AttachmentName::from(path.attachment_name()),
-                               attachment.clone())
+                              (AttachmentName::from(path.attachment_name()), attachment.clone())
                           })
                           .collect();
         assert_eq!(attachments, got);

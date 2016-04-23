@@ -107,8 +107,7 @@ impl<'a> Iterator for DesignDocumentPathIter<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         let (item, next) = match self {
             &mut DesignDocumentPathIter::DatabaseName(path) => {
-                (path.db_name.inner,
-                 DesignDocumentPathIter::DocumentPrefix(path))
+                (path.db_name.inner, DesignDocumentPathIter::DocumentPrefix(path))
             }
             &mut DesignDocumentPathIter::DocumentPrefix(path) => {
                 (DESIGN_PREFIX, DesignDocumentPathIter::DocumentName(path))

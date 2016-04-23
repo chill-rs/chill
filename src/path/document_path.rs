@@ -114,8 +114,7 @@ impl<'a> Iterator for DocumentPathIter<'a> {
                 })
             }
             &mut DocumentPathIter::DocumentPrefix(path) => {
-                (path.doc_id.prefix().unwrap(),
-                 DocumentPathIter::DocumentName(path))
+                (path.doc_id.prefix().unwrap(), DocumentPathIter::DocumentName(path))
             }
             &mut DocumentPathIter::DocumentName(path) => {
                 (path.doc_id.name_as_str(), DocumentPathIter::Done)

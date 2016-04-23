@@ -158,12 +158,10 @@ impl<'a> Iterator for AttachmentPathIter<'a> {
                 })
             }
             &mut AttachmentPathIter::DocumentPrefix(path) => {
-                (path.doc_id.prefix().unwrap(),
-                 AttachmentPathIter::DocumentName(path))
+                (path.doc_id.prefix().unwrap(), AttachmentPathIter::DocumentName(path))
             }
             &mut AttachmentPathIter::DocumentName(path) => {
-                (path.doc_id.name_as_str(),
-                 AttachmentPathIter::AttachmentName(path))
+                (path.doc_id.name_as_str(), AttachmentPathIter::AttachmentName(path))
             }
             &mut AttachmentPathIter::AttachmentName(path) => {
                 (path.att_name.inner, AttachmentPathIter::Done)
