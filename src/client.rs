@@ -1,11 +1,37 @@
-use hyper;
 use prelude_impl::*;
 use serde;
+use url;
 
-/// Types that are convertible into a URL.
-pub trait IntoUrl: hyper::client::IntoUrl {}
+/// Describes a type that may be converted into a URL.
+///
+/// The `IntoUrl` trait is like the `Into` trait except that its conversion may
+/// fail, such as when parsing a string containing an invalid URL.
+///
+pub trait IntoUrl {
+    // FIXME: This is kinda a breaking change, but applications shouldn't be
+    // explicitly implementing this trait, so I think it's OK. Make sure this is
+    // noted in the Change Log.
 
-impl<T: hyper::client::IntoUrl> IntoUrl for T {}
+    fn into_url(self) -> Result<url::Url, Error>;
+}
+
+impl IntoUrl for url::Url {
+    fn into_url(self) -> Result<url::Url, Error> {
+        Ok(self)
+    }
+}
+
+impl<'a> IntoUrl for &'a str {
+    fn into_url(self) -> Result<url::Url, Error> {
+        url::Url::parse(self).map_err(|e| Error::UrlParse { cause: e })
+    }
+}
+
+impl<'a> IntoUrl for &'a String {
+    fn into_url(self) -> Result<url::Url, Error> {
+        url::Url::parse(self).map_err(|e| Error::UrlParse { cause: e })
+    }
+}
 
 /// Manages all communication with a CouchDB server.
 ///
@@ -23,7 +49,7 @@ pub struct Client {
 impl Client {
     /// Constructs a client for the given server.
     pub fn new<U: IntoUrl>(server_url: U) -> Result<Self, Error> {
-        let server_url = try!(server_url.into_url().map_err(|e| Error::UrlParse { cause: e }));
+        let server_url = try!(server_url.into_url());
         let transport = try!(HyperTransport::new(server_url));
         Ok((Client { transport: transport }))
     }

@@ -14,7 +14,7 @@ regex = "0.1"
 serde = "0.7"
 serde_json = "0.7"
 tempdir = "0.3"
-url = "0.5"
+url = "1"
 
 [dependencies.mime]
 version = "0.2"

@@ -3,8 +3,73 @@ use prelude_impl::*;
 use serde;
 use serde_json;
 use super::{RequestAccept, RequestBody};
-use std;
 use url;
+
+fn make_url_path<'a, P: Iterator<Item = &'a str>>(base: &str, path: P) -> String {
+
+    let without_trailing_slash: String = {
+        let mut p = base;
+        if p.ends_with('/') {
+            p = &p[0..p.len() - 1];
+        }
+        p.into()
+    };
+
+    path.into_iter().fold(without_trailing_slash, {
+        |mut left, right| {
+            use url::percent_encoding::*;
+            left.push('/');
+            for encoded in utf8_percent_encode(right, PATH_SEGMENT_ENCODE_SET) {
+                left.push_str(encoded);
+            }
+            left
+        }
+    })
+}
+
+#[cfg(test)]
+mod make_url_path_tests {
+
+    #[test]
+    fn base_is_root() {
+        use super::make_url_path;
+        let expected = "/foo/bar";
+        let got = make_url_path("/", vec!["foo", "bar"].into_iter());
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn base_in_nonroot_without_trailing_slash() {
+        use super::make_url_path;
+        let expected = "/foo/bar/qux";
+        let got = make_url_path("/foo", vec!["bar", "qux"].into_iter());
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn base_in_nonroot_with_trailing_slash() {
+        use super::make_url_path;
+        let expected = "/foo/bar/qux";
+        let got = make_url_path("/foo/", vec!["bar", "qux"].into_iter());
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn extra_contains_percent_char() {
+        use super::make_url_path;
+        let expected = "/foo%25bar";
+        let got = make_url_path("/", vec!["foo%bar"].into_iter());
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn extra_contains_slash_char() {
+        use super::make_url_path;
+        let expected = "/foo%2Fbar";
+        let got = make_url_path("/", vec!["foo/bar"].into_iter());
+        assert_eq!(expected, got);
+    }
+}
 
 #[derive(Debug)]
 pub struct HyperTransport {
@@ -13,12 +78,7 @@ pub struct HyperTransport {
 }
 
 impl HyperTransport {
-    pub fn new(mut server_base_url: url::Url) -> Result<Self, Error> {
-
-        if server_base_url.path_mut().is_none() {
-            return Err(Error::UrlNotSchemeRelative);
-        }
-
+    pub fn new(server_base_url: url::Url) -> Result<Self, Error> {
         Ok(HyperTransport {
             server_base_url: server_base_url,
             hyper_client: hyper::Client::new(),
@@ -30,8 +90,10 @@ impl HyperTransport {
         let (request, state) = try!(action.make_request());
 
         let response = {
+            // FIXME: Remove `as_str` method call when Hyper upgrades to Url
+            // v1.x.
             let b = self.hyper_client
-                        .request(request.method, request.url)
+                        .request(request.method, request.url.as_str())
                         .headers(request.headers);
 
             let b = if request.body.is_empty() {
@@ -56,62 +118,55 @@ impl HyperTransport {
     {
         let mut url = self.server_base_url.clone();
 
-        let path = path.into_iter().collect::<Vec<_>>();
+        let full_path = make_url_path(url.path(), path.into_iter());
+        url.set_path(&full_path);
 
-        // The base URL may have an empty final path component, which will lead
-        // to an empty path component (//) if we naively append path components
-        // to the URL.
-        if !path.is_empty() && url.path().unwrap().last().map_or(false, |x| x.is_empty()) {
-            url.path_mut().unwrap().pop();
+        fn bool_to_string(x: bool) -> &'static str {
+            if x {
+                "true"
+            } else {
+                "false"
+            }
         }
 
-        url.path_mut().unwrap().extend(path.iter().map(|x| {
-            let x = x.replace("%", "%25")
-                     .replace("/", "%2F");
-            url::percent_encoding::utf8_percent_encode(&x,
-                                                       url::percent_encoding::DEFAULT_ENCODE_SET)
-        }));
-
-        let query_pairs = {
-            let mut pairs = std::collections::HashMap::new();
+        {
+            let mut query = url.query_pairs_mut();
 
             if let Some(yes_or_no) = options.attachments_query {
-                pairs.insert(String::from("attachments"), yes_or_no.to_string());
+                query.append_pair("attachments", bool_to_string(yes_or_no));
             }
 
             if let Some(yes_or_no) = options.descending_query {
-                pairs.insert(String::from("descending"), yes_or_no.to_string());
+                query.append_pair("descending", bool_to_string(yes_or_no));
             }
 
             if let Some(ref key_value) = options.end_key_query {
-                pairs.insert(String::from("endkey"), key_value.clone());
+                query.append_pair("endkey", key_value);
             }
 
             if let Some(yes_or_no) = options.inclusive_end_query {
-                pairs.insert(String::from("inclusive_end"), yes_or_no.to_string());
+                query.append_pair("inclusive_end", bool_to_string(yes_or_no));
             }
 
             if let Some(limit) = options.limit {
-                pairs.insert(String::from("limit"), limit.to_string());
+                query.append_pair("limit", &limit.to_string());
             }
 
             if let Some(yes_or_no) = options.reduce_query {
-                pairs.insert(String::from("reduce"), yes_or_no.to_string());
+                query.append_pair("reduce", bool_to_string(yes_or_no));
             }
 
             if let Some(revision) = options.revision_query {
-                pairs.insert(String::from("rev"), revision.to_string());
+                query.append_pair("rev", &revision.to_string());
             }
 
             if let Some(ref key_value) = options.start_key_query {
-                pairs.insert(String::from("startkey"), key_value.clone());
+                query.append_pair("startkey", key_value);
             }
+        }
 
-            pairs
-        };
-
-        if !query_pairs.is_empty() {
-            url.set_query_from_pairs(query_pairs);
+        if let Some("") = url.query() {
+            url.set_query(None);
         }
 
         url
