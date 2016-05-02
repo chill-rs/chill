@@ -496,8 +496,8 @@ impl<M> AttachmentBuilder<M> {
 mod tests {
 
     use base64;
-    use prelude_impl::*;
     use serde_json;
+    use super::*;
     use super::{AttachmentEncodingInfo, Base64JsonDecodable, ContentTypeJsonDecodable,
                 Base64JsonEncodable, SavedAttachmentContent};
 

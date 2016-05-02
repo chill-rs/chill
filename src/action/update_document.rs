@@ -1,4 +1,9 @@
-use prelude_impl::*;
+use document::WriteDocumentResponse;
+use Document;
+use Error;
+use Revision;
+use transport::{Action, RequestOptions, Response, StatusCode, Transport};
+use transport::production::HyperTransport;
 
 pub struct UpdateDocument<'a, T>
     where T: Transport + 'a
@@ -55,9 +60,13 @@ impl<'a, T: Transport + 'a> Action<T> for UpdateDocument<'a, T> {
 #[cfg(test)]
 mod tests {
 
-    use prelude_impl::*;
+    use document::DocumentBuilder;
+    use Error;
+    use Revision;
     use serde_json;
     use super::UpdateDocument;
+    use transport::{Action, RequestOptions, StatusCode, Transport};
+    use transport::testing::{MockResponse, MockTransport};
 
     #[test]
     fn make_request_default() {

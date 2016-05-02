@@ -1,5 +1,17 @@
+use Attachment;
+use attachment::AttachmentBuilder;
+use AttachmentName;
+use AttachmentNameRef;
+use AttachmentPathRef;
+use DatabaseName;
+use DocumentId;
+use DocumentPath;
+use DocumentPathRef;
+use Error;
+#[cfg(test)]
+use IntoDocumentPath;
 use mime;
-use prelude_impl::*;
+use Revision;
 use serde;
 use serde_json;
 use std;
@@ -184,10 +196,15 @@ impl<'a> Iterator for AttachmentIter<'a> {
 #[cfg(test)]
 mod document_tests {
 
+    use attachment::AttachmentBuilder;
+    use AttachmentName;
     use base64;
-    use prelude_impl::*;
+    use DocumentPath;
+    use Error;
+    use Revision;
     use serde_json;
     use std;
+    use super::*;
 
     #[test]
     fn get_content_ok() {
@@ -769,9 +786,12 @@ impl DocumentBuilder {
 #[cfg(test)]
 mod tests {
 
-    use prelude_impl::*;
+    use attachment::AttachmentBuilder;
+    use AttachmentName;
+    use DocumentId;
     use serde_json;
     use std;
+    use super::*;
 
     #[test]
     fn json_decodable_document_deserialize_ok_as_minimum() {

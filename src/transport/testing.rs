@@ -1,8 +1,9 @@
+use Error;
 use hyper;
-use prelude_impl::*;
+use Revision;
 use serde;
 use serde_json;
-use super::{RequestAccept, RequestBody};
+use super::{RequestAccept, RequestBody, RequestOptions, Response, StatusCode, Transport};
 
 // A mock transport allows us to test our CouchDB actions without the presence
 // of a CouchDB server. This is helpful because:

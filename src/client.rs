@@ -1,5 +1,12 @@
-use prelude_impl::*;
+use action;
+use Document;
+use Error;
+use IntoDatabasePath;
+use IntoDocumentPath;
+use IntoViewPath;
+use Revision;
 use serde;
+use transport::production::HyperTransport;
 use url;
 
 /// Describes a type that may be converted into a URL.

@@ -1,4 +1,9 @@
-use prelude_impl::*;
+use DatabaseName;
+use DatabaseNameRef;
+use DatabasePath;
+use DatabasePathRef;
+use Error;
+use IntoDatabasePath;
 use super::PathExtractor;
 
 impl<'a> DatabasePathRef<'a> {
@@ -116,7 +121,8 @@ impl<'a> IntoDatabasePath<'a> for &'a DatabaseName {
 #[cfg(test)]
 mod tests {
 
-    use prelude_impl::*;
+    use DatabasePathRef;
+    use IntoDatabasePath;
 
     #[test]
     fn into_iter() {

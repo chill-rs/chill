@@ -1,6 +1,14 @@
 //! Defines an action for reading a document from the CouchDB server.
 
-use prelude_impl::*;
+use DatabaseName;
+use Document;
+use DocumentPathRef;
+use document::JsonDecodableDocument;
+use Error;
+use IntoDocumentPath;
+use Revision;
+use transport::{Action, RequestOptions, Response, StatusCode, Transport};
+use transport::production::HyperTransport;
 
 /// Reads a document from the CouchDB server and returns the result.
 ///
@@ -160,8 +168,15 @@ pub enum AttachmentContent {
 #[cfg(test)]
 mod tests {
 
-    use prelude_impl::*;
+    use DatabaseName;
+    use DatabaseNameRef;
+    use document::DocumentBuilder;
+    use DocumentIdRef;
+    use Error;
+    use Revision;
     use super::*;
+    use transport::{Action, RequestOptions, StatusCode, Transport};
+    use transport::testing::{MockResponse, MockTransport};
 
     #[test]
     fn make_request_default() {

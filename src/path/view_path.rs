@@ -1,5 +1,21 @@
-use prelude_impl::*;
+use DatabaseName;
+use DatabaseNameRef;
+use DatabasePath;
+use DatabasePathRef;
+use DesignDocumentName;
+use DesignDocumentNameRef;
+use DesignDocumentPath;
+use DesignDocumentPathRef;
+use Error;
+use error::PathParseErrorKind;
+use IntoDatabasePath;
+use IntoDesignDocumentPath;
+use IntoViewPath;
 use super::{DESIGN_PREFIX, PathExtractor, VIEW_PREFIX};
+use ViewName;
+use ViewNameRef;
+use ViewPath;
+use ViewPathRef;
 
 impl<'a> ViewPathRef<'a> {
     pub fn database_name(&self) -> DatabaseNameRef<'a> {
@@ -241,7 +257,10 @@ impl<'a, T, U> IntoViewPath<'a> for (T, U)
 #[cfg(test)]
 mod tests {
 
-    use prelude_impl::*;
+    use Error;
+    use error::PathParseErrorKind;
+    use IntoViewPath;
+    use ViewPathRef;
 
     #[test]
     fn into_iter() {

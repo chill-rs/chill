@@ -1,4 +1,15 @@
-use prelude_impl::*;
+use DatabaseName;
+use DatabaseNameRef;
+use DatabasePath;
+use DatabasePathRef;
+use DocumentId;
+use DocumentIdRef;
+use DocumentPath;
+use DocumentPathRef;
+use Error;
+use error::PathParseErrorKind;
+use IntoDatabasePath;
+use IntoDocumentPath;
 use super::{PathExtractor, SegmentExtraction};
 
 impl<'a> DocumentPathRef<'a> {
@@ -182,7 +193,10 @@ impl<'a, T, U> IntoDocumentPath<'a> for (T, U)
 #[cfg(test)]
 mod tests {
 
-    use prelude_impl::*;
+    use DocumentPathRef;
+    use Error;
+    use error::PathParseErrorKind;
+    use IntoDocumentPath;
 
     #[test]
     fn into_iter_normal() {

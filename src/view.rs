@@ -1,4 +1,7 @@
-use prelude_impl::*;
+use DatabaseName;
+use DocumentId;
+use DocumentPathRef;
+use Error;
 use serde;
 use std;
 
@@ -105,7 +108,7 @@ impl<K: serde::Deserialize, V: serde::Deserialize> ViewResponse<K, V> {
 #[cfg(test)]
 mod view_response_tests {
 
-    use prelude_impl::*;
+    use super::*;
 
     #[test]
     fn impls_send() {
@@ -775,7 +778,9 @@ impl<K: serde::Deserialize, M, V: serde::Deserialize> ViewResponseBuilder<K, V, 
 #[cfg(test)]
 mod view_response_builder_tests {
 
-    use prelude_impl::*;
+    use DatabaseName;
+    use DocumentId;
+    use super::*;
 
     #[test]
     fn reduced_required() {

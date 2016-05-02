@@ -1,8 +1,9 @@
+use Error;
+use error::TransportErrorKind;
 use hyper;
-use prelude_impl::*;
 use serde;
 use serde_json;
-use super::{RequestAccept, RequestBody};
+use super::{Action, RequestAccept, RequestBody, RequestOptions, Response, StatusCode, Transport};
 use url;
 
 fn make_url_path<'a, P: Iterator<Item = &'a str>>(base: &str, path: P) -> String {
@@ -263,8 +264,10 @@ impl Response for HyperResponse {
 mod tests {
 
     use hyper;
-    use prelude_impl::*;
+    use Revision;
     use serde_json;
+    use super::*;
+    use transport::RequestOptions;
     use url;
 
     #[test]

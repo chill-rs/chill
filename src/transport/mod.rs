@@ -2,8 +2,9 @@ pub mod production;
 #[cfg(test)]
 pub mod testing;
 
+use Error;
 use hyper;
-use prelude_impl::*;
+use Revision;
 use serde;
 use serde_json;
 
@@ -158,3 +159,5 @@ enum RequestAccept {
 enum RequestBody<'a, B: serde::Serialize + 'a> {
     Json(&'a B),
 }
+
+pub use hyper::status::StatusCode;

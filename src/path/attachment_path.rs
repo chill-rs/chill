@@ -1,4 +1,19 @@
-use prelude_impl::*;
+use AttachmentName;
+use AttachmentNameRef;
+use AttachmentPath;
+use AttachmentPathRef;
+use DatabaseName;
+use DatabaseNameRef;
+use DatabasePath;
+use DatabasePathRef;
+use DocumentId;
+use DocumentIdRef;
+use DocumentPath;
+use DocumentPathRef;
+use Error;
+use IntoAttachmentPath;
+use IntoDatabasePath;
+use IntoDocumentPath;
 use super::PathExtractor;
 
 impl<'a> AttachmentPathRef<'a> {
@@ -235,7 +250,8 @@ impl<'a, T, U> IntoAttachmentPath<'a> for (T, U)
 #[cfg(test)]
 mod tests {
 
-    use prelude_impl::*;
+    use AttachmentPathRef;
+    use IntoAttachmentPath;
 
     #[test]
     fn into_iter_normal() {

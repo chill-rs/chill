@@ -1,4 +1,15 @@
-use prelude_impl::*;
+use DatabaseName;
+use DatabaseNameRef;
+use DatabasePath;
+use DatabasePathRef;
+use DesignDocumentName;
+use DesignDocumentNameRef;
+use DesignDocumentPath;
+use DesignDocumentPathRef;
+use Error;
+use error::PathParseErrorKind;
+use IntoDatabasePath;
+use IntoDesignDocumentPath;
 use super::{DESIGN_PREFIX, PathExtractor};
 
 impl<'a> DesignDocumentPathRef<'a> {
@@ -171,7 +182,10 @@ impl<'a, T, U> IntoDesignDocumentPath<'a> for (T, U)
 #[cfg(test)]
 mod tests {
 
-    use prelude_impl::*;
+    use DesignDocumentPathRef;
+    use Error;
+    use error::PathParseErrorKind;
+    use IntoDesignDocumentPath;
 
     #[test]
     fn into_iter() {

@@ -1,6 +1,14 @@
-use prelude_impl::*;
+use DatabasePathRef;
+use document::WriteDocumentResponse;
+use DocumentId;
+use DocumentIdRef;
+use Error;
+use IntoDatabasePath;
+use Revision;
 use serde;
 use serde_json;
+use transport::{Action, RequestOptions, Response, StatusCode, Transport};
+use transport::production::HyperTransport;
 
 pub struct CreateDocument<'a, T, C>
     where C: serde::Serialize + 'a,
@@ -92,9 +100,13 @@ impl<'a, C, T> Action<T> for CreateDocument<'a, T, C>
 #[cfg(test)]
 mod tests {
 
-    use prelude_impl::*;
+    use DocumentId;
+    use Error;
+    use Revision;
     use serde_json;
     use super::CreateDocument;
+    use transport::{Action, RequestOptions, StatusCode, Transport};
+    use transport::testing::{MockResponse, MockTransport};
 
     #[test]
     fn make_request_default() {

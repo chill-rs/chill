@@ -1,4 +1,11 @@
-use prelude_impl::*;
+use DesignDocumentName;
+use DesignDocumentNameRef;
+use DocumentId;
+use DocumentIdRef;
+use LocalDocumentName;
+use LocalDocumentNameRef;
+use NormalDocumentName;
+use NormalDocumentNameRef;
 use serde;
 use std;
 use super::{DESIGN_PREFIX, LOCAL_PREFIX};
@@ -214,7 +221,11 @@ impl serde::Deserialize for DocumentId {
 #[cfg(test)]
 mod tests {
 
-    use prelude_impl::*;
+    use DesignDocumentNameRef;
+    use DocumentId;
+    use DocumentIdRef;
+    use LocalDocumentNameRef;
+    use NormalDocumentNameRef;
     use serde_json;
 
     #[test]

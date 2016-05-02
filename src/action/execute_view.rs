@@ -1,8 +1,15 @@
 //! Defines an action for executing a view.
 
-use prelude_impl::*;
+use DatabaseName;
+use Error;
+use IntoViewPath;
 use serde;
 use std;
+use transport::{Action, RequestOptions, Response, StatusCode, Transport};
+use transport::production::HyperTransport;
+use view::ViewResponseJsonable;
+use ViewPathRef;
+use ViewResponse;
 
 enum Inclusivity {
     Exclusive,
@@ -280,9 +287,13 @@ impl<'a, T, K, V> Action<T> for ExecuteView<'a, T, K, V>
 #[cfg(test)]
 mod tests {
 
-    use prelude_impl::*;
+    use DatabaseName;
+    use Error;
     use serde_json;
     use super::ExecuteView;
+    use transport::{Action, RequestOptions, StatusCode, Transport};
+    use transport::testing::{MockResponse, MockTransport};
+    use view::ViewResponseBuilder;
 
     #[test]
     fn make_request_default() {
