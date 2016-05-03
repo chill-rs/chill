@@ -3,6 +3,7 @@
 use DatabaseName;
 use Error;
 use IntoViewPath;
+use IntoDatabaseViewPath;
 use serde;
 use std;
 use transport::{Action, RequestOptions, Response, StatusCode, Transport};
@@ -10,6 +11,8 @@ use transport::production::HyperTransport;
 use view::ViewResponseJsonable;
 use ViewPathRef;
 use ViewResponse;
+use DatabaseNameRef;
+use DatabaseViewPathRef;
 
 enum Inclusivity {
     Exclusive,
@@ -106,13 +109,28 @@ enum Inclusivity {
 /// assert_eq!(expected, got);
 /// ```
 ///
+
+enum ExecuteViewPath<'a> {
+    View(ViewPathRef<'a>),
+    DatabaseView(DatabaseViewPathRef<'a>),
+}
+
+impl<'a> ExecuteViewPath<'a> {
+    pub fn database_name(&self) -> DatabaseNameRef {
+        match self {
+            &ExecuteViewPath::View(view) => view.database_name(),
+            &ExecuteViewPath::DatabaseView(view) => view.database_name(),
+        }
+    }
+}
+
 pub struct ExecuteView<'a, T, K, V>
     where K: serde::Deserialize + serde::Serialize + 'a,
           T: Transport + 'a,
           V: serde::Deserialize
 {
     transport: &'a T,
-    view_path: ViewPathRef<'a>,
+    view_path: ExecuteViewPath<'a>,
     phantom_key: std::marker::PhantomData<K>,
     phantom_value: std::marker::PhantomData<V>,
     reduce: Option<bool>,
@@ -131,7 +149,22 @@ impl<'a, K, T, V> ExecuteView<'a, T, K, V>
     pub fn new<P: IntoViewPath<'a>>(transport: &'a T, view_path: P) -> Result<Self, Error> {
         Ok(ExecuteView {
             transport: transport,
-            view_path: try!(view_path.into_view_path()),
+            view_path: ExecuteViewPath::View(try!(view_path.into_view_path())),
+            phantom_key: std::marker::PhantomData,
+            phantom_value: std::marker::PhantomData,
+            reduce: None,
+            start_key: None,
+            end_key: None,
+            limit: None,
+            descending: None,
+        })
+    }
+
+    #[doc(hidden)]
+    pub fn with_database_view<P: IntoDatabaseViewPath<'a>>(transport: &'a T, view_path: P) -> Result<Self, Error> {
+        Ok(ExecuteView {
+            transport: transport,
+            view_path: ExecuteViewPath::DatabaseView(try!(view_path.into_database_view_path())),
             phantom_key: std::marker::PhantomData,
             phantom_value: std::marker::PhantomData,
             reduce: None,
@@ -265,7 +298,10 @@ impl<'a, T, K, V> Action<T> for ExecuteView<'a, T, K, V>
         };
 
         let db_name = DatabaseName::from(self.view_path.database_name());
-        let request = try!(self.transport.get(self.view_path, options));
+        let request = match self.view_path {
+            ExecuteViewPath::View(view) => try!(self.transport.get(view, options)),
+            ExecuteViewPath::DatabaseView(view) => try!(self.transport.get(view, options)),
+        };
         Ok((request, db_name))
     }
 
@@ -308,6 +344,26 @@ mod tests {
         let got = {
             let mut action = ExecuteView::<_, String, i32>::new(&transport,
                                                                 "/foo/_design/bar/_view/qux")
+                                 .unwrap();
+            action.make_request().unwrap()
+        };
+
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn make_request_with_database_view_path() {
+        let transport = MockTransport::new();
+
+        let expected = ({
+            let options = RequestOptions::new().with_accept_json();
+            transport.get(vec!["foo", "_all_docs"], options).unwrap()
+        },
+                        DatabaseName::from("foo"));
+
+        let got = {
+            let mut action = ExecuteView::<_, String, i32>::with_database_view(&transport,
+                                                                               "/foo/_all_docs")
                                  .unwrap();
             action.make_request().unwrap()
         };

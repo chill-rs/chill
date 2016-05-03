@@ -44,7 +44,7 @@ impl std::fmt::Display for Revision {
         write!(f,
                "{}-{}",
                self.sequence_number,
-               self.digest.to_simple_string())
+               self.digest.simple())
     }
 }
 
