@@ -293,7 +293,7 @@ fn update_document_ok_default() {
 
     let updated_rev = client.update_document(&doc).unwrap().run().unwrap();
 
-    let doc = client.read_document(("/baseball", doc.id().clone()))
+    let doc = client.read_document(("/baseball", doc.path().document_id().clone()))
                     .unwrap()
                     .run()
                     .unwrap();

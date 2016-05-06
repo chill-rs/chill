@@ -32,17 +32,6 @@ impl Document {
         }
     }
 
-    #[doc(hidden)]
-    pub fn database_name(&self) -> &DatabaseName {
-        self.doc_path.database_name()
-    }
-
-    // DEPRECATED: See issue #42 (https://github.com/chill-rs/chill/issues/42).
-    #[doc(hidden)]
-    pub fn id(&self) -> &DocumentId {
-        self.doc_path.document_id()
-    }
-
     pub fn path(&self) -> &DocumentPath {
         &self.doc_path
     }
