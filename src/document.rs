@@ -1,20 +1,9 @@
-use Attachment;
-use attachment::AttachmentBuilder;
-use AttachmentName;
-use AttachmentNameRef;
-use AttachmentPathRef;
-use DatabaseName;
-use DocumentId;
-use DocumentPath;
-use DocumentPathRef;
-use Error;
+use {Attachment, AttachmentName, AttachmentPath, DatabaseName, DocumentId, DocumentPath, Error,
+     Revision};
 #[cfg(test)]
 use IntoDocumentPath;
-use mime;
-use Revision;
-use serde;
-use serde_json;
-use std;
+use attachment::AttachmentBuilder;
+use {mime, serde, serde_json, std};
 
 /// Contains a specific version of a document.
 ///
@@ -35,7 +24,7 @@ impl Document {
     #[doc(hidden)]
     pub fn new_from_decoded(db_name: DatabaseName, doc: JsonDecodableDocument) -> Self {
         Document {
-            doc_path: DocumentPath::new(db_name, doc.doc_id),
+            doc_path: DocumentPath::from((db_name, doc.doc_id)),
             revision: doc.revision,
             deleted: doc.deleted,
             attachments: doc.attachments,
@@ -95,13 +84,11 @@ impl Document {
 
     /// Returns the document's attachment of a given name, if the attachment
     /// exists.
-    pub fn get_attachment<'a, A>(&self, name: A) -> Option<&Attachment>
-        where A: Into<AttachmentNameRef<'a>>
+    pub fn get_attachment<'a, A>(&self, att_name: A) -> Option<&Attachment>
+        where A: Into<AttachmentName>
     {
-        // TODO: Implement Borrow to eliminate this heap-allocated temporary.
-        // See issue #33 for a possible long-term solution.
-        let owned_name = AttachmentName::from(name.into());
-        self.attachments.get(&owned_name)
+        let att_name = att_name.into();
+        self.attachments.get(&att_name)
     }
 
     /// Creates or replaces the document's attachment of a given name.
@@ -112,11 +99,14 @@ impl Document {
     /// update the document, at which time the client will send the attachment
     /// to the server.
     ///
-    pub fn insert_attachment<'a, A>(&mut self, name: A, content_type: mime::Mime, content: Vec<u8>)
-        where A: Into<AttachmentNameRef<'a>>
+    pub fn insert_attachment<'a, A>(&mut self,
+                                    att_name: A,
+                                    content_type: mime::Mime,
+                                    content: Vec<u8>)
+        where A: Into<AttachmentName>
     {
-        let owned_name = AttachmentName::from(name.into());
-        self.attachments.insert(owned_name,
+        let att_name = att_name.into();
+        self.attachments.insert(att_name,
                                 AttachmentBuilder::new_unsaved(content_type, content).unwrap());
     }
 
@@ -127,19 +117,17 @@ impl Document {
     /// deleted attachment will continue to exist on the CouchDB server until
     /// the client executes an action to update the document.
     ///
-    pub fn remove_attachment<'a, A>(&mut self, name: A)
-        where A: Into<AttachmentNameRef<'a>>
+    pub fn remove_attachment<'a, A>(&mut self, att_name: A)
+        where A: Into<AttachmentName>
     {
-        // TODO: Implement Borrow to eliminate this heap-allocated temporary.
-        // See issue #33 for a possible long-term solution.
-        let owned_name = AttachmentName::from(name.into());
-        self.attachments.remove(&owned_name);
+        let att_name = att_name.into();
+        self.attachments.remove(&att_name);
     }
 
     /// Returns an iterator to all attachments to the document.
     pub fn attachments(&self) -> AttachmentIter {
         AttachmentIter {
-            doc_path: DocumentPathRef::from(&self.doc_path),
+            doc_path: &self.doc_path,
             inner: self.attachments.iter(),
         }
     }
@@ -176,18 +164,18 @@ impl serde::Serialize for Document {
 }
 
 pub struct AttachmentIter<'a> {
-    doc_path: DocumentPathRef<'a>,
+    doc_path: &'a DocumentPath,
     inner: std::collections::hash_map::Iter<'a, AttachmentName, Attachment>,
 }
 
 impl<'a> Iterator for AttachmentIter<'a> {
-    type Item = (AttachmentPathRef<'a>, &'a Attachment);
+    type Item = (AttachmentPath, &'a Attachment);
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.inner.next() {
             None => None,
-            Some((name, attachment)) => {
-                Some((AttachmentPathRef::from((self.doc_path, name)), attachment))
+            Some((att_name, att)) => {
+                Some((AttachmentPath::from((self.doc_path.clone(), att_name.clone())), att))
             }
         }
     }
@@ -196,15 +184,10 @@ impl<'a> Iterator for AttachmentIter<'a> {
 #[cfg(test)]
 mod document_tests {
 
-    use attachment::AttachmentBuilder;
-    use AttachmentName;
-    use base64;
-    use DocumentPath;
-    use Error;
-    use Revision;
-    use serde_json;
-    use std;
     use super::*;
+    use {AttachmentName, Error, IntoDocumentPath, Revision};
+    use attachment::AttachmentBuilder;
+    use {base64, serde_json, std};
 
     #[test]
     fn get_content_ok() {
@@ -215,7 +198,7 @@ mod document_tests {
                           .unwrap();
 
         let doc = Document {
-            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
+            doc_path: "/database/document_id".into_document_path().unwrap(),
             revision: "1-1234567890abcdef1234567890abcdef".parse().unwrap(),
             deleted: false,
             attachments: std::collections::HashMap::new(),
@@ -233,7 +216,7 @@ mod document_tests {
         let content = serde_json::builder::ObjectBuilder::new().unwrap();
 
         let doc = Document {
-            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
+            doc_path: "/database/document_id".into_document_path().unwrap(),
             revision: "1-1234567890abcdef1234567890abcdef".parse().unwrap(),
             deleted: true,
             attachments: std::collections::HashMap::new(),
@@ -249,7 +232,7 @@ mod document_tests {
     fn get_content_nok_decode_error() {
 
         let doc = Document {
-            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
+            doc_path: "/database/document_id".into_document_path().unwrap(),
             revision: "1-1234567890abcdef1234567890abcdef".parse().unwrap(),
             deleted: false,
             attachments: std::collections::HashMap::new(),
@@ -266,7 +249,7 @@ mod document_tests {
     fn serialize_empty() {
 
         let document = Document {
-            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
+            doc_path: "/database/document_id".into_document_path().unwrap(),
             revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
             deleted: true, // This value should have no effect.
             attachments: std::collections::HashMap::new(),
@@ -283,7 +266,7 @@ mod document_tests {
     fn serialize_with_content_and_attachments() {
 
         let document = Document {
-            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
+            doc_path: "/database/document_id".into_document_path().unwrap(),
             revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
             deleted: true, // This value should have no effect.
             attachments: {
@@ -337,7 +320,7 @@ mod document_tests {
                                .unwrap();
 
         let document = Document {
-            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
+            doc_path: "/database/document_id".into_document_path().unwrap(),
             revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
             deleted: false,
             attachments: {
@@ -356,7 +339,7 @@ mod document_tests {
     fn get_attachment_no_exist() {
 
         let document = Document {
-            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
+            doc_path: "/database/document_id".into_document_path().unwrap(),
             revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
             deleted: false,
             attachments: std::collections::HashMap::new(),
@@ -371,7 +354,7 @@ mod document_tests {
     fn insert_attachment_new() {
 
         let mut document = Document {
-            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
+            doc_path: "/database/document_id".into_document_path().unwrap(),
             revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
             deleted: false,
             attachments: std::collections::HashMap::new(),
@@ -384,7 +367,7 @@ mod document_tests {
                                    "This is the second attachment.".into());
 
         let expected = Document {
-            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
+            doc_path: "/database/document_id".into_document_path().unwrap(),
             revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
             deleted: false,
             attachments: {
@@ -409,7 +392,7 @@ mod document_tests {
     fn insert_attachment_replace() {
 
         let mut document = Document {
-            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
+            doc_path: "/database/document_id".into_document_path().unwrap(),
             revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
             deleted: false,
             attachments: std::collections::HashMap::new(),
@@ -422,7 +405,7 @@ mod document_tests {
                                    "This is the second attachment.".into());
 
         let expected = Document {
-            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
+            doc_path: "/database/document_id".into_document_path().unwrap(),
             revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
             deleted: false,
             attachments: {
@@ -443,7 +426,7 @@ mod document_tests {
     fn remove_attachment_exists() {
 
         let mut document = Document {
-            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
+            doc_path: "/database/document_id".into_document_path().unwrap(),
             revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
             deleted: false,
             attachments: {
@@ -460,7 +443,7 @@ mod document_tests {
         document.remove_attachment("foo");
 
         let expected = Document {
-            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
+            doc_path: "/database/document_id".into_document_path().unwrap(),
             revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
             deleted: false,
             attachments: std::collections::HashMap::new(),
@@ -474,7 +457,7 @@ mod document_tests {
     fn remove_attachment_no_exist() {
 
         let mut document = Document {
-            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
+            doc_path: "/database/document_id".into_document_path().unwrap(),
             revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
             deleted: false,
             attachments: {
@@ -491,7 +474,7 @@ mod document_tests {
         document.remove_attachment("bar");
 
         let expected = Document {
-            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
+            doc_path: "/database/document_id".into_document_path().unwrap(),
             revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
             deleted: false,
             attachments: {
@@ -524,7 +507,7 @@ mod document_tests {
         };
 
         let document = Document {
-            doc_path: DocumentPath::parse("/database/document_id").unwrap(),
+            doc_path: "/database/document_id".into_document_path().unwrap(),
             revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
             deleted: false,
             attachments: attachments.clone(),
@@ -533,7 +516,7 @@ mod document_tests {
 
         let got = document.attachments()
                           .map(|(path, attachment)| {
-                              (AttachmentName::from(path.attachment_name()), attachment.clone())
+                              (path.attachment_name().clone(), attachment.clone())
                           })
                           .collect();
         assert_eq!(attachments, got);
@@ -751,9 +734,7 @@ pub struct DocumentBuilder(Document);
 
 #[cfg(test)]
 impl DocumentBuilder {
-    pub fn new<'a, P>(doc_path: P, revision: Revision) -> Self
-        where P: IntoDocumentPath<'a>
-    {
+    pub fn new<P: IntoDocumentPath>(doc_path: P, revision: Revision) -> Self {
         DocumentBuilder(Document {
             doc_path: doc_path.into_document_path().unwrap().into(),
             revision: revision,

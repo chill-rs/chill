@@ -1,21 +1,18 @@
+use {DocumentPath, Error, IntoDocumentPath, Revision};
 use document::WriteDocumentResponse;
-use DocumentPathRef;
-use Error;
-use IntoDocumentPath;
-use Revision;
 use transport::{Action, RequestOptions, Response, StatusCode, Transport};
 use transport::production::HyperTransport;
 
 pub struct DeleteDocument<'a, T: Transport + 'a> {
     transport: &'a T,
-    doc_path: DocumentPathRef<'a>,
+    doc_path: DocumentPath,
     revision: &'a Revision,
 }
 
 impl<'a, T: Transport + 'a> DeleteDocument<'a, T> {
     #[doc(hidden)]
     pub fn new<P>(transport: &'a T, doc_path: P, revision: &'a Revision) -> Result<Self, Error>
-        where P: IntoDocumentPath<'a>
+        where P: IntoDocumentPath
     {
         Ok(DeleteDocument {
             transport: transport,
@@ -37,7 +34,7 @@ impl<'a, T: Transport + 'a> Action<T> for DeleteDocument<'a, T> {
 
     fn make_request(&mut self) -> Result<(T::Request, Self::State), Error> {
         let options = RequestOptions::new().with_accept_json().with_revision_query(self.revision);
-        let request = try!(self.transport.delete(self.doc_path, options));
+        let request = try!(self.transport.delete(self.doc_path.iter(), options));
         Ok((request, ()))
     }
 

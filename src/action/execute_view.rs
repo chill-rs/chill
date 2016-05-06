@@ -1,15 +1,10 @@
 //! Defines an action for executing a view.
 
-use DatabaseName;
-use Error;
-use IntoViewPath;
-use serde;
-use std;
+use {DatabaseName, Error, IntoViewPath, ViewPath, ViewResponse};
 use transport::{Action, RequestOptions, Response, StatusCode, Transport};
 use transport::production::HyperTransport;
 use view::ViewResponseJsonable;
-use ViewPathRef;
-use ViewResponse;
+use {serde, std};
 
 enum Inclusivity {
     Exclusive,
@@ -112,7 +107,7 @@ pub struct ExecuteView<'a, T, K, V>
           V: serde::Deserialize
 {
     transport: &'a T,
-    view_path: ViewPathRef<'a>,
+    view_path: ViewPath,
     phantom_key: std::marker::PhantomData<K>,
     phantom_value: std::marker::PhantomData<V>,
     reduce: Option<bool>,
@@ -128,7 +123,7 @@ impl<'a, K, T, V> ExecuteView<'a, T, K, V>
           V: serde::Deserialize
 {
     #[doc(hidden)]
-    pub fn new<P: IntoViewPath<'a>>(transport: &'a T, view_path: P) -> Result<Self, Error> {
+    pub fn new<P: IntoViewPath>(transport: &'a T, view_path: P) -> Result<Self, Error> {
         Ok(ExecuteView {
             transport: transport,
             view_path: try!(view_path.into_view_path()),
@@ -264,8 +259,8 @@ impl<'a, T, K, V> Action<T> for ExecuteView<'a, T, K, V>
             Some(value) => options.with_descending_query(value),
         };
 
-        let db_name = DatabaseName::from(self.view_path.database_name());
-        let request = try!(self.transport.get(self.view_path, options));
+        let request = try!(self.transport.get(self.view_path.iter(), options));
+        let db_name = self.view_path.database_name().clone();
         Ok((request, db_name))
     }
 

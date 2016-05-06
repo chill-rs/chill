@@ -252,8 +252,7 @@ impl std::fmt::Display for Error {
 
 #[derive(Debug)]
 pub enum PathParseErrorKind {
-    BadDesignPrefix,
-    BadViewPrefix,
+    BadSegment(&'static str),
     EmptySegment,
     NoLeadingSlash,
     TooFewSegments,
@@ -269,19 +268,9 @@ impl PathParseErrorKind {
 
 impl std::fmt::Display for PathParseErrorKind {
     fn fmt(&self, formatter: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-        use path;
         use self::PathParseErrorKind::*;
         match self {
-            &BadDesignPrefix => {
-                write!(formatter,
-                       r#"Design document prefix is invalid (expecting "{}")"#,
-                       path::DESIGN_PREFIX)
-            }
-            &BadViewPrefix => {
-                write!(formatter,
-                       r#"View prefix is invalid (expecting "{}")"#,
-                       path::VIEW_PREFIX)
-            }
+            &BadSegment(expected) => write!(formatter, "Segment is bad, expected {:?}", expected),
             &EmptySegment => write!(formatter, "Path segment is empty"),
             &NoLeadingSlash => write!(formatter, "Path does not begin with a slash"),
             &TooFewSegments => write!(formatter, "Too few path segments"),

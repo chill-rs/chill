@@ -65,7 +65,7 @@ impl Client {
     pub fn create_database<'a, P>(&'a self,
                                   db_path: P)
                                   -> Result<action::CreateDatabase<'a, HyperTransport>, Error>
-        where P: IntoDatabasePath<'a>
+        where P: IntoDatabasePath
     {
         action::CreateDatabase::new(&self.transport, db_path)
     }
@@ -77,7 +77,7 @@ impl Client {
          content: &'a C)
          -> Result<action::CreateDocument<'a, HyperTransport, C>, Error>
         where C: serde::Serialize,
-              P: IntoDatabasePath<'a>
+              P: IntoDatabasePath
     {
         action::CreateDocument::new(&self.transport, db_path, content)
     }
@@ -86,7 +86,7 @@ impl Client {
     pub fn read_document<'a, P>(&'a self,
                                 doc_path: P)
                                 -> Result<action::ReadDocument<'a, HyperTransport>, Error>
-        where P: IntoDocumentPath<'a>
+        where P: IntoDocumentPath
     {
         action::ReadDocument::new(&self.transport, doc_path)
     }
@@ -103,7 +103,7 @@ impl Client {
                                   doc_path: P,
                                   revision: &'a Revision)
                                   -> Result<action::DeleteDocument<'a, HyperTransport>, Error>
-        where P: IntoDocumentPath<'a>
+        where P: IntoDocumentPath
     {
         action::DeleteDocument::new(&self.transport, doc_path, revision)
     }
@@ -114,7 +114,7 @@ impl Client {
          view_path: P)
          -> Result<action::ExecuteView<'a, HyperTransport, K, V>, Error>
         where K: serde::Deserialize + serde::Serialize,
-              P: IntoViewPath<'a>,
+              P: IntoViewPath,
               V: serde::Deserialize
     {
         action::ExecuteView::new(&self.transport, view_path)

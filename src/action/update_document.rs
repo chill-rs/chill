@@ -1,7 +1,5 @@
+use {Document, Error, Revision};
 use document::WriteDocumentResponse;
-use Document;
-use Error;
-use Revision;
 use transport::{Action, RequestOptions, Response, StatusCode, Transport};
 use transport::production::HyperTransport;
 

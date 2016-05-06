@@ -1,12 +1,6 @@
-use DatabasePathRef;
+use {DatabasePath, DocumentId, Error, IntoDatabasePath, Revision};
 use document::WriteDocumentResponse;
-use DocumentId;
-use DocumentIdRef;
-use Error;
-use IntoDatabasePath;
-use Revision;
-use serde;
-use serde_json;
+use {serde, serde_json};
 use transport::{Action, RequestOptions, Response, StatusCode, Transport};
 use transport::production::HyperTransport;
 
@@ -15,9 +9,9 @@ pub struct CreateDocument<'a, T, C>
           T: Transport + 'a
 {
     transport: &'a T,
-    db_path: DatabasePathRef<'a>,
+    db_path: DatabasePath,
     content: &'a C,
-    doc_id: Option<DocumentIdRef<'a>>,
+    doc_id: Option<DocumentId>,
 }
 
 impl<'a, C, T> CreateDocument<'a, T, C>
@@ -26,7 +20,7 @@ impl<'a, C, T> CreateDocument<'a, T, C>
 {
     #[doc(hidden)]
     pub fn new<P>(transport: &'a T, db_path: P, content: &'a C) -> Result<Self, Error>
-        where P: IntoDatabasePath<'a>
+        where P: IntoDatabasePath
     {
         Ok(CreateDocument {
             transport: transport,
@@ -37,7 +31,7 @@ impl<'a, C, T> CreateDocument<'a, T, C>
     }
 
     pub fn with_document_id<D>(mut self, doc_id: D) -> Self
-        where D: Into<DocumentIdRef<'a>>
+        where D: Into<DocumentId>
     {
         self.doc_id = Some(doc_id.into());
         self
@@ -66,8 +60,8 @@ impl<'a, C, T> Action<T> for CreateDocument<'a, T, C>
 
             match doc {
                 serde_json::Value::Object(ref mut fields) => {
-                    for doc_id in self.doc_id {
-                        fields.insert(String::from("_id"), serde_json::to_value(&doc_id));
+                    if let Some(ref doc_id) = self.doc_id {
+                        fields.insert(String::from("_id"), serde_json::to_value(doc_id));
                     }
                 }
                 _ => {
@@ -79,7 +73,7 @@ impl<'a, C, T> Action<T> for CreateDocument<'a, T, C>
         };
 
         let options = RequestOptions::new().with_accept_json().with_json_body(&body);
-        let request = try!(self.transport.post(self.db_path, options));
+        let request = try!(self.transport.post(self.db_path.iter(), options));
         Ok((request, ()))
     }
 

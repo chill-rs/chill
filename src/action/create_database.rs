@@ -1,17 +1,15 @@
-use DatabasePathRef;
-use Error;
-use IntoDatabasePath;
+use {DatabasePath, Error, IntoDatabasePath};
 use transport::{Action, RequestOptions, Response, StatusCode, Transport};
 use transport::production::HyperTransport;
 
 pub struct CreateDatabase<'a, T: Transport + 'a> {
     transport: &'a T,
-    db_path: DatabasePathRef<'a>,
+    db_path: DatabasePath,
 }
 
 impl<'a, T: Transport + 'a> CreateDatabase<'a, T> {
     #[doc(hidden)]
-    pub fn new<P: IntoDatabasePath<'a>>(transport: &'a T, db_path: P) -> Result<Self, Error> {
+    pub fn new<P: IntoDatabasePath>(transport: &'a T, db_path: P) -> Result<Self, Error> {
         Ok(CreateDatabase {
             transport: transport,
             db_path: try!(db_path.into_database_path()),
@@ -31,7 +29,7 @@ impl<'a, T: Transport + 'a> Action<T> for CreateDatabase<'a, T> {
 
     fn make_request(&mut self) -> Result<(T::Request, Self::State), Error> {
         let options = RequestOptions::new().with_accept_json();
-        let request = try!(self.transport.put(self.db_path, options));
+        let request = try!(self.transport.put(self.db_path.iter(), options));
         Ok((request, ()))
     }
 

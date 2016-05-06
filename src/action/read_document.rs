@@ -1,12 +1,7 @@
 //! Defines an action for reading a document from the CouchDB server.
 
-use DatabaseName;
-use Document;
-use DocumentPathRef;
+use {DatabaseName, Document, DocumentPath, Error, IntoDocumentPath, Revision};
 use document::JsonDecodableDocument;
-use Error;
-use IntoDocumentPath;
-use Revision;
 use transport::{Action, RequestOptions, Response, StatusCode, Transport};
 use transport::production::HyperTransport;
 
@@ -54,7 +49,7 @@ use transport::production::HyperTransport;
 ///                            .run()
 ///                            .unwrap();
 ///
-/// let doc = client.read_document(("/baseball", &doc_id))
+/// let doc = client.read_document(("/baseball", doc_id))
 ///                 .unwrap()
 ///                 .run()
 ///                 .unwrap();
@@ -65,14 +60,14 @@ use transport::production::HyperTransport;
 ///
 pub struct ReadDocument<'a, T: Transport + 'a> {
     transport: &'a T,
-    doc_path: DocumentPathRef<'a>,
+    doc_path: DocumentPath,
     revision: Option<&'a Revision>,
     attachment_content: Option<AttachmentContent>,
 }
 
 impl<'a, T: Transport + 'a> ReadDocument<'a, T> {
     #[doc(hidden)]
-    pub fn new<P: IntoDocumentPath<'a>>(transport: &'a T, doc_path: P) -> Result<Self, Error> {
+    pub fn new<P: IntoDocumentPath>(transport: &'a T, doc_path: P) -> Result<Self, Error> {
         Ok(ReadDocument {
             transport: transport,
             doc_path: try!(doc_path.into_document_path()),
@@ -115,7 +110,7 @@ impl<'a, T: Transport + 'a> Action<T> for ReadDocument<'a, T> {
     type State = DatabaseName;
 
     fn make_request(&mut self) -> Result<(T::Request, Self::State), Error> {
-        let db_name = DatabaseName::from(self.doc_path.database_name());
+        let db_name = self.doc_path.database_name().clone();
 
         let options = RequestOptions::new().with_accept_json();
 
@@ -130,7 +125,7 @@ impl<'a, T: Transport + 'a> Action<T> for ReadDocument<'a, T> {
             Some(rev) => options.with_revision_query(rev),
         };
 
-        let request = try!(self.transport.get(self.doc_path, options));
+        let request = try!(self.transport.get(self.doc_path.iter(), options));
         Ok((request, db_name))
     }
 
@@ -168,13 +163,9 @@ pub enum AttachmentContent {
 #[cfg(test)]
 mod tests {
 
-    use DatabaseName;
-    use DatabaseNameRef;
-    use document::DocumentBuilder;
-    use DocumentIdRef;
-    use Error;
-    use Revision;
     use super::*;
+    use {DatabaseName, DocumentId, Error, Revision};
+    use document::DocumentBuilder;
     use transport::{Action, RequestOptions, StatusCode, Transport};
     use transport::testing::{MockResponse, MockTransport};
 
@@ -249,8 +240,8 @@ mod tests {
 
     #[test]
     fn take_response_ok() {
-        let db_name = DatabaseNameRef::from("foo");
-        let doc_id = DocumentIdRef::from("bar");
+        let db_name = DatabaseName::from("foo");
+        let doc_id = DocumentId::from("bar");
         let rev = Revision::parse("1-1234567890abcdef1234567890abcdef").unwrap();
         let response = MockResponse::new(StatusCode::Ok).build_json_body(|x| {
             x.insert("_id", doc_id.to_string())
@@ -259,7 +250,7 @@ mod tests {
              .insert("field_2", "hello")
         });
 
-        let expected = DocumentBuilder::new((db_name, doc_id), rev)
+        let expected = DocumentBuilder::new((db_name.clone(), doc_id), rev)
                            .build_content(|x| {
                                x.insert("field_1", 42)
                                 .insert("field_2", "hello")

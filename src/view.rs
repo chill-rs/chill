@@ -1,9 +1,5 @@
-use DatabaseName;
-use DocumentId;
-use DocumentPathRef;
-use Error;
-use serde;
-use std;
+use {DatabaseName, DocumentId, DocumentPath, Error};
+use {serde, std};
 
 /// Contains the response from the CouchDB server as a result of successfully
 /// executing a view.
@@ -202,8 +198,7 @@ pub struct ViewIsUnreduced;
 pub struct ViewRow<K: serde::Deserialize, V: serde::Deserialize> {
     key: K,
     value: V,
-    db_name: DatabaseName,
-    doc_id: DocumentId,
+    doc_path: DocumentPath,
 }
 
 impl<K, V> ViewRow<K, V>
@@ -229,8 +224,7 @@ impl<K, V> ViewRow<K, V>
         Ok(ViewRow {
             key: key,
             value: row.value,
-            db_name: db_name,
-            doc_id: doc_id,
+            doc_path: DocumentPath::from((db_name, doc_id)),
         })
     }
 
@@ -245,8 +239,8 @@ impl<K, V> ViewRow<K, V>
     }
 
     /// Returns the path of the row's document.
-    pub fn document_path(&self) -> DocumentPathRef {
-        DocumentPathRef::from((&self.db_name, &self.doc_id))
+    pub fn document_path(&self) -> &DocumentPath {
+        &self.doc_path
     }
 }
 
@@ -749,8 +743,7 @@ impl<K: serde::Deserialize, V: serde::Deserialize> ViewResponseBuilder<K, V, Vie
         let row = ViewRow {
             key: key.into(),
             value: value.into(),
-            db_name: self.db_name.clone().unwrap(),
-            doc_id: doc_id.into(),
+            doc_path: DocumentPath::from((self.db_name.clone().unwrap(), doc_id.into())),
         };
 
         self.target.as_unreduced_mut().unwrap().rows.push(row);
@@ -778,9 +771,8 @@ impl<K: serde::Deserialize, M, V: serde::Deserialize> ViewResponseBuilder<K, V, 
 #[cfg(test)]
 mod view_response_builder_tests {
 
-    use DatabaseName;
-    use DocumentId;
     use super::*;
+    use IntoDocumentPath;
 
     #[test]
     fn reduced_required() {
@@ -846,14 +838,12 @@ mod view_response_builder_tests {
                 rows: vec![ViewRow {
                                key: String::from("Babe Ruth"),
                                value: 714,
-                               db_name: DatabaseName::from("baseball"),
-                               doc_id: DocumentId::from("babe_ruth"),
+                               doc_path: "/baseball/babe_ruth".into_document_path().unwrap(),
                            },
                            ViewRow {
                                key: String::from("Hank Aaron"),
                                value: 755,
-                               db_name: DatabaseName::from("baseball"),
-                               doc_id: DocumentId::from("hank_aaron"),
+                               doc_path: "/baseball/hank_aaron".into_document_path().unwrap(),
                            }],
             }
         });

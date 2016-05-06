@@ -50,7 +50,7 @@ fn create_document_ok_default() {
 
     let (doc_id, _rev) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
 
-    let doc = client.read_document(("/baseball", &doc_id))
+    let doc = client.read_document(("/baseball", doc_id))
                     .unwrap()
                     .run()
                     .unwrap();
@@ -76,7 +76,7 @@ fn create_document_ok_with_document_id() {
                                .unwrap();
     assert_eq!(chill::DocumentId::from("babe_ruth"), doc_id);
 
-    let doc = client.read_document(("/baseball", &doc_id))
+    let doc = client.read_document(("/baseball", doc_id))
                     .unwrap()
                     .run()
                     .unwrap();
@@ -99,7 +99,7 @@ fn create_document_nok_document_conflict() {
 
     match client.create_document("/baseball", &up_content)
                 .unwrap()
-                .with_document_id(&doc_id)
+                .with_document_id(doc_id)
                 .run() {
         Err(chill::Error::DocumentConflict(..)) => (),
         x @ _ => unexpected_result!(x),
@@ -119,7 +119,7 @@ fn read_document_ok_default() {
 
     let (doc_id, _rev) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
 
-    let doc = client.read_document(("/baseball", &doc_id))
+    let doc = client.read_document(("/baseball", doc_id))
                     .unwrap()
                     .run()
                     .unwrap();
@@ -140,7 +140,7 @@ fn read_document_ok_with_revision() {
 
     let (doc_id, rev) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
 
-    let doc = client.read_document(("/baseball", &doc_id))
+    let doc = client.read_document(("/baseball", doc_id))
                     .unwrap()
                     .with_revision(&rev)
                     .run()
@@ -184,7 +184,7 @@ fn read_document_ok_with_attachment_stubs() {
 
     let (doc_id, _rev) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
 
-    let doc = client.read_document(("/baseball", &doc_id))
+    let doc = client.read_document(("/baseball", doc_id))
                     .unwrap()
                     .run()
                     .unwrap();
@@ -194,8 +194,7 @@ fn read_document_ok_with_attachment_stubs() {
         let path = chill::AttachmentPath::from((doc.path().clone(),
                                                 chill::AttachmentName::from("photo.png")));
         m.insert(path,
-                 (mime!(Image / Png),
-                  "Pretend this is a PNG file.".len() as u64));
+                 (mime!(Image / Png), "Pretend this is a PNG file.".len() as u64));
         m
     };
 
@@ -233,7 +232,7 @@ fn read_document_ok_with_attachment_content() {
 
     let (doc_id, _rev) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
 
-    let doc = client.read_document(("/baseball", &doc_id))
+    let doc = client.read_document(("/baseball", doc_id))
                     .unwrap()
                     .with_attachment_content(chill::action::read_document::AttachmentContent::All)
                     .run()
@@ -274,7 +273,7 @@ fn update_document_ok_default() {
 
     let (doc_id, _rev) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
 
-    let mut doc = client.read_document(("/baseball", &doc_id))
+    let mut doc = client.read_document(("/baseball", doc_id))
                         .unwrap()
                         .run()
                         .unwrap();
@@ -294,7 +293,7 @@ fn update_document_ok_default() {
 
     let updated_rev = client.update_document(&doc).unwrap().run().unwrap();
 
-    let doc = client.read_document(("/baseball", doc.id()))
+    let doc = client.read_document(("/baseball", doc.id().clone()))
                     .unwrap()
                     .run()
                     .unwrap();
@@ -316,7 +315,7 @@ fn update_document_ok_create_attachment() {
 
     let (doc_id, _rev) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
 
-    let mut doc = client.read_document(("/baseball", &doc_id))
+    let mut doc = client.read_document(("/baseball", doc_id.clone()))
                         .unwrap()
                         .run()
                         .unwrap();
@@ -327,7 +326,7 @@ fn update_document_ok_create_attachment() {
 
     client.update_document(&doc).unwrap().run().unwrap();
 
-    let doc = client.read_document(("/baseball", &doc_id))
+    let doc = client.read_document(("/baseball", doc_id))
                     .unwrap()
                     .with_attachment_content(chill::action::read_document::AttachmentContent::All)
                     .run()
@@ -377,7 +376,7 @@ fn update_document_ok_update_attachment() {
 
     let (doc_id, _rev) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
 
-    let mut doc = client.read_document(("/baseball", &doc_id))
+    let mut doc = client.read_document(("/baseball", doc_id.clone()))
                         .unwrap()
                         .run()
                         .unwrap();
@@ -388,7 +387,7 @@ fn update_document_ok_update_attachment() {
 
     client.update_document(&doc).unwrap().run().unwrap();
 
-    let doc = client.read_document(("/baseball", &doc_id))
+    let doc = client.read_document(("/baseball", doc_id))
                     .unwrap()
                     .with_attachment_content(chill::action::read_document::AttachmentContent::All)
                     .run()
@@ -400,8 +399,7 @@ fn update_document_ok_update_attachment() {
         let path = chill::AttachmentPath::from((doc.path().clone(),
                                                 chill::AttachmentName::from("photo.png")));
         m.insert(path,
-                 (mime!(Image / Png),
-                  Vec::from("Pretend we updated the photo.")));
+                 (mime!(Image / Png), Vec::from("Pretend we updated the photo.")));
         m
     };
 
@@ -439,7 +437,7 @@ fn update_document_ok_delete_attachment() {
 
     let (doc_id, _rev) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
 
-    let mut doc = client.read_document(("/baseball", &doc_id))
+    let mut doc = client.read_document(("/baseball", doc_id.clone()))
                         .unwrap()
                         .run()
                         .unwrap();
@@ -448,7 +446,7 @@ fn update_document_ok_delete_attachment() {
 
     client.update_document(&doc).unwrap().run().unwrap();
 
-    let doc = client.read_document(("/baseball", &doc_id))
+    let doc = client.read_document(("/baseball", doc_id))
                     .unwrap()
                     .with_attachment_content(chill::action::read_document::AttachmentContent::All)
                     .run()
@@ -482,19 +480,19 @@ fn delete_document_ok() {
 
     let (doc_id, rev1) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
 
-    let rev2 = client.delete_document(("/baseball", &doc_id), &rev1)
+    let rev2 = client.delete_document(("/baseball", doc_id.clone()), &rev1)
                      .unwrap()
                      .run()
                      .unwrap();
 
-    match client.read_document(("/baseball", &doc_id)).unwrap().run() {
+    match client.read_document(("/baseball", doc_id.clone())).unwrap().run() {
         Err(chill::Error::NotFound(..)) => (),
         x @ _ => {
             panic!("Unexpected result: {:?}", x);
         }
     }
 
-    let doc = client.read_document(("/baseball", &doc_id))
+    let doc = client.read_document(("/baseball", doc_id))
                     .unwrap()
                     .with_revision(&rev2)
                     .run()
