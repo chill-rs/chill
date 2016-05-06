@@ -1,5 +1,12 @@
 # Chill-rs Change Log
 
+## v0.2.0 (unreleased)
+
+* Replace each owning and non-owning path-related type pair (e.g.,
+  `DatabaseName` and `DatabaseNameRef`) with a single owning type (e.g.,
+  `DatabaseName`). This increases the number of memory allocations in
+  some use cases but vastly simplifies the API.
+
 ## v0.1.2 (unreleased)
 
 * Deprecate the `Document::id` method, use `Document::path` instead.
