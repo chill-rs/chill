@@ -1,9 +1,12 @@
 # Chill-rs Change Log
 
-## v0.1.2 (unreleased)
+## v0.1.2 (2016-05-07)
 
-* Deprecate the `Document::id` method, use `Document::path` instead.
-* New support for `limit` query parameter when executing a view.
+The v0.1.2 release has a few small changes.
+
+* New support for the `limit` query parameter when executing a view.
+* Deprecate the `Document::id` method. Applications should use
+  `Document::path` instead.
 * Define `IntoUrl` not to be based on Hyper's trait of the same name.
 
 ## v0.1.1 (2016-04-16)
