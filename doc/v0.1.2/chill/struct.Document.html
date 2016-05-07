@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `Document` struct in crate `chill`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, Document">
+
+    <title>chill::Document - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../rustdoc.css">
+    <link rel="stylesheet" type="text/css" href="../main.css">
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <nav class="sidebar">
+        
+        <p class='location'><a href='index.html'>chill</a></p><script>window.sidebarCurrent = {name: 'Document', ty: 'struct', relpath: ''};</script><script defer src="sidebar-items.js"></script>
+    </nav>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press ‘S’ to search, ‘?’ for more options…"
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content struct">
+<h1 class='fqn'><span class='in-band'>Struct <a href='index.html'>chill</a>::<wbr><a class='struct' href=''>Document</a></span><span class='out-of-band'><span id='render-detail'>
+            <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                [<span class='inner'>&#x2212;</span>]
+            </a>
+        </span><a id='src-612' class='srclink' href='../src/chill/src/document.rs.html#26-32' title='goto source code'>[src]</a></span></h1>
+<pre class='rust struct'>pub struct Document {
+    // some fields omitted
+}</pre><div class='docblock'><p>Contains a specific version of a document.</p>
+
+<p>A <code>Document</code> is an in-memory representation of a document, including its
+content, attachments, and meta-information.</p>
+
+<p>A <code>Document</code> may represent a document of any type: normal, design, or local.</p>
+</div><h2 id='methods'>Methods</h2><h3 class='impl'><code>impl <a class='struct' href='../chill/struct.Document.html' title='chill::Document'>Document</a></code></h3><div class='impl-items'><h4 id='method.path' class='method'><code>fn <a href='#method.path' class='fnname'>path</a>(&amp;self) -&gt; &amp;<a class='struct' href='../chill/path/struct.DocumentPath.html' title='chill::path::DocumentPath'>DocumentPath</a></code></h4>
+<h4 id='method.revision' class='method'><code>fn <a href='#method.revision' class='fnname'>revision</a>(&amp;self) -&gt; &amp;<a class='struct' href='../chill/struct.Revision.html' title='chill::Revision'>Revision</a></code></h4>
+<div class='docblock'><p>Returns the document&#39;s revision.</p>
+</div><h4 id='method.is_deleted' class='method'><code>fn <a href='#method.is_deleted' class='fnname'>is_deleted</a>(&amp;self) -&gt; <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.bool.html'>bool</a></code></h4>
+<div class='docblock'><p>Returns <code>true</code> if and only if the document is deleted.</p>
+
+<p>Normally, the CouchDB server returns a <code>NotFound</code> error if the
+application attempts to read a deleted document. However, the
+application may specify a revision when reading the document, and, if
+the revision marks when the document was deleted, then the server will
+respond successfully with a <code>Document</code> “stub” marked as deleted.</p>
+</div><h4 id='method.get_content' class='method'><code>fn <a href='#method.get_content' class='fnname'>get_content</a>&lt;C: <a class='trait' href='https://serde-rs.github.io/serde/serde/serde/de/trait.Deserialize.html' title='serde::de::Deserialize'>Deserialize</a>&gt;(&amp;self) -&gt; <a class='enum' href='https://doc.rust-lang.org/nightly/core/result/enum.Result.html' title='core::result::Result'>Result</a>&lt;C, <a class='enum' href='../chill/enum.Error.html' title='chill::Error'>Error</a>&gt;</code></h4>
+<div class='docblock'><p>Decodes and returns the document content, from a JSON object into a Rust
+type.</p>
+</div><h4 id='method.set_content' class='method'><code>fn <a href='#method.set_content' class='fnname'>set_content</a>&lt;C: <a class='trait' href='https://serde-rs.github.io/serde/serde/serde/ser/trait.Serialize.html' title='serde::ser::Serialize'>Serialize</a>&gt;(&amp;mut self, new_content: &amp;C) -&gt; <a class='enum' href='https://doc.rust-lang.org/nightly/core/result/enum.Result.html' title='core::result::Result'>Result</a>&lt;<a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.tuple.html'>()</a>, <a class='enum' href='../chill/enum.Error.html' title='chill::Error'>Error</a>&gt;</code></h4>
+<div class='docblock'><p>Encodes the document content, from a Rust type into a JSON object.</p>
+
+<p>The <code>set_content</code> method modifies the <code>Document</code> instance but doesn&#39;t
+update the document on the CouchDB server. To update the document on the
+server, the application must use the <code>UpdateDocument</code> action upon the
+modified <code>Document</code>.</p>
+</div><h4 id='method.get_attachment' class='method'><code>fn <a href='#method.get_attachment' class='fnname'>get_attachment</a>&lt;'a, A&gt;(&amp;self, name: A) -&gt; <a class='enum' href='https://doc.rust-lang.org/nightly/core/option/enum.Option.html' title='core::option::Option'>Option</a>&lt;&amp;<a class='enum' href='../chill/enum.Attachment.html' title='chill::Attachment'>Attachment</a>&gt; <span class='where'>where A: <a class='trait' href='https://doc.rust-lang.org/nightly/core/convert/trait.Into.html' title='core::convert::Into'>Into</a>&lt;<a class='struct' href='../chill/path/struct.AttachmentNameRef.html' title='chill::path::AttachmentNameRef'>AttachmentNameRef</a>&lt;'a&gt;&gt;</span></code></h4>
+<div class='docblock'><p>Returns the document&#39;s attachment of a given name, if the attachment
+exists.</p>
+</div><h4 id='method.insert_attachment' class='method'><code>fn <a href='#method.insert_attachment' class='fnname'>insert_attachment</a>&lt;'a, A&gt;(&amp;mut self, name: A, content_type: <a class='struct' href='https://hyperium.github.io/mime.rs/mime/struct.Mime.html' title='mime::Mime'>Mime</a>, content: <a class='struct' href='https://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;<a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.u8.html'>u8</a>&gt;) <span class='where'>where A: <a class='trait' href='https://doc.rust-lang.org/nightly/core/convert/trait.Into.html' title='core::convert::Into'>Into</a>&lt;<a class='struct' href='../chill/path/struct.AttachmentNameRef.html' title='chill::path::AttachmentNameRef'>AttachmentNameRef</a>&lt;'a&gt;&gt;</span></code></h4>
+<div class='docblock'><p>Creates or replaces the document&#39;s attachment of a given name.</p>
+
+<p>This method does <em>not</em> change state on the CouchDB server, and the newly
+created attachment exists only in memory on the client-side. To store
+the document on the CouchDB server, the client must execute an action to
+update the document, at which time the client will send the attachment
+to the server.</p>
+</div><h4 id='method.remove_attachment' class='method'><code>fn <a href='#method.remove_attachment' class='fnname'>remove_attachment</a>&lt;'a, A&gt;(&amp;mut self, name: A) <span class='where'>where A: <a class='trait' href='https://doc.rust-lang.org/nightly/core/convert/trait.Into.html' title='core::convert::Into'>Into</a>&lt;<a class='struct' href='../chill/path/struct.AttachmentNameRef.html' title='chill::path::AttachmentNameRef'>AttachmentNameRef</a>&lt;'a&gt;&gt;</span></code></h4>
+<div class='docblock'><p>Deletes the document&#39;s attachment of a given name, if the attachment
+exists.</p>
+
+<p>This method does <em>not</em> change state on the CouchDB server, and the newly
+deleted attachment will continue to exist on the CouchDB server until
+the client executes an action to update the document.</p>
+</div><h4 id='method.attachments' class='method'><code>fn <a href='#method.attachments' class='fnname'>attachments</a>(&amp;self) -&gt; AttachmentIter</code></h4>
+<div class='docblock'><p>Returns an iterator to all attachments to the document.</p>
+</div></div><h2 id='implementations'>Trait Implementations</h2><h3 id='derived_implementations'>Derived Implementations </h3><h3 class='impl'><code>impl <a class='trait' href='https://doc.rust-lang.org/nightly/core/cmp/trait.PartialEq.html' title='core::cmp::PartialEq'>PartialEq</a> for <a class='struct' href='../chill/struct.Document.html' title='chill::Document'>Document</a></code></h3><div class='impl-items'><h4 id='method.eq' class='method'><code>fn <a href='https://doc.rust-lang.org/nightly/core/cmp/trait.PartialEq.html#method.eq' class='fnname'>eq</a>(&amp;self, __arg_0: &amp;<a class='struct' href='../chill/struct.Document.html' title='chill::Document'>Document</a>) -&gt; <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.bool.html'>bool</a></code></h4>
+<h4 id='method.ne' class='method'><code>fn <a href='https://doc.rust-lang.org/nightly/core/cmp/trait.PartialEq.html#method.ne' class='fnname'>ne</a>(&amp;self, __arg_0: &amp;<a class='struct' href='../chill/struct.Document.html' title='chill::Document'>Document</a>) -&gt; <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.bool.html'>bool</a></code></h4>
+</div><h3 class='impl'><code>impl <a class='trait' href='https://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html' title='core::fmt::Debug'>Debug</a> for <a class='struct' href='../chill/struct.Document.html' title='chill::Document'>Document</a></code></h3><div class='impl-items'><h4 id='method.fmt' class='method'><code>fn <a href='https://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html#method.fmt' class='fnname'>fmt</a>(&amp;self, __arg_0: &amp;mut <a class='struct' href='https://doc.rust-lang.org/nightly/core/fmt/struct.Formatter.html' title='core::fmt::Formatter'>Formatter</a>) -&gt; <a class='type' href='https://doc.rust-lang.org/nightly/core/fmt/type.Result.html' title='core::fmt::Result'>Result</a></code></h4>
+</div></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <aside id="help" class="hidden">
+        <div>
+            <h1 class="hidden">Help</h1>
+
+            <div class="shortcuts">
+                <h2>Keyboard Shortcuts</h2>
+
+                <dl>
+                    <dt>?</dt>
+                    <dd>Show this help dialog</dd>
+                    <dt>S</dt>
+                    <dd>Focus the search field</dd>
+                    <dt>&larrb;</dt>
+                    <dd>Move up in search results</dd>
+                    <dt>&rarrb;</dt>
+                    <dd>Move down in search results</dd>
+                    <dt>&#9166;</dt>
+                    <dd>Go to active search result</dd>
+                </dl>
+            </div>
+
+            <div class="infos">
+                <h2>Search Tricks</h2>
+
+                <p>
+                    Prefix searches with a type followed by a colon (e.g.
+                    <code>fn:</code>) to restrict the search to a given type.
+                </p>
+
+                <p>
+                    Accepted types are: <code>fn</code>, <code>mod</code>,
+                    <code>struct</code>, <code>enum</code>,
+                    <code>trait</code>, <code>type</code>, <code>macro</code>,
+                    and <code>const</code>.
+                </p>
+
+                <p>
+                    Search functions by type signature (e.g.
+                    <code>vec -> usize</code> or <code>* -> vec</code>)
+                </p>
+            </div>
+        </div>
+    </aside>
+
+    
+
+    <script>
+        window.rootPath = "../";
+        window.currentCrate = "chill";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../jquery.js"></script>
+    <script src="../main.js"></script>
+    
+    <script defer src="../search-index.js"></script>
+</body>
+</html>

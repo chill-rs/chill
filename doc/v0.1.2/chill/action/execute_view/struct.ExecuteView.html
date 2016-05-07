@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `ExecuteView` struct in crate `chill`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, ExecuteView">
+
+    <title>chill::action::execute_view::ExecuteView - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../../../rustdoc.css">
+    <link rel="stylesheet" type="text/css" href="../../../main.css">
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <nav class="sidebar">
+        
+        <p class='location'><a href='../../index.html'>chill</a>::<wbr><a href='../index.html'>action</a>::<wbr><a href='index.html'>execute_view</a></p><script>window.sidebarCurrent = {name: 'ExecuteView', ty: 'struct', relpath: ''};</script><script defer src="sidebar-items.js"></script>
+    </nav>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press ‘S’ to search, ‘?’ for more options…"
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content struct">
+<h1 class='fqn'><span class='in-band'>Struct <a href='../../index.html'>chill</a>::<wbr><a href='../index.html'>action</a>::<wbr><a href='index.html'>execute_view</a>::<wbr><a class='struct' href=''>ExecuteView</a></span><span class='out-of-band'><span id='render-detail'>
+            <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                [<span class='inner'>&#x2212;</span>]
+            </a>
+        </span><a id='src-2851' class='srclink' href='../../../src/chill/src/action/execute_view.rs.html#109-123' title='goto source code'>[src]</a></span></h1>
+<pre class='rust struct'>pub struct ExecuteView&lt;'a, T, K, V&gt; <span class='where'>where K: <a class='trait' href='https://serde-rs.github.io/serde/serde/serde/de/trait.Deserialize.html' title='serde::de::Deserialize'>Deserialize</a> + <a class='trait' href='https://serde-rs.github.io/serde/serde/serde/ser/trait.Serialize.html' title='serde::ser::Serialize'>Serialize</a> + 'a, T: Transport + 'a, V: <a class='trait' href='https://serde-rs.github.io/serde/serde/serde/de/trait.Deserialize.html' title='serde::de::Deserialize'>Deserialize</a></span> {
+    // some fields omitted
+}</pre><div class='docblock'><p>Executes a view on the CouchDB server and returns the result.</p>
+
+<p>Chill executes the view by sending an HTTP request to the CouchDB server to
+<code>GET</code> from or <code>POST</code> to the view&#39;s path. For more details about executing
+views, please see the CouchDB documentation.</p>
+
+<h1 id='errors' class='section-header'><a href='#errors'>Errors</a></h1>
+<p>The following are <em>some</em> errors that may occur when executing a view.</p>
+
+<table>
+<tr>
+ <td><code>Error::NotFound</code></td>
+ <td>The database, design document, or view does not exist.</td>
+</tr>
+<tr>
+ <td><code>Error::Unauthorized</code></td>
+ <td>The client lacks permission to execute the view.</td>
+</tr>
+</table>
+
+<h1 id='examples' class='section-header'><a href='#examples'>Examples</a></h1>
+<p>The following program demonstrates view execution.</p>
+
+<pre class='rust rust-example-rendered'>
+<span class='kw'>extern</span> <span class='kw'>crate</span> <span class='ident'>chill</span>;
+<span class='kw'>extern</span> <span class='kw'>crate</span> <span class='ident'>serde_json</span>;
+
+<span class='kw'>let</span> <span class='ident'>server</span> <span class='op'>=</span> <span class='ident'>chill</span>::<span class='ident'>testing</span>::<span class='ident'>FakeServer</span>::<span class='ident'>new</span>().<span class='ident'>unwrap</span>();
+<span class='kw'>let</span> <span class='ident'>client</span> <span class='op'>=</span> <span class='ident'>chill</span>::<span class='ident'>Client</span>::<span class='ident'>new</span>(<span class='ident'>server</span>.<span class='ident'>uri</span>()).<span class='ident'>unwrap</span>();
+
+<span class='comment'>// Create a database and populate it with some documents.</span>
+
+<span class='ident'>client</span>.<span class='ident'>create_database</span>(<span class='string'>&quot;/baseball&quot;</span>).<span class='ident'>unwrap</span>().<span class='ident'>run</span>().<span class='ident'>unwrap</span>();
+
+<span class='kw'>let</span> <span class='ident'>create_player</span> <span class='op'>=</span> <span class='op'>|</span><span class='ident'>name</span>, <span class='ident'>home_runs</span><span class='op'>|</span> {
+    <span class='ident'>client</span>.<span class='ident'>create_document</span>(<span class='string'>&quot;/baseball&quot;</span>,
+                           <span class='kw-2'>&amp;</span><span class='ident'>serde_json</span>::<span class='ident'>builder</span>::<span class='ident'>ObjectBuilder</span>::<span class='ident'>new</span>()
+                                .<span class='ident'>insert</span>(<span class='string'>&quot;name&quot;</span>, <span class='ident'>name</span>)
+                                .<span class='ident'>insert</span>(<span class='string'>&quot;home_runs&quot;</span>, <span class='ident'>home_runs</span>)
+                                .<span class='ident'>unwrap</span>())
+          .<span class='ident'>unwrap</span>()
+          .<span class='ident'>run</span>()
+          .<span class='ident'>unwrap</span>();
+};
+
+<span class='ident'>create_player</span>(<span class='string'>&quot;Babe Ruth&quot;</span>, <span class='number'>714</span>);
+<span class='ident'>create_player</span>(<span class='string'>&quot;Hank Aaron&quot;</span>, <span class='number'>755</span>);
+<span class='ident'>create_player</span>(<span class='string'>&quot;Willie Mays&quot;</span>, <span class='number'>660</span>);
+
+<span class='ident'>client</span>.<span class='ident'>create_document</span>(<span class='string'>&quot;/baseball&quot;</span>, {
+          <span class='kw-2'>&amp;</span><span class='ident'>serde_json</span>::<span class='ident'>builder</span>::<span class='ident'>ObjectBuilder</span>::<span class='ident'>new</span>()
+               .<span class='ident'>insert_object</span>(<span class='string'>&quot;views&quot;</span>, <span class='op'>|</span><span class='ident'>x</span><span class='op'>|</span> {
+                   <span class='ident'>x</span>.<span class='ident'>insert_object</span>(<span class='string'>&quot;home_run&quot;</span>, <span class='op'>|</span><span class='ident'>x</span><span class='op'>|</span> {
+                       <span class='ident'>x</span>.<span class='ident'>insert</span>(<span class='string'>&quot;map&quot;</span>, <span class='string'>r#&quot;function(doc) { emit(doc.home_runs, doc.name); }&quot;#</span>)
+                   })
+               })
+               .<span class='ident'>unwrap</span>()
+      })
+      .<span class='ident'>unwrap</span>()
+      .<span class='ident'>with_document_id</span>(<span class='string'>&quot;_design/stat&quot;</span>)
+      .<span class='ident'>run</span>()
+      .<span class='ident'>unwrap</span>();
+
+<span class='comment'>// Execute a view to get players with at least 700 home runs.</span>
+
+<span class='kw'>let</span> <span class='ident'>view_response</span> <span class='op'>=</span> <span class='ident'>client</span>.<span class='ident'>execute_view</span>::<span class='op'>&lt;</span><span class='ident'>i32</span>, <span class='ident'>String</span>, _<span class='op'>&gt;</span>(
+                              <span class='string'>&quot;/baseball/_design/stat/_view/home_run&quot;</span>)
+                          .<span class='ident'>unwrap</span>()
+                          .<span class='ident'>with_descending</span>(<span class='boolval'>true</span>)
+                          .<span class='ident'>with_end_key_inclusive</span>(<span class='kw-2'>&amp;</span><span class='number'>700</span>)
+                          .<span class='ident'>run</span>()
+                          .<span class='ident'>unwrap</span>();
+
+<span class='kw'>let</span> <span class='ident'>expected</span> <span class='op'>=</span> <span class='macro'>vec</span><span class='macro'>!</span>[
+    (<span class='number'>755</span>, <span class='string'>&quot;Hank Aaron&quot;</span>),
+    (<span class='number'>714</span>, <span class='string'>&quot;Babe Ruth&quot;</span>),
+];
+
+<span class='kw'>let</span> <span class='ident'>got</span> <span class='op'>=</span> <span class='ident'>view_response</span>.<span class='ident'>as_unreduced</span>()
+                       .<span class='ident'>expect</span>(<span class='string'>&quot;View response is not unreduced&quot;</span>)
+                       .<span class='ident'>rows</span>()
+                       .<span class='ident'>iter</span>()
+                       .<span class='ident'>map</span>(<span class='op'>|</span><span class='ident'>x</span><span class='op'>|</span> (<span class='op'>*</span><span class='ident'>x</span>.<span class='ident'>key</span>(), <span class='ident'>x</span>.<span class='ident'>value</span>().<span class='ident'>as_ref</span>()))
+                       .<span class='ident'>collect</span>::<span class='op'>&lt;</span><span class='ident'>Vec</span><span class='op'>&lt;</span>(<span class='ident'>i32</span>, <span class='kw-2'>&amp;</span><span class='ident'>str</span>)<span class='op'>&gt;&gt;</span>();
+
+<span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='ident'>expected</span>, <span class='ident'>got</span>);</pre>
+</div><h2 id='methods'>Methods</h2><h3 class='impl'><code>impl&lt;'a, K, T, V&gt; <a class='struct' href='../../../chill/action/execute_view/struct.ExecuteView.html' title='chill::action::execute_view::ExecuteView'>ExecuteView</a>&lt;'a, T, K, V&gt; <span class='where'>where K: <a class='trait' href='https://serde-rs.github.io/serde/serde/serde/de/trait.Deserialize.html' title='serde::de::Deserialize'>Deserialize</a> + <a class='trait' href='https://serde-rs.github.io/serde/serde/serde/ser/trait.Serialize.html' title='serde::ser::Serialize'>Serialize</a>, T: Transport + 'a, V: <a class='trait' href='https://serde-rs.github.io/serde/serde/serde/de/trait.Deserialize.html' title='serde::de::Deserialize'>Deserialize</a></span></code></h3><div class='impl-items'><h4 id='method.with_reduce' class='method'><code>fn <a href='#method.with_reduce' class='fnname'>with_reduce</a>(self, reduce: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.bool.html'>bool</a>) -&gt; Self</code></h4>
+<div class='docblock'><p>Modifies the action to explicitly reduce or not reduce the view.</p>
+
+<p>The <code>with_reduce</code> method abstracts CouchDB&#39;s <code>reduce</code> query parameter.
+By default, CouchDB reduces a view if and only if the view contains a
+reduction function. Consequently, an application may use this method to
+disable reduction of a view that contains a reduction function.</p>
+</div><h4 id='method.with_start_key' class='method'><code>fn <a href='#method.with_start_key' class='fnname'>with_start_key</a>(self, start_key: &amp;'a K) -&gt; Self</code></h4>
+<div class='docblock'><p>Modifies the action to include only records with a key greater than or
+equal to a given key.</p>
+
+<p>The <code>with_start_key</code> method abstracts CouchDB&#39;s <code>startkey</code> query
+parameter. By default, the CouchDB server includes all records.</p>
+</div><h4 id='method.with_end_key_inclusive' class='method'><code>fn <a href='#method.with_end_key_inclusive' class='fnname'>with_end_key_inclusive</a>(self, end_key: &amp;'a K) -&gt; Self</code></h4>
+<div class='docblock'><p>Modifies the action to include only records with a key less than or
+equal to a given key.</p>
+
+<p>The <code>with_end_key_inclusive</code> method abstracts CouchDB&#39;s <code>endkey</code> query
+parameter. By default, the CouchDB server includes all records.</p>
+</div><h4 id='method.with_end_key_exclusive' class='method'><code>fn <a href='#method.with_end_key_exclusive' class='fnname'>with_end_key_exclusive</a>(self, end_key: &amp;'a K) -&gt; Self</code></h4>
+<div class='docblock'><p>Modifies the action to include only records with a key less than a given
+key.</p>
+
+<p>The <code>with_end_key_exclusive</code> method abstracts CouchDB&#39;s <code>endkey</code> and
+<code>inclusive_end</code> query parameters. By default, the CouchDB server
+includes all records.</p>
+</div><h4 id='method.with_limit' class='method'><code>fn <a href='#method.with_limit' class='fnname'>with_limit</a>(self, limit: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.u64.html'>u64</a>) -&gt; Self</code></h4>
+<div class='docblock'><p>Modifies the action to retrieve at most a given number of documents.</p>
+
+<p>The <code>with_limit</code> method abstracts CouchDB&#39;s <code>limit</code> query parameter. By
+default, the CouchDB server sends all rows.</p>
+
+<p>This method has no effect if the view is reduced.</p>
+</div><h4 id='method.with_descending' class='method'><code>fn <a href='#method.with_descending' class='fnname'>with_descending</a>(self, descending: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.bool.html'>bool</a>) -&gt; Self</code></h4>
+<div class='docblock'><p>Modifies the action to retrieve the view rows in descending order.</p>
+
+<p>The <code>with_descending</code> method abstracts CouchDB&#39;s <code>descending</code> query
+parameter. By default, the CouchDB server sends the rows of an unreduced
+view in ascending order, sorted by key. Whereas, if the <code>descending</code>
+query parameter is <code>true</code>, then the server sends the rows in reverse
+order.</p>
+
+<p>This method has no effect if the view is reduced.</p>
+</div></div><h3 class='impl'><code>impl&lt;'a, K, V&gt; <a class='struct' href='../../../chill/action/execute_view/struct.ExecuteView.html' title='chill::action::execute_view::ExecuteView'>ExecuteView</a>&lt;'a, HyperTransport, K, V&gt; <span class='where'>where K: <a class='trait' href='https://serde-rs.github.io/serde/serde/serde/de/trait.Deserialize.html' title='serde::de::Deserialize'>Deserialize</a> + <a class='trait' href='https://serde-rs.github.io/serde/serde/serde/ser/trait.Serialize.html' title='serde::ser::Serialize'>Serialize</a>, V: <a class='trait' href='https://serde-rs.github.io/serde/serde/serde/de/trait.Deserialize.html' title='serde::de::Deserialize'>Deserialize</a></span></code></h3><div class='impl-items'><h4 id='method.run' class='method'><code>fn <a href='#method.run' class='fnname'>run</a>(self) -&gt; <a class='enum' href='https://doc.rust-lang.org/nightly/core/result/enum.Result.html' title='core::result::Result'>Result</a>&lt;<a class='enum' href='../../../chill/enum.ViewResponse.html' title='chill::ViewResponse'>ViewResponse</a>&lt;K, V&gt;, <a class='enum' href='../../../chill/enum.Error.html' title='chill::Error'>Error</a>&gt;</code></h4>
+</div></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <aside id="help" class="hidden">
+        <div>
+            <h1 class="hidden">Help</h1>
+
+            <div class="shortcuts">
+                <h2>Keyboard Shortcuts</h2>
+
+                <dl>
+                    <dt>?</dt>
+                    <dd>Show this help dialog</dd>
+                    <dt>S</dt>
+                    <dd>Focus the search field</dd>
+                    <dt>&larrb;</dt>
+                    <dd>Move up in search results</dd>
+                    <dt>&rarrb;</dt>
+                    <dd>Move down in search results</dd>
+                    <dt>&#9166;</dt>
+                    <dd>Go to active search result</dd>
+                </dl>
+            </div>
+
+            <div class="infos">
+                <h2>Search Tricks</h2>
+
+                <p>
+                    Prefix searches with a type followed by a colon (e.g.
+                    <code>fn:</code>) to restrict the search to a given type.
+                </p>
+
+                <p>
+                    Accepted types are: <code>fn</code>, <code>mod</code>,
+                    <code>struct</code>, <code>enum</code>,
+                    <code>trait</code>, <code>type</code>, <code>macro</code>,
+                    and <code>const</code>.
+                </p>
+
+                <p>
+                    Search functions by type signature (e.g.
+                    <code>vec -> usize</code> or <code>* -> vec</code>)
+                </p>
+            </div>
+        </div>
+    </aside>
+
+    
+
+    <script>
+        window.rootPath = "../../../";
+        window.currentCrate = "chill";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../../../jquery.js"></script>
+    <script src="../../../main.js"></script>
+    
+    <script defer src="../../../search-index.js"></script>
+</body>
+</html>
