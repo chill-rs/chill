@@ -11,7 +11,7 @@ use serde_json;
 pub trait Action<T: Transport> {
     type Output;
     type State;
-    fn make_request(&mut self) -> Result<(T::Request, Self::State), Error>;
+    fn make_request(self) -> Result<(T::Request, Self::State), Error>;
     fn take_response<R: Response>(response: R, state: Self::State) -> Result<Self::Output, Error>;
 }
 

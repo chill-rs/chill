@@ -1,43 +1,41 @@
+use {Error, IntoDocumentPath, Revision};
 use document::WriteDocumentResponse;
-use DocumentPathRef;
-use Error;
-use IntoDocumentPath;
-use Revision;
 use transport::{Action, RequestOptions, Response, StatusCode, Transport};
 use transport::production::HyperTransport;
 
-pub struct DeleteDocument<'a, T: Transport + 'a> {
+pub struct DeleteDocument<'a, T: Transport + 'a, P: IntoDocumentPath> {
     transport: &'a T,
-    doc_path: DocumentPathRef<'a>,
+    doc_path: P,
     revision: &'a Revision,
 }
 
-impl<'a, T: Transport + 'a> DeleteDocument<'a, T> {
+impl<'a, P: IntoDocumentPath, T: Transport + 'a> DeleteDocument<'a, T, P> {
     #[doc(hidden)]
-    pub fn new<P>(transport: &'a T, doc_path: P, revision: &'a Revision) -> Result<Self, Error>
-        where P: IntoDocumentPath<'a>
+    pub fn new(transport: &'a T, doc_path: P, revision: &'a Revision) -> Self
+        where P: IntoDocumentPath
     {
-        Ok(DeleteDocument {
+        DeleteDocument {
             transport: transport,
-            doc_path: try!(doc_path.into_document_path()),
+            doc_path: doc_path,
             revision: revision,
-        })
+        }
     }
 }
 
-impl<'a> DeleteDocument<'a, HyperTransport> {
+impl<'a, P: IntoDocumentPath> DeleteDocument<'a, HyperTransport, P> {
     pub fn run(self) -> Result<Revision, Error> {
         self.transport.exec_sync(self)
     }
 }
 
-impl<'a, T: Transport + 'a> Action<T> for DeleteDocument<'a, T> {
+impl<'a, P: IntoDocumentPath, T: Transport + 'a> Action<T> for DeleteDocument<'a, T, P> {
     type Output = Revision;
     type State = ();
 
-    fn make_request(&mut self) -> Result<(T::Request, Self::State), Error> {
+    fn make_request(self) -> Result<(T::Request, Self::State), Error> {
+        let doc_path = try!(self.doc_path.into_document_path());
         let options = RequestOptions::new().with_accept_json().with_revision_query(self.revision);
-        let request = try!(self.transport.delete(self.doc_path, options));
+        let request = try!(self.transport.delete(doc_path.iter(), options));
         Ok((request, ()))
     }
 
@@ -58,9 +56,8 @@ impl<'a, T: Transport + 'a> Action<T> for DeleteDocument<'a, T> {
 #[cfg(test)]
 mod tests {
 
-    use Error;
-    use Revision;
-    use super::DeleteDocument;
+    use super::*;
+    use {DocumentPath, Error, Revision};
     use transport::{Action, RequestOptions, StatusCode, Transport};
     use transport::testing::{MockResponse, MockTransport};
 
@@ -77,7 +74,7 @@ mod tests {
                         ());
 
         let got = {
-            let mut action = DeleteDocument::new(&transport, "/foo/bar", &rev1).unwrap();
+            let action = DeleteDocument::new(&transport, "/foo/bar", &rev1);
             action.make_request().unwrap()
         };
 
@@ -93,7 +90,8 @@ mod tests {
              .insert("rev", rev.to_string())
         });
         let expected = rev;
-        let got = DeleteDocument::<MockTransport>::take_response(response, ()).unwrap();
+        let got = DeleteDocument::<MockTransport, DocumentPath>::take_response(response, ())
+                      .unwrap();
         assert_eq!(expected, got);
     }
 
@@ -105,7 +103,7 @@ mod tests {
             x.insert("error", error)
              .insert("reason", reason)
         });
-        match DeleteDocument::<MockTransport>::take_response(response, ()) {
+        match DeleteDocument::<MockTransport, DocumentPath>::take_response(response, ()) {
             Err(Error::DocumentConflict(ref error_response)) if error == error_response.error() &&
                                                                 reason ==
                                                                 error_response.reason() => (),
@@ -121,7 +119,7 @@ mod tests {
             x.insert("error", error)
              .insert("reason", reason)
         });
-        match DeleteDocument::<MockTransport>::take_response(response, ()) {
+        match DeleteDocument::<MockTransport, DocumentPath>::take_response(response, ()) {
             Err(Error::NotFound(ref error_response)) if error == error_response.error() &&
                                                         reason == error_response.reason() => (),
             x @ _ => unexpected_result!(x),
@@ -136,7 +134,7 @@ mod tests {
             x.insert("error", error)
              .insert("reason", reason)
         });
-        match DeleteDocument::<MockTransport>::take_response(response, ()) {
+        match DeleteDocument::<MockTransport, DocumentPath>::take_response(response, ()) {
             Err(Error::Unauthorized(ref error_response)) if error == error_response.error() &&
                                                             reason == error_response.reason() => (),
             x @ _ => unexpected_result!(x),

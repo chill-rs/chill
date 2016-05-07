@@ -29,12 +29,9 @@ pub use attachment::{Attachment, SavedAttachment, UnsavedAttachment};
 pub use client::{Client, IntoUrl};
 pub use document::Document;
 pub use error::{Error, ErrorResponse};
-pub use path::{AttachmentName, AttachmentNameRef, AttachmentPath, AttachmentPathRef, DatabaseName,
-               DatabaseNameRef, DatabasePath, DatabasePathRef, DesignDocumentName,
-               DesignDocumentNameRef, DesignDocumentPath, DesignDocumentPathRef, DocumentId,
-               DocumentIdRef, DocumentPath, DocumentPathRef, IntoAttachmentPath, IntoDatabasePath,
+pub use path::{AttachmentName, AttachmentPath, DatabaseName, DatabasePath, DesignDocumentName,
+               DesignDocumentPath, DocumentId, DocumentPath, IntoAttachmentPath, IntoDatabasePath,
                IntoDesignDocumentPath, IntoDocumentPath, IntoViewPath, LocalDocumentName,
-               LocalDocumentNameRef, NormalDocumentName, NormalDocumentNameRef, ViewName,
-               ViewNameRef, ViewPath, ViewPathRef};
+               NormalDocumentName, ViewName, ViewPath};
 pub use revision::Revision;
 pub use view::{ReducedView, UnreducedView, ViewResponse, ViewRow};

@@ -1,73 +1,69 @@
-use DatabasePathRef;
+use {DocumentId, Error, IntoDatabasePath, Revision};
 use document::WriteDocumentResponse;
-use DocumentId;
-use DocumentIdRef;
-use Error;
-use IntoDatabasePath;
-use Revision;
-use serde;
-use serde_json;
+use {serde, serde_json};
 use transport::{Action, RequestOptions, Response, StatusCode, Transport};
 use transport::production::HyperTransport;
 
-pub struct CreateDocument<'a, T, C>
+pub struct CreateDocument<'a, T, P, C>
     where C: serde::Serialize + 'a,
+          P: IntoDatabasePath,
           T: Transport + 'a
 {
     transport: &'a T,
-    db_path: DatabasePathRef<'a>,
+    db_path: P,
     content: &'a C,
-    doc_id: Option<DocumentIdRef<'a>>,
+    doc_id: Option<DocumentId>,
 }
 
-impl<'a, C, T> CreateDocument<'a, T, C>
+impl<'a, C, P, T> CreateDocument<'a, T, P, C>
     where C: serde::Serialize + 'a,
+          P: IntoDatabasePath,
           T: Transport + 'a
 {
     #[doc(hidden)]
-    pub fn new<P>(transport: &'a T, db_path: P, content: &'a C) -> Result<Self, Error>
-        where P: IntoDatabasePath<'a>
-    {
-        Ok(CreateDocument {
+    pub fn new(transport: &'a T, db_path: P, content: &'a C) -> Self {
+        CreateDocument {
             transport: transport,
-            db_path: try!(db_path.into_database_path()),
+            db_path: db_path,
             content: content,
             doc_id: None,
-        })
+        }
     }
 
     pub fn with_document_id<D>(mut self, doc_id: D) -> Self
-        where D: Into<DocumentIdRef<'a>>
+        where D: Into<DocumentId>
     {
         self.doc_id = Some(doc_id.into());
         self
     }
 }
 
-impl<'a, C> CreateDocument<'a, HyperTransport, C>
-    where C: serde::Serialize + 'a
+impl<'a, C, P> CreateDocument<'a, HyperTransport, P, C>
+    where C: serde::Serialize + 'a,
+          P: IntoDatabasePath
 {
     pub fn run(self) -> Result<(DocumentId, Revision), Error> {
         self.transport.exec_sync(self)
     }
 }
 
-impl<'a, C, T> Action<T> for CreateDocument<'a, T, C>
+impl<'a, C, P, T> Action<T> for CreateDocument<'a, T, P, C>
     where C: serde::Serialize + 'a,
+          P: IntoDatabasePath,
           T: Transport + 'a
 {
     type Output = (DocumentId, Revision);
     type State = ();
 
-    fn make_request(&mut self) -> Result<(T::Request, Self::State), Error> {
+    fn make_request(self) -> Result<(T::Request, Self::State), Error> {
 
         let body = {
             let mut doc = serde_json::to_value(self.content);
 
             match doc {
                 serde_json::Value::Object(ref mut fields) => {
-                    for doc_id in self.doc_id {
-                        fields.insert(String::from("_id"), serde_json::to_value(&doc_id));
+                    if let Some(ref doc_id) = self.doc_id {
+                        fields.insert(String::from("_id"), serde_json::to_value(doc_id));
                     }
                 }
                 _ => {
@@ -78,8 +74,9 @@ impl<'a, C, T> Action<T> for CreateDocument<'a, T, C>
             doc
         };
 
+        let db_path = try!(self.db_path.into_database_path());
         let options = RequestOptions::new().with_accept_json().with_json_body(&body);
-        let request = try!(self.transport.post(self.db_path, options));
+        let request = try!(self.transport.post(db_path.iter(), options));
         Ok((request, ()))
     }
 
@@ -100,9 +97,7 @@ impl<'a, C, T> Action<T> for CreateDocument<'a, T, C>
 #[cfg(test)]
 mod tests {
 
-    use DocumentId;
-    use Error;
-    use Revision;
+    use {DatabasePath, DocumentId, Error, Revision};
     use serde_json;
     use super::CreateDocument;
     use transport::{Action, RequestOptions, StatusCode, Transport};
@@ -124,7 +119,7 @@ mod tests {
                         ());
 
         let got = {
-            let mut action = CreateDocument::new(&transport, "/foo", &body).unwrap();
+            let action = CreateDocument::new(&transport, "/foo", &body);
             action.make_request().unwrap()
         };
 
@@ -147,9 +142,7 @@ mod tests {
         };
 
         let (got_request, _) = {
-            let mut action = CreateDocument::new(&transport, "/foo", &body)
-                                 .unwrap()
-                                 .with_document_id("bar");
+            let action = CreateDocument::new(&transport, "/foo", &body).with_document_id("bar");
             action.make_request().unwrap()
         };
 
@@ -165,7 +158,8 @@ mod tests {
              .insert("rev", rev.to_string())
         });
         let expected = (DocumentId::from("foo"), rev);
-        let got = CreateDocument::<MockTransport, ()>::take_response(response, ()).unwrap();
+        let got = CreateDocument::<MockTransport, DatabasePath, ()>::take_response(response, ())
+                      .unwrap();
         assert_eq!(expected, got);
     }
 
@@ -177,7 +171,7 @@ mod tests {
             x.insert("error", error)
              .insert("reason", reason)
         });
-        match CreateDocument::<MockTransport, ()>::take_response(response, ()) {
+        match CreateDocument::<MockTransport, DatabasePath, ()>::take_response(response, ()) {
             Err(Error::DocumentConflict(ref error_response)) if error == error_response.error() &&
                                                                 reason ==
                                                                 error_response.reason() => (),
@@ -193,7 +187,7 @@ mod tests {
             x.insert("error", error)
              .insert("reason", reason)
         });
-        match CreateDocument::<MockTransport, ()>::take_response(response, ()) {
+        match CreateDocument::<MockTransport, DatabasePath, ()>::take_response(response, ()) {
             Err(Error::Unauthorized(ref error_response)) if error == error_response.error() &&
                                                             reason == error_response.reason() => (),
             x @ _ => unexpected_result!(x),

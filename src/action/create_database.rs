@@ -1,37 +1,36 @@
-use DatabasePathRef;
-use Error;
-use IntoDatabasePath;
+use {Error, IntoDatabasePath};
 use transport::{Action, RequestOptions, Response, StatusCode, Transport};
 use transport::production::HyperTransport;
 
-pub struct CreateDatabase<'a, T: Transport + 'a> {
+pub struct CreateDatabase<'a, T: Transport + 'a, P: IntoDatabasePath> {
     transport: &'a T,
-    db_path: DatabasePathRef<'a>,
+    db_path: P,
 }
 
-impl<'a, T: Transport + 'a> CreateDatabase<'a, T> {
+impl<'a, P: IntoDatabasePath, T: Transport + 'a> CreateDatabase<'a, T, P> {
     #[doc(hidden)]
-    pub fn new<P: IntoDatabasePath<'a>>(transport: &'a T, db_path: P) -> Result<Self, Error> {
-        Ok(CreateDatabase {
+    pub fn new(transport: &'a T, db_path: P) -> Self {
+        CreateDatabase {
             transport: transport,
-            db_path: try!(db_path.into_database_path()),
-        })
+            db_path: db_path,
+        }
     }
 }
 
-impl<'a> CreateDatabase<'a, HyperTransport> {
+impl<'a, P: IntoDatabasePath> CreateDatabase<'a, HyperTransport, P> {
     pub fn run(self) -> Result<(), Error> {
         self.transport.exec_sync(self)
     }
 }
 
-impl<'a, T: Transport + 'a> Action<T> for CreateDatabase<'a, T> {
+impl<'a, P: IntoDatabasePath, T: Transport + 'a> Action<T> for CreateDatabase<'a, T, P> {
     type Output = ();
     type State = ();
 
-    fn make_request(&mut self) -> Result<(T::Request, Self::State), Error> {
+    fn make_request(self) -> Result<(T::Request, Self::State), Error> {
+        let db_path = try!(self.db_path.into_database_path());
         let options = RequestOptions::new().with_accept_json();
-        let request = try!(self.transport.put(self.db_path, options));
+        let request = try!(self.transport.put(db_path.iter(), options));
         Ok((request, ()))
     }
 
@@ -48,7 +47,7 @@ impl<'a, T: Transport + 'a> Action<T> for CreateDatabase<'a, T> {
 #[cfg(test)]
 mod tests {
 
-    use Error;
+    use {DatabasePath, Error};
     use super::CreateDatabase;
     use transport::{Action, RequestOptions, StatusCode, Transport};
     use transport::testing::{MockResponse, MockTransport};
@@ -64,7 +63,7 @@ mod tests {
                         ());
 
         let got = {
-            let mut action = CreateDatabase::new(&transport, "/foo").unwrap();
+            let action = CreateDatabase::new(&transport, "/foo");
             action.make_request().unwrap()
         };
 
@@ -76,7 +75,8 @@ mod tests {
         let response = MockResponse::new(StatusCode::Created)
                            .build_json_body(|x| x.insert("ok", true));
         let expected = ();
-        let got = CreateDatabase::<MockTransport>::take_response(response, ()).unwrap();
+        let got = CreateDatabase::<MockTransport, DatabasePath>::take_response(response, ())
+                      .unwrap();
         assert_eq!(expected, got);
     }
 
@@ -88,7 +88,7 @@ mod tests {
             x.insert("error", error)
              .insert("reason", reason)
         });
-        match CreateDatabase::<MockTransport>::take_response(response, ()) {
+        match CreateDatabase::<MockTransport, DatabasePath>::take_response(response, ()) {
             Err(Error::DatabaseExists(ref error_response)) if error == error_response.error() &&
                                                               reason == error_response.reason() => {
                 ()
@@ -105,7 +105,7 @@ mod tests {
             x.insert("error", error)
              .insert("reason", reason)
         });
-        match CreateDatabase::<MockTransport>::take_response(response, ()) {
+        match CreateDatabase::<MockTransport, DatabasePath>::take_response(response, ()) {
             Err(Error::Unauthorized(ref error_response)) if error == error_response.error() &&
                                                             reason == error_response.reason() => (),
             x @ _ => unexpected_result!(x),

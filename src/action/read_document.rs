@@ -1,12 +1,7 @@
 //! Defines an action for reading a document from the CouchDB server.
 
-use DatabaseName;
-use Document;
-use DocumentPathRef;
+use {DatabaseName, Document, Error, IntoDocumentPath, Revision};
 use document::JsonDecodableDocument;
-use Error;
-use IntoDocumentPath;
-use Revision;
 use transport::{Action, RequestOptions, Response, StatusCode, Transport};
 use transport::production::HyperTransport;
 
@@ -42,7 +37,7 @@ use transport::production::HyperTransport;
 /// let server = chill::testing::FakeServer::new().unwrap();
 /// let client = chill::Client::new(server.uri()).unwrap();
 ///
-/// client.create_database("/baseball").unwrap().run().unwrap();
+/// client.create_database("/baseball").run().unwrap();
 ///
 /// let content = serde_json::builder::ObjectBuilder::new()
 ///                   .insert("name", "Babe Ruth")
@@ -50,12 +45,10 @@ use transport::production::HyperTransport;
 ///                   .unwrap();
 ///
 /// let (doc_id, rev) = client.create_document("/baseball", &content)
-///                            .unwrap()
 ///                            .run()
 ///                            .unwrap();
 ///
-/// let doc = client.read_document(("/baseball", &doc_id))
-///                 .unwrap()
+/// let doc = client.read_document(("/baseball", doc_id))
 ///                 .run()
 ///                 .unwrap();
 ///
@@ -63,22 +56,22 @@ use transport::production::HyperTransport;
 /// assert_eq!(content, doc.get_content::<serde_json::Value>().unwrap());
 /// ```
 ///
-pub struct ReadDocument<'a, T: Transport + 'a> {
+pub struct ReadDocument<'a, T: Transport + 'a, P: IntoDocumentPath> {
     transport: &'a T,
-    doc_path: DocumentPathRef<'a>,
+    doc_path: P,
     revision: Option<&'a Revision>,
     attachment_content: Option<AttachmentContent>,
 }
 
-impl<'a, T: Transport + 'a> ReadDocument<'a, T> {
+impl<'a, T: Transport + 'a, P: IntoDocumentPath> ReadDocument<'a, T, P> {
     #[doc(hidden)]
-    pub fn new<P: IntoDocumentPath<'a>>(transport: &'a T, doc_path: P) -> Result<Self, Error> {
-        Ok(ReadDocument {
+    pub fn new(transport: &'a T, doc_path: P) -> Self {
+        ReadDocument {
             transport: transport,
-            doc_path: try!(doc_path.into_document_path()),
+            doc_path: doc_path,
             revision: None,
             attachment_content: None,
-        })
+        }
     }
 
     /// Modifies the action to read the document of the given revision.
@@ -103,19 +96,18 @@ impl<'a, T: Transport + 'a> ReadDocument<'a, T> {
     }
 }
 
-impl<'a> ReadDocument<'a, HyperTransport> {
+impl<'a, P: IntoDocumentPath> ReadDocument<'a, HyperTransport, P> {
     /// Executes the action and waits for the result.
     pub fn run(self) -> Result<Document, Error> {
         self.transport.exec_sync(self)
     }
 }
 
-impl<'a, T: Transport + 'a> Action<T> for ReadDocument<'a, T> {
+impl<'a, T: Transport + 'a, P: IntoDocumentPath> Action<T> for ReadDocument<'a, T, P> {
     type Output = Document;
     type State = DatabaseName;
 
-    fn make_request(&mut self) -> Result<(T::Request, Self::State), Error> {
-        let db_name = DatabaseName::from(self.doc_path.database_name());
+    fn make_request(self) -> Result<(T::Request, Self::State), Error> {
 
         let options = RequestOptions::new().with_accept_json();
 
@@ -130,7 +122,9 @@ impl<'a, T: Transport + 'a> Action<T> for ReadDocument<'a, T> {
             Some(rev) => options.with_revision_query(rev),
         };
 
-        let request = try!(self.transport.get(self.doc_path, options));
+        let doc_path = try!(self.doc_path.into_document_path());
+        let db_name = doc_path.database_name().clone();
+        let request = try!(self.transport.get(doc_path.iter(), options));
         Ok((request, db_name))
     }
 
@@ -168,13 +162,9 @@ pub enum AttachmentContent {
 #[cfg(test)]
 mod tests {
 
-    use DatabaseName;
-    use DatabaseNameRef;
-    use document::DocumentBuilder;
-    use DocumentIdRef;
-    use Error;
-    use Revision;
     use super::*;
+    use {DatabaseName, DocumentId, DocumentPath, Error, Revision};
+    use document::DocumentBuilder;
     use transport::{Action, RequestOptions, StatusCode, Transport};
     use transport::testing::{MockResponse, MockTransport};
 
@@ -187,7 +177,7 @@ mod tests {
         },
                         DatabaseName::from("foo"));
         let got = {
-            let mut action = ReadDocument::new(&transport, "/foo/bar").unwrap();
+            let action = ReadDocument::new(&transport, "/foo/bar");
             action.make_request().unwrap()
         };
         assert_eq!(expected, got);
@@ -203,7 +193,7 @@ mod tests {
         },
                         DatabaseName::from("foo"));
         let got = {
-            let mut action = ReadDocument::new(&transport, "/foo/bar").unwrap().with_revision(&rev);
+            let action = ReadDocument::new(&transport, "/foo/bar").with_revision(&rev);
             action.make_request().unwrap()
         };
         assert_eq!(expected, got);
@@ -220,9 +210,8 @@ mod tests {
         },
                         DatabaseName::from("foo"));
         let got = {
-            let mut action = ReadDocument::new(&transport, "/foo/bar")
-                                 .unwrap()
-                                 .with_attachment_content(AttachmentContent::None);
+            let action = ReadDocument::new(&transport, "/foo/bar")
+                             .with_attachment_content(AttachmentContent::None);
             action.make_request().unwrap()
         };
         assert_eq!(expected, got);
@@ -239,9 +228,8 @@ mod tests {
         },
                         DatabaseName::from("foo"));
         let got = {
-            let mut action = ReadDocument::new(&transport, "/foo/bar")
-                                 .unwrap()
-                                 .with_attachment_content(AttachmentContent::All);
+            let action = ReadDocument::new(&transport, "/foo/bar")
+                             .with_attachment_content(AttachmentContent::All);
             action.make_request().unwrap()
         };
         assert_eq!(expected, got);
@@ -249,8 +237,8 @@ mod tests {
 
     #[test]
     fn take_response_ok() {
-        let db_name = DatabaseNameRef::from("foo");
-        let doc_id = DocumentIdRef::from("bar");
+        let db_name = DatabaseName::from("foo");
+        let doc_id = DocumentId::from("bar");
         let rev = Revision::parse("1-1234567890abcdef1234567890abcdef").unwrap();
         let response = MockResponse::new(StatusCode::Ok).build_json_body(|x| {
             x.insert("_id", doc_id.to_string())
@@ -259,16 +247,17 @@ mod tests {
              .insert("field_2", "hello")
         });
 
-        let expected = DocumentBuilder::new((db_name, doc_id), rev)
+        let expected = DocumentBuilder::new((db_name.clone(), doc_id), rev)
                            .build_content(|x| {
                                x.insert("field_1", 42)
                                 .insert("field_2", "hello")
                            })
                            .unwrap();
 
-        let got = ReadDocument::<MockTransport>::take_response(response,
-                                                               DatabaseName::from(db_name))
-                      .unwrap();
+        let got =
+            ReadDocument::<MockTransport, DocumentPath>::take_response(response,
+                                                                       DatabaseName::from(db_name))
+                .unwrap();
         assert_eq!(expected, got);
     }
 
@@ -280,7 +269,8 @@ mod tests {
             x.insert("error", error)
              .insert("reason", reason)
         });
-        match ReadDocument::<MockTransport>::take_response(response, DatabaseName::from("foo")) {
+        match ReadDocument::<MockTransport, DocumentPath>::take_response(response,
+                                                                         DatabaseName::from("foo")) {
             Err(Error::NotFound(ref error_response)) if error == error_response.error() &&
                                                         reason == error_response.reason() => (),
             x @ _ => unexpected_result!(x),
@@ -295,7 +285,8 @@ mod tests {
             x.insert("error", error)
              .insert("reason", reason)
         });
-        match ReadDocument::<MockTransport>::take_response(response, DatabaseName::from("foo")) {
+        match ReadDocument::<MockTransport, DocumentPath>::take_response(response,
+                                                                         DatabaseName::from("foo")) {
             Err(Error::Unauthorized(ref error_response)) if error == error_response.error() &&
                                                             reason == error_response.reason() => (),
             x @ _ => unexpected_result!(x),
