@@ -1,6 +1,6 @@
 //! Defines an action for executing a view.
 
-use {DatabaseName, Error, IntoViewPath, ViewPath, ViewResponse};
+use {DatabaseName, Error, IntoViewPath, ViewResponse};
 use transport::{Action, RequestOptions, Response, StatusCode, Transport};
 use transport::production::HyperTransport;
 use view::ViewResponseJsonable;
@@ -45,7 +45,7 @@ enum Inclusivity {
 ///
 /// // Create a database and populate it with some documents.
 ///
-/// client.create_database("/baseball").unwrap().run().unwrap();
+/// client.create_database("/baseball").run().unwrap();
 ///
 /// let create_player = |name, home_runs| {
 ///     client.create_document("/baseball",
@@ -53,7 +53,6 @@ enum Inclusivity {
 ///                                 .insert("name", name)
 ///                                 .insert("home_runs", home_runs)
 ///                                 .unwrap())
-///           .unwrap()
 ///           .run()
 ///           .unwrap();
 /// };
@@ -71,7 +70,6 @@ enum Inclusivity {
 ///                })
 ///                .unwrap()
 ///       })
-///       .unwrap()
 ///       .with_document_id("_design/stat")
 ///       .run()
 ///       .unwrap();
@@ -80,7 +78,6 @@ enum Inclusivity {
 ///
 /// let view_response = client.execute_view::<i32, String, _>(
 ///                               "/baseball/_design/stat/_view/home_run")
-///                           .unwrap()
 ///                           .with_descending(true)
 ///                           .with_end_key_inclusive(&700)
 ///                           .run()
@@ -101,13 +98,14 @@ enum Inclusivity {
 /// assert_eq!(expected, got);
 /// ```
 ///
-pub struct ExecuteView<'a, T, K, V>
+pub struct ExecuteView<'a, T, P, K, V>
     where K: serde::Deserialize + serde::Serialize + 'a,
+          P: IntoViewPath,
           T: Transport + 'a,
           V: serde::Deserialize
 {
     transport: &'a T,
-    view_path: ViewPath,
+    view_path: P,
     phantom_key: std::marker::PhantomData<K>,
     phantom_value: std::marker::PhantomData<V>,
     reduce: Option<bool>,
@@ -117,16 +115,17 @@ pub struct ExecuteView<'a, T, K, V>
     descending: Option<bool>,
 }
 
-impl<'a, K, T, V> ExecuteView<'a, T, K, V>
+impl<'a, K, P, T, V> ExecuteView<'a, T, P, K, V>
     where K: serde::Deserialize + serde::Serialize,
+          P: IntoViewPath,
           T: Transport + 'a,
           V: serde::Deserialize
 {
     #[doc(hidden)]
-    pub fn new<P: IntoViewPath>(transport: &'a T, view_path: P) -> Result<Self, Error> {
-        Ok(ExecuteView {
+    pub fn new(transport: &'a T, view_path: P) -> Self {
+        ExecuteView {
             transport: transport,
-            view_path: try!(view_path.into_view_path()),
+            view_path: view_path,
             phantom_key: std::marker::PhantomData,
             phantom_value: std::marker::PhantomData,
             reduce: None,
@@ -134,7 +133,7 @@ impl<'a, K, T, V> ExecuteView<'a, T, K, V>
             end_key: None,
             limit: None,
             descending: None,
-        })
+        }
     }
 
     /// Modifies the action to explicitly reduce or not reduce the view.
@@ -211,8 +210,9 @@ impl<'a, K, T, V> ExecuteView<'a, T, K, V>
     }
 }
 
-impl<'a, K, V> ExecuteView<'a, HyperTransport, K, V>
+impl<'a, K, P, V> ExecuteView<'a, HyperTransport, P, K, V>
     where K: serde::Deserialize + serde::Serialize,
+          P: IntoViewPath,
           V: serde::Deserialize
 {
     pub fn run(self) -> Result<ViewResponse<K, V>, Error> {
@@ -220,15 +220,16 @@ impl<'a, K, V> ExecuteView<'a, HyperTransport, K, V>
     }
 }
 
-impl<'a, T, K, V> Action<T> for ExecuteView<'a, T, K, V>
+impl<'a, K, P, T, V> Action<T> for ExecuteView<'a, T, P, K, V>
     where K: serde::Deserialize + serde::Serialize,
+          P: IntoViewPath,
           T: Transport + 'a,
           V: serde::Deserialize
 {
     type Output = ViewResponse<K, V>;
     type State = DatabaseName;
 
-    fn make_request(&mut self) -> Result<(T::Request, Self::State), Error> {
+    fn make_request(self) -> Result<(T::Request, Self::State), Error> {
         let options = RequestOptions::new().with_accept_json();
 
         let options = match self.reduce {
@@ -259,8 +260,9 @@ impl<'a, T, K, V> Action<T> for ExecuteView<'a, T, K, V>
             Some(value) => options.with_descending_query(value),
         };
 
-        let request = try!(self.transport.get(self.view_path.iter(), options));
-        let db_name = self.view_path.database_name().clone();
+        let view_path = try!(self.view_path.into_view_path());
+        let db_name = view_path.database_name().clone();
+        let request = try!(self.transport.get(view_path.iter(), options));
         Ok((request, db_name))
     }
 
@@ -282,10 +284,9 @@ impl<'a, T, K, V> Action<T> for ExecuteView<'a, T, K, V>
 #[cfg(test)]
 mod tests {
 
-    use DatabaseName;
-    use Error;
+    use super::*;
+    use {DatabaseName, Error, ViewPath};
     use serde_json;
-    use super::ExecuteView;
     use transport::{Action, RequestOptions, StatusCode, Transport};
     use transport::testing::{MockResponse, MockTransport};
     use view::ViewResponseBuilder;
@@ -301,9 +302,8 @@ mod tests {
                         DatabaseName::from("foo"));
 
         let got = {
-            let mut action = ExecuteView::<_, String, i32>::new(&transport,
-                                                                "/foo/_design/bar/_view/qux")
-                                 .unwrap();
+            let action = ExecuteView::<_, &'static str, String, i32>::new(&transport,
+                                                                          "/foo/_design/bar/_view/qux");
             action.make_request().unwrap()
         };
 
@@ -321,10 +321,10 @@ mod tests {
                         DatabaseName::from("foo"));
 
         let got = {
-            let mut action = ExecuteView::<_, String, i32>::new(&transport,
-                                                                "/foo/_design/bar/_view/qux")
-                                 .unwrap()
-                                 .with_descending(true);
+            let action =
+                ExecuteView::<_, &'static str, String, i32>::new(&transport,
+                                                                 "/foo/_design/bar/_view/qux")
+                    .with_descending(true);
             action.make_request().unwrap()
         };
 
@@ -348,10 +348,10 @@ mod tests {
                         DatabaseName::from("foo"));
 
         let got = {
-            let mut action = ExecuteView::<_, String, i32>::new(&transport,
-                                                                "/foo/_design/bar/_view/qux")
-                                 .unwrap()
-                                 .with_end_key_exclusive(&end_key);
+            let action =
+                ExecuteView::<_, &'static str, String, i32>::new(&transport,
+                                                                 "/foo/_design/bar/_view/qux")
+                    .with_end_key_exclusive(&end_key);
             action.make_request().unwrap()
         };
 
@@ -374,10 +374,10 @@ mod tests {
                         DatabaseName::from("foo"));
 
         let got = {
-            let mut action = ExecuteView::<_, String, i32>::new(&transport,
-                                                                "/foo/_design/bar/_view/qux")
-                                 .unwrap()
-                                 .with_end_key_inclusive(&end_key);
+            let action =
+                ExecuteView::<_, &'static str, String, i32>::new(&transport,
+                                                                 "/foo/_design/bar/_view/qux")
+                    .with_end_key_inclusive(&end_key);
             action.make_request().unwrap()
         };
 
@@ -397,10 +397,10 @@ mod tests {
                         DatabaseName::from("foo"));
 
         let got = {
-            let mut action = ExecuteView::<_, String, i32>::new(&transport,
-                                                                "/foo/_design/bar/_view/qux")
-                                 .unwrap()
-                                 .with_limit(42);
+            let action =
+                ExecuteView::<_, &'static str, String, i32>::new(&transport,
+                                                                 "/foo/_design/bar/_view/qux")
+                    .with_limit(42);
             action.make_request().unwrap()
         };
 
@@ -418,10 +418,10 @@ mod tests {
                         DatabaseName::from("foo"));
 
         let got = {
-            let mut action = ExecuteView::<_, String, i32>::new(&transport,
-                                                                "/foo/_design/bar/_view/qux")
-                                 .unwrap()
-                                 .with_reduce(false);
+            let action =
+                ExecuteView::<_, &'static str, String, i32>::new(&transport,
+                                                                 "/foo/_design/bar/_view/qux")
+                    .with_reduce(false);
             action.make_request().unwrap()
         };
 
@@ -444,10 +444,10 @@ mod tests {
                         DatabaseName::from("foo"));
 
         let got = {
-            let mut action = ExecuteView::<_, String, i32>::new(&transport,
-                                                                "/foo/_design/bar/_view/qux")
-                                 .unwrap()
-                                 .with_start_key(&start_key);
+            let action =
+                ExecuteView::<_, &'static str, String, i32>::new(&transport,
+                                                                 "/foo/_design/bar/_view/qux")
+                    .with_start_key(&start_key);
             action.make_request().unwrap()
         };
 
@@ -468,8 +468,10 @@ mod tests {
 
         let expected = ViewResponseBuilder::new_reduced(42).unwrap();
 
-        let got = ExecuteView::<MockTransport, _, _>::take_response(response,
-                                                                    DatabaseName::from("foo"))
+        let got = ExecuteView::<MockTransport,
+                                ViewPath,
+                                _,
+                                _>::take_response(response, DatabaseName::from("foo"))
                       .unwrap();
         assert_eq!(expected, got);
     }
@@ -500,7 +502,8 @@ mod tests {
                            .unwrap();
 
         let db_name = DatabaseName::from("baseball");
-        let got = ExecuteView::<MockTransport, _, _>::take_response(response, db_name).unwrap();
+        let got = ExecuteView::<MockTransport, ViewPath, _, _>::take_response(response, db_name)
+                      .unwrap();
         assert_eq!(expected, got);
     }
 
@@ -513,7 +516,8 @@ mod tests {
              .insert("reason", reason)
         });
         let db_name = DatabaseName::from("foo");
-        match ExecuteView::<MockTransport, String, i32>::take_response(response, db_name) {
+        match ExecuteView::<MockTransport, ViewPath, String, i32>::take_response(response,
+                                                                                 db_name) {
             Err(Error::NotFound(ref error_response)) if error == error_response.error() &&
                                                         reason == error_response.reason() => (),
             x @ _ => unexpected_result!(x),
@@ -529,7 +533,8 @@ mod tests {
              .insert("reason", reason)
         });
         let db_name = DatabaseName::from("foo");
-        match ExecuteView::<MockTransport, String, i32>::take_response(response, db_name) {
+        match ExecuteView::<MockTransport, ViewPath, String, i32>::take_response(response,
+                                                                                 db_name) {
             Err(Error::Unauthorized(ref error_response)) if error == error_response.error() &&
                                                             reason == error_response.reason() => (),
             x @ _ => unexpected_result!(x),

@@ -14,11 +14,11 @@ impl<'a, T> UpdateDocument<'a, T>
     where T: Transport + 'a
 {
     #[doc(hidden)]
-    pub fn new(transport: &'a T, doc: &'a Document) -> Result<Self, Error> {
-        Ok(UpdateDocument {
+    pub fn new(transport: &'a T, doc: &'a Document) -> Self {
+        UpdateDocument {
             transport: transport,
             doc: doc,
-        })
+        }
     }
 }
 
@@ -32,7 +32,7 @@ impl<'a, T: Transport + 'a> Action<T> for UpdateDocument<'a, T> {
     type Output = Revision;
     type State = ();
 
-    fn make_request(&mut self) -> Result<(T::Request, Self::State), Error> {
+    fn make_request(self) -> Result<(T::Request, Self::State), Error> {
         let options = RequestOptions::new()
                           .with_accept_json()
                           .with_revision_query(&self.doc.revision())
@@ -92,7 +92,7 @@ mod tests {
                         ());
 
         let got = {
-            let mut action = UpdateDocument::new(&transport, &doc).unwrap();
+            let action = UpdateDocument::new(&transport, &doc);
             action.make_request().unwrap()
         };
 

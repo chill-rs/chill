@@ -2,10 +2,15 @@
 
 ## v0.2.0 (unreleased)
 
+### Breaking changes
+
 * Replace each owning and non-owning path-related type pair (e.g.,
   `DatabaseName` and `DatabaseNameRef`) with a single owning type (e.g.,
-  `DatabaseName`). This increases the number of memory allocations in
-  some use cases but vastly simplifies the API.
+  `DatabaseName`) ([issue #33](issue_33)). This increases the number of
+  memory allocations in some use cases but vastly simplifies the API.
+* Convert action-constructing `Client` methods to be infallible ([issue
+  #34](issue_34)). This simplifies the API.
+* Remove deprecated `Document::id` method ([issue #42](issue_42)).
 
 ## v0.1.2 (unreleased)
 
@@ -25,3 +30,7 @@ The v0.1.1 release extends Chill's coverage of the CouchDB API.
 
 This is the first release. It has minimal support for creating, reading,
 updating, and deleting documents.
+
+[issue_33]: https://github.com/chill-rs/chill/issues/33
+[issue_34]: https://github.com/chill-rs/chill/issues/34
+[issue_42]: https://github.com/chill-rs/chill/issues/42

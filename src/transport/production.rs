@@ -86,7 +86,7 @@ impl HyperTransport {
         })
     }
 
-    pub fn exec_sync<A: Action<Self>>(&self, mut action: A) -> Result<A::Output, Error> {
+    pub fn exec_sync<A: Action<Self>>(&self, action: A) -> Result<A::Output, Error> {
 
         let (request, state) = try!(action.make_request());
 

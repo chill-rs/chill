@@ -22,14 +22,14 @@ fn make_server_and_client() -> (chill::testing::FakeServer, chill::Client) {
 #[test]
 fn create_database_ok() {
     let (_server, client) = make_server_and_client();
-    client.create_database("/baseball").unwrap().run().unwrap();
+    client.create_database("/baseball").run().unwrap();
 }
 
 #[test]
 fn create_database_nok_database_exists() {
     let (_server, client) = make_server_and_client();
-    client.create_database("/baseball").unwrap().run().unwrap();
-    match client.create_database("/baseball").unwrap().run() {
+    client.create_database("/baseball").run().unwrap();
+    match client.create_database("/baseball").run() {
         Err(chill::Error::DatabaseExists(..)) => (),
         x @ _ => {
             panic!("Unexpected result: {:?}", x);
@@ -41,17 +41,16 @@ fn create_database_nok_database_exists() {
 fn create_document_ok_default() {
 
     let (_server, client) = make_server_and_client();
-    client.create_database("/baseball").unwrap().run().unwrap();
+    client.create_database("/baseball").run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
                          .insert("name", "Babe Ruth")
                          .insert("nickname", "The Bambino")
                          .unwrap();
 
-    let (doc_id, _rev) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
+    let (doc_id, _rev) = client.create_document("/baseball", &up_content).run().unwrap();
 
     let doc = client.read_document(("/baseball", doc_id))
-                    .unwrap()
                     .run()
                     .unwrap();
     let down_content = doc.get_content().unwrap();
@@ -62,7 +61,7 @@ fn create_document_ok_default() {
 fn create_document_ok_with_document_id() {
 
     let (_server, client) = make_server_and_client();
-    client.create_database("/baseball").unwrap().run().unwrap();
+    client.create_database("/baseball").run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
                          .insert("name", "Babe Ruth")
@@ -70,14 +69,12 @@ fn create_document_ok_with_document_id() {
                          .unwrap();
 
     let (doc_id, _rev) = client.create_document("/baseball", &up_content)
-                               .unwrap()
                                .with_document_id("babe_ruth")
                                .run()
                                .unwrap();
     assert_eq!(chill::DocumentId::from("babe_ruth"), doc_id);
 
     let doc = client.read_document(("/baseball", doc_id))
-                    .unwrap()
                     .run()
                     .unwrap();
     let down_content = doc.get_content().unwrap();
@@ -88,17 +85,16 @@ fn create_document_ok_with_document_id() {
 fn create_document_nok_document_conflict() {
 
     let (_server, client) = make_server_and_client();
-    client.create_database("/baseball").unwrap().run().unwrap();
+    client.create_database("/baseball").run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
                          .insert("name", "Babe Ruth")
                          .insert("nickname", "The Bambino")
                          .unwrap();
 
-    let (doc_id, _rev) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
+    let (doc_id, _rev) = client.create_document("/baseball", &up_content).run().unwrap();
 
     match client.create_document("/baseball", &up_content)
-                .unwrap()
                 .with_document_id(doc_id)
                 .run() {
         Err(chill::Error::DocumentConflict(..)) => (),
@@ -110,17 +106,16 @@ fn create_document_nok_document_conflict() {
 fn read_document_ok_default() {
 
     let (_server, client) = make_server_and_client();
-    client.create_database("/baseball").unwrap().run().unwrap();
+    client.create_database("/baseball").run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
                          .insert("name", "Babe Ruth")
                          .insert("nickname", "The Bambino")
                          .unwrap();
 
-    let (doc_id, _rev) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
+    let (doc_id, _rev) = client.create_document("/baseball", &up_content).run().unwrap();
 
     let doc = client.read_document(("/baseball", doc_id))
-                    .unwrap()
                     .run()
                     .unwrap();
     let down_content = doc.get_content().unwrap();
@@ -131,17 +126,16 @@ fn read_document_ok_default() {
 fn read_document_ok_with_revision() {
 
     let (_server, client) = make_server_and_client();
-    client.create_database("/baseball").unwrap().run().unwrap();
+    client.create_database("/baseball").run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
                          .insert("name", "Babe Ruth")
                          .insert("nickname", "The Bambino")
                          .unwrap();
 
-    let (doc_id, rev) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
+    let (doc_id, rev) = client.create_document("/baseball", &up_content).run().unwrap();
 
     let doc = client.read_document(("/baseball", doc_id))
-                    .unwrap()
                     .with_revision(&rev)
                     .run()
                     .unwrap();
@@ -153,9 +147,9 @@ fn read_document_ok_with_revision() {
 fn read_document_nok_not_found() {
 
     let (_server, client) = make_server_and_client();
-    client.create_database("/baseball").unwrap().run().unwrap();
+    client.create_database("/baseball").run().unwrap();
 
-    match client.read_document("/baseball/babe_ruth").unwrap().run() {
+    match client.read_document("/baseball/babe_ruth").run() {
         Err(chill::Error::NotFound(..)) => (),
         x @ _ => unexpected_result!(x),
     }
@@ -166,7 +160,7 @@ fn read_document_nok_not_found() {
 fn read_document_ok_with_attachment_stubs() {
 
     let (_server, client) = make_server_and_client();
-    client.create_database("/baseball").unwrap().run().unwrap();
+    client.create_database("/baseball").run().unwrap();
 
     // TODO: Create the attachment using strong types.
 
@@ -182,10 +176,9 @@ fn read_document_ok_with_attachment_stubs() {
                          })
                          .unwrap();
 
-    let (doc_id, _rev) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
+    let (doc_id, _rev) = client.create_document("/baseball", &up_content).run().unwrap();
 
     let doc = client.read_document(("/baseball", doc_id))
-                    .unwrap()
                     .run()
                     .unwrap();
 
@@ -214,7 +207,7 @@ fn read_document_ok_with_attachment_stubs() {
 fn read_document_ok_with_attachment_content() {
 
     let (_server, client) = make_server_and_client();
-    client.create_database("/baseball").unwrap().run().unwrap();
+    client.create_database("/baseball").run().unwrap();
 
     // TODO: Create the attachment using strong types.
 
@@ -230,10 +223,9 @@ fn read_document_ok_with_attachment_content() {
                          })
                          .unwrap();
 
-    let (doc_id, _rev) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
+    let (doc_id, _rev) = client.create_document("/baseball", &up_content).run().unwrap();
 
     let doc = client.read_document(("/baseball", doc_id))
-                    .unwrap()
                     .with_attachment_content(chill::action::read_document::AttachmentContent::All)
                     .run()
                     .unwrap();
@@ -264,17 +256,16 @@ fn read_document_ok_with_attachment_content() {
 fn update_document_ok_default() {
 
     let (_server, client) = make_server_and_client();
-    client.create_database("/baseball").unwrap().run().unwrap();
+    client.create_database("/baseball").run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
                          .insert("name", "Babe Ruth")
                          .insert("nickname", "The Bambino")
                          .unwrap();
 
-    let (doc_id, _rev) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
+    let (doc_id, _rev) = client.create_document("/baseball", &up_content).run().unwrap();
 
     let mut doc = client.read_document(("/baseball", doc_id))
-                        .unwrap()
                         .run()
                         .unwrap();
 
@@ -291,10 +282,9 @@ fn update_document_ok_default() {
 
     doc.set_content(&up_content).unwrap();
 
-    let updated_rev = client.update_document(&doc).unwrap().run().unwrap();
+    let updated_rev = client.update_document(&doc).run().unwrap();
 
     let doc = client.read_document(("/baseball", doc.path().document_id().clone()))
-                    .unwrap()
                     .run()
                     .unwrap();
     let down_content: serde_json::Value = doc.get_content().unwrap();
@@ -306,17 +296,16 @@ fn update_document_ok_default() {
 fn update_document_ok_create_attachment() {
 
     let (_server, client) = make_server_and_client();
-    client.create_database("/baseball").unwrap().run().unwrap();
+    client.create_database("/baseball").run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
                          .insert("name", "Babe Ruth")
                          .insert("nickname", "The Bambino")
                          .unwrap();
 
-    let (doc_id, _rev) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
+    let (doc_id, _rev) = client.create_document("/baseball", &up_content).run().unwrap();
 
     let mut doc = client.read_document(("/baseball", doc_id.clone()))
-                        .unwrap()
                         .run()
                         .unwrap();
 
@@ -324,10 +313,9 @@ fn update_document_ok_create_attachment() {
                           mime!(Image / Png),
                           Vec::from("Pretend this is a PNG file."));
 
-    client.update_document(&doc).unwrap().run().unwrap();
+    client.update_document(&doc).run().unwrap();
 
     let doc = client.read_document(("/baseball", doc_id))
-                    .unwrap()
                     .with_attachment_content(chill::action::read_document::AttachmentContent::All)
                     .run()
                     .unwrap();
@@ -358,7 +346,7 @@ fn update_document_ok_create_attachment() {
 fn update_document_ok_update_attachment() {
 
     let (_server, client) = make_server_and_client();
-    client.create_database("/baseball").unwrap().run().unwrap();
+    client.create_database("/baseball").run().unwrap();
 
     // TODO: Create the attachment using strong types.
 
@@ -374,10 +362,9 @@ fn update_document_ok_update_attachment() {
                          })
                          .unwrap();
 
-    let (doc_id, _rev) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
+    let (doc_id, _rev) = client.create_document("/baseball", &up_content).run().unwrap();
 
     let mut doc = client.read_document(("/baseball", doc_id.clone()))
-                        .unwrap()
                         .run()
                         .unwrap();
 
@@ -385,10 +372,9 @@ fn update_document_ok_update_attachment() {
                           mime!(Image / Png),
                           Vec::from("Pretend we updated the photo."));
 
-    client.update_document(&doc).unwrap().run().unwrap();
+    client.update_document(&doc).run().unwrap();
 
     let doc = client.read_document(("/baseball", doc_id))
-                    .unwrap()
                     .with_attachment_content(chill::action::read_document::AttachmentContent::All)
                     .run()
                     .unwrap();
@@ -419,7 +405,7 @@ fn update_document_ok_update_attachment() {
 fn update_document_ok_delete_attachment() {
 
     let (_server, client) = make_server_and_client();
-    client.create_database("/baseball").unwrap().run().unwrap();
+    client.create_database("/baseball").run().unwrap();
 
     // TODO: Create the attachment using strong types.
 
@@ -435,19 +421,17 @@ fn update_document_ok_delete_attachment() {
                          })
                          .unwrap();
 
-    let (doc_id, _rev) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
+    let (doc_id, _rev) = client.create_document("/baseball", &up_content).run().unwrap();
 
     let mut doc = client.read_document(("/baseball", doc_id.clone()))
-                        .unwrap()
                         .run()
                         .unwrap();
 
     doc.remove_attachment("photo.png");
 
-    client.update_document(&doc).unwrap().run().unwrap();
+    client.update_document(&doc).run().unwrap();
 
     let doc = client.read_document(("/baseball", doc_id))
-                    .unwrap()
                     .with_attachment_content(chill::action::read_document::AttachmentContent::All)
                     .run()
                     .unwrap();
@@ -471,21 +455,20 @@ fn update_document_ok_delete_attachment() {
 fn delete_document_ok() {
 
     let (_server, client) = make_server_and_client();
-    client.create_database("/baseball").unwrap().run().unwrap();
+    client.create_database("/baseball").run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
                          .insert("name", "Babe Ruth")
                          .insert("nickname", "The Bambino")
                          .unwrap();
 
-    let (doc_id, rev1) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
+    let (doc_id, rev1) = client.create_document("/baseball", &up_content).run().unwrap();
 
     let rev2 = client.delete_document(("/baseball", doc_id.clone()), &rev1)
-                     .unwrap()
                      .run()
                      .unwrap();
 
-    match client.read_document(("/baseball", doc_id.clone())).unwrap().run() {
+    match client.read_document(("/baseball", doc_id.clone())).run() {
         Err(chill::Error::NotFound(..)) => (),
         x @ _ => {
             panic!("Unexpected result: {:?}", x);
@@ -493,7 +476,6 @@ fn delete_document_ok() {
     }
 
     let doc = client.read_document(("/baseball", doc_id))
-                    .unwrap()
                     .with_revision(&rev2)
                     .run()
                     .unwrap();
@@ -504,21 +486,21 @@ fn delete_document_ok() {
 fn execute_view_ok_unreduced_default() {
 
     let (_server, client) = make_server_and_client();
-    client.create_database("/baseball").unwrap().run().unwrap();
+    client.create_database("/baseball").run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
                          .insert("name", "Babe Ruth")
                          .insert("home_runs", 714)
                          .unwrap();
 
-    let (babe_id, _) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
+    let (babe_id, _) = client.create_document("/baseball", &up_content).run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
                          .insert("name", "Hank Aaron")
                          .insert("home_runs", 755)
                          .unwrap();
 
-    let (hank_id, _) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
+    let (hank_id, _) = client.create_document("/baseball", &up_content).run().unwrap();
 
     // TODO: Make use of a Design type when available.
 
@@ -531,7 +513,6 @@ fn execute_view_ok_unreduced_default() {
                          })
                          .unwrap();
     client.create_document("/baseball", &up_content)
-          .unwrap()
           .with_document_id("_design/stats")
           .run()
           .unwrap();
@@ -542,7 +523,6 @@ fn execute_view_ok_unreduced_default() {
                        .unwrap();
 
     let got = client.execute_view::<i32, i32, _>("/baseball/_design/stats/_view/home_runs")
-                    .unwrap()
                     .run()
                     .unwrap();
 
@@ -553,21 +533,21 @@ fn execute_view_ok_unreduced_default() {
 fn execute_view_ok_unreduced_with_descending() {
 
     let (_server, client) = make_server_and_client();
-    client.create_database("/baseball").unwrap().run().unwrap();
+    client.create_database("/baseball").run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
                          .insert("name", "Babe Ruth")
                          .insert("home_runs", 714)
                          .unwrap();
 
-    let (babe_id, _) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
+    let (babe_id, _) = client.create_document("/baseball", &up_content).run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
                          .insert("name", "Hank Aaron")
                          .insert("home_runs", 755)
                          .unwrap();
 
-    let (hank_id, _) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
+    let (hank_id, _) = client.create_document("/baseball", &up_content).run().unwrap();
 
     // TODO: Make use of a Design type when available.
 
@@ -580,7 +560,6 @@ fn execute_view_ok_unreduced_with_descending() {
                          })
                          .unwrap();
     client.create_document("/baseball", &up_content)
-          .unwrap()
           .with_document_id("_design/stats")
           .run()
           .unwrap();
@@ -591,7 +570,6 @@ fn execute_view_ok_unreduced_with_descending() {
                        .unwrap();
 
     let got = client.execute_view::<i32, i32, _>("/baseball/_design/stats/_view/home_runs")
-                    .unwrap()
                     .with_descending(true)
                     .run()
                     .unwrap();
@@ -603,21 +581,21 @@ fn execute_view_ok_unreduced_with_descending() {
 fn execute_view_ok_unreduced_with_end_key_inclusive() {
 
     let (_server, client) = make_server_and_client();
-    client.create_database("/baseball").unwrap().run().unwrap();
+    client.create_database("/baseball").run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
                          .insert("name", "Babe Ruth")
                          .insert("home_runs", 714)
                          .unwrap();
 
-    let (babe_id, _) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
+    let (babe_id, _) = client.create_document("/baseball", &up_content).run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
                          .insert("name", "Hank Aaron")
                          .insert("home_runs", 755)
                          .unwrap();
 
-    client.create_document("/baseball", &up_content).unwrap().run().unwrap();
+    client.create_document("/baseball", &up_content).run().unwrap();
 
     // TODO: Make use of a Design type when available.
 
@@ -630,7 +608,6 @@ fn execute_view_ok_unreduced_with_end_key_inclusive() {
                          })
                          .unwrap();
     client.create_document("/baseball", &up_content)
-          .unwrap()
           .with_document_id("_design/stats")
           .run()
           .unwrap();
@@ -640,7 +617,6 @@ fn execute_view_ok_unreduced_with_end_key_inclusive() {
                        .unwrap();
 
     let got = client.execute_view::<i32, i32, _>("/baseball/_design/stats/_view/home_runs")
-                    .unwrap()
                     .with_end_key_inclusive(&714)
                     .run()
                     .unwrap();
@@ -652,21 +628,21 @@ fn execute_view_ok_unreduced_with_end_key_inclusive() {
 fn execute_view_ok_unreduced_with_end_key_exclusive() {
 
     let (_server, client) = make_server_and_client();
-    client.create_database("/baseball").unwrap().run().unwrap();
+    client.create_database("/baseball").run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
                          .insert("name", "Babe Ruth")
                          .insert("home_runs", 714)
                          .unwrap();
 
-    let (babe_id, _) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
+    let (babe_id, _) = client.create_document("/baseball", &up_content).run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
                          .insert("name", "Hank Aaron")
                          .insert("home_runs", 755)
                          .unwrap();
 
-    client.create_document("/baseball", &up_content).unwrap().run().unwrap();
+    client.create_document("/baseball", &up_content).run().unwrap();
 
     // TODO: Make use of a Design type when available.
 
@@ -679,7 +655,6 @@ fn execute_view_ok_unreduced_with_end_key_exclusive() {
                          })
                          .unwrap();
     client.create_document("/baseball", &up_content)
-          .unwrap()
           .with_document_id("_design/stats")
           .run()
           .unwrap();
@@ -689,7 +664,6 @@ fn execute_view_ok_unreduced_with_end_key_exclusive() {
                        .unwrap();
 
     let got = client.execute_view::<i32, i32, _>("/baseball/_design/stats/_view/home_runs")
-                    .unwrap()
                     .with_end_key_exclusive(&755)
                     .run()
                     .unwrap();
@@ -701,21 +675,21 @@ fn execute_view_ok_unreduced_with_end_key_exclusive() {
 fn execute_view_ok_unreduced_with_start_key() {
 
     let (_server, client) = make_server_and_client();
-    client.create_database("/baseball").unwrap().run().unwrap();
+    client.create_database("/baseball").run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
                          .insert("name", "Babe Ruth")
                          .insert("home_runs", 714)
                          .unwrap();
 
-    client.create_document("/baseball", &up_content).unwrap().run().unwrap();
+    client.create_document("/baseball", &up_content).run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
                          .insert("name", "Hank Aaron")
                          .insert("home_runs", 755)
                          .unwrap();
 
-    let (hank_id, _) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
+    let (hank_id, _) = client.create_document("/baseball", &up_content).run().unwrap();
 
     // TODO: Make use of a Design type when available.
 
@@ -728,7 +702,6 @@ fn execute_view_ok_unreduced_with_start_key() {
                          })
                          .unwrap();
     client.create_document("/baseball", &up_content)
-          .unwrap()
           .with_document_id("_design/stats")
           .run()
           .unwrap();
@@ -738,7 +711,6 @@ fn execute_view_ok_unreduced_with_start_key() {
                        .unwrap();
 
     let got = client.execute_view::<i32, i32, _>("/baseball/_design/stats/_view/home_runs")
-                    .unwrap()
                     .with_start_key(&730)
                     .run()
                     .unwrap();
@@ -750,21 +722,21 @@ fn execute_view_ok_unreduced_with_start_key() {
 fn execute_view_ok_unreduced_with_reduce_false() {
 
     let (_server, client) = make_server_and_client();
-    client.create_database("/baseball").unwrap().run().unwrap();
+    client.create_database("/baseball").run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
                          .insert("name", "Babe Ruth")
                          .insert("home_runs", 714)
                          .unwrap();
 
-    let (babe_id, _rev) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
+    let (babe_id, _rev) = client.create_document("/baseball", &up_content).run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
                          .insert("name", "Hank Aaron")
                          .insert("home_runs", 755)
                          .unwrap();
 
-    let (hank_id, _rev) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
+    let (hank_id, _rev) = client.create_document("/baseball", &up_content).run().unwrap();
 
     // TODO: Make use of a Design type when available.
 
@@ -785,7 +757,6 @@ fn execute_view_ok_unreduced_with_reduce_false() {
                          })
                          .unwrap();
     client.create_document("/baseball", &up_content)
-          .unwrap()
           .with_document_id("_design/stats")
           .run()
           .unwrap();
@@ -796,7 +767,6 @@ fn execute_view_ok_unreduced_with_reduce_false() {
                        .unwrap();
 
     let got = client.execute_view::<i32, i32, _>("/baseball/_design/stats/_view/home_runs")
-                    .unwrap()
                     .with_reduce(false)
                     .run()
                     .unwrap();
@@ -808,21 +778,21 @@ fn execute_view_ok_unreduced_with_reduce_false() {
 fn execute_view_ok_unreduced_with_limit() {
 
     let (_server, client) = make_server_and_client();
-    client.create_database("/baseball").unwrap().run().unwrap();
+    client.create_database("/baseball").run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
                          .insert("name", "Babe Ruth")
                          .insert("home_runs", 714)
                          .unwrap();
 
-    let (babe_id, _rev) = client.create_document("/baseball", &up_content).unwrap().run().unwrap();
+    let (babe_id, _rev) = client.create_document("/baseball", &up_content).run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
                          .insert("name", "Hank Aaron")
                          .insert("home_runs", 755)
                          .unwrap();
 
-    client.create_document("/baseball", &up_content).unwrap().run().unwrap();
+    client.create_document("/baseball", &up_content).run().unwrap();
 
     // TODO: Make use of a Design type when available.
 
@@ -835,7 +805,6 @@ fn execute_view_ok_unreduced_with_limit() {
                          })
                          .unwrap();
     client.create_document("/baseball", &up_content)
-          .unwrap()
           .with_document_id("_design/stats")
           .run()
           .unwrap();
@@ -845,7 +814,6 @@ fn execute_view_ok_unreduced_with_limit() {
                        .unwrap();
 
     let got = client.execute_view::<i32, i32, _>("/baseball/_design/stats/_view/home_runs")
-                    .unwrap()
                     .with_limit(1)
                     .run()
                     .unwrap();
@@ -857,21 +825,21 @@ fn execute_view_ok_unreduced_with_limit() {
 fn execute_view_ok_reduced() {
 
     let (_server, client) = make_server_and_client();
-    client.create_database("/baseball").unwrap().run().unwrap();
+    client.create_database("/baseball").run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
                          .insert("name", "Babe Ruth")
                          .insert("home_runs", 714)
                          .unwrap();
 
-    client.create_document("/baseball", &up_content).unwrap().run().unwrap();
+    client.create_document("/baseball", &up_content).run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
                          .insert("name", "Hank Aaron")
                          .insert("home_runs", 755)
                          .unwrap();
 
-    client.create_document("/baseball", &up_content).unwrap().run().unwrap();
+    client.create_document("/baseball", &up_content).run().unwrap();
 
     // TODO: Make use of a Design type when available.
 
@@ -892,7 +860,6 @@ fn execute_view_ok_reduced() {
                          })
                          .unwrap();
     client.create_document("/baseball", &up_content)
-          .unwrap()
           .with_document_id("_design/stats")
           .run()
           .unwrap();
@@ -900,7 +867,6 @@ fn execute_view_ok_reduced() {
     let expected = chill::testing::ViewResponseBuilder::new_reduced(714 + 755).unwrap();
 
     let got = client.execute_view::<(), i32, _>("/baseball/_design/stats/_view/home_runs")
-                    .unwrap()
                     .run()
                     .unwrap();
 

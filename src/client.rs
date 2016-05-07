@@ -64,18 +64,17 @@ impl Client {
     /// Builds an action to create a database.
     pub fn create_database<'a, P>(&'a self,
                                   db_path: P)
-                                  -> Result<action::CreateDatabase<'a, HyperTransport>, Error>
+                                  -> action::CreateDatabase<'a, HyperTransport, P>
         where P: IntoDatabasePath
     {
         action::CreateDatabase::new(&self.transport, db_path)
     }
 
     /// Builds an action to create a document.
-    pub fn create_document<'a, C, P>
-        (&'a self,
-         db_path: P,
-         content: &'a C)
-         -> Result<action::CreateDocument<'a, HyperTransport, C>, Error>
+    pub fn create_document<'a, C, P>(&'a self,
+                                     db_path: P,
+                                     content: &'a C)
+                                     -> action::CreateDocument<'a, HyperTransport, P, C>
         where C: serde::Serialize,
               P: IntoDatabasePath
     {
@@ -85,7 +84,7 @@ impl Client {
     /// Builds an action to read a document.
     pub fn read_document<'a, P>(&'a self,
                                 doc_path: P)
-                                -> Result<action::ReadDocument<'a, HyperTransport>, Error>
+                                -> action::ReadDocument<'a, HyperTransport, P>
         where P: IntoDocumentPath
     {
         action::ReadDocument::new(&self.transport, doc_path)
@@ -94,7 +93,7 @@ impl Client {
     /// Builds an action to update a document.
     pub fn update_document<'a>(&'a self,
                                doc: &'a Document)
-                               -> Result<action::UpdateDocument<'a, HyperTransport>, Error> {
+                               -> action::UpdateDocument<'a, HyperTransport> {
         action::UpdateDocument::new(&self.transport, doc)
     }
 
@@ -102,17 +101,16 @@ impl Client {
     pub fn delete_document<'a, P>(&'a self,
                                   doc_path: P,
                                   revision: &'a Revision)
-                                  -> Result<action::DeleteDocument<'a, HyperTransport>, Error>
+                                  -> action::DeleteDocument<'a, HyperTransport, P>
         where P: IntoDocumentPath
     {
         action::DeleteDocument::new(&self.transport, doc_path, revision)
     }
 
     /// Builds an action to execute a view.
-    pub fn execute_view<'a, K, V, P>
-        (&'a self,
-         view_path: P)
-         -> Result<action::ExecuteView<'a, HyperTransport, K, V>, Error>
+    pub fn execute_view<'a, K, V, P>(&'a self,
+                                     view_path: P)
+                                     -> action::ExecuteView<'a, HyperTransport, P, K, V>
         where K: serde::Deserialize + serde::Serialize,
               P: IntoViewPath,
               V: serde::Deserialize
