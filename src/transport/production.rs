@@ -91,10 +91,8 @@ impl HyperTransport {
         let (request, state) = try!(action.make_request());
 
         let response = {
-            // FIXME: Remove `as_str` method call when Hyper upgrades to Url
-            // v1.x.
             let b = self.hyper_client
-                        .request(request.method, request.url.as_str())
+                        .request(request.method, request.url)
                         .headers(request.headers);
 
             let b = if request.body.is_empty() {
