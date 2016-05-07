@@ -41,10 +41,7 @@ impl Revision {
 
 impl std::fmt::Display for Revision {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f,
-               "{}-{}",
-               self.sequence_number,
-               self.digest.to_simple_string())
+        write!(f, "{}-{}", self.sequence_number, self.digest.simple())
     }
 }
 
