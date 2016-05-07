@@ -4,6 +4,7 @@
 
 * Deprecate the `Document::id` method, use `Document::path` instead.
 * New support for `limit` query parameter when executing a view.
+* Define `IntoUrl` not to be based on Hyper's trait of the same name.
 
 ## v0.1.1 (2016-04-16)
 

@@ -15,10 +15,6 @@ use url;
 /// fail, such as when parsing a string containing an invalid URL.
 ///
 pub trait IntoUrl {
-    // FIXME: This is kinda a breaking change, but applications shouldn't be
-    // explicitly implementing this trait, so I think it's OK. Make sure this is
-    // noted in the Change Log.
-
     fn into_url(self) -> Result<url::Url, Error>;
 }
 
