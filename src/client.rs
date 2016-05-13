@@ -104,12 +104,10 @@ impl Client {
     }
 
     /// Builds an action to execute a view.
-    pub fn execute_view<'a, K, V, P>(&'a self,
-                                     view_path: P)
-                                     -> action::ExecuteView<'a, HyperTransport, P, K, V>
-        where K: serde::Deserialize + serde::Serialize,
-              P: IntoViewPath,
-              V: serde::Deserialize
+    pub fn execute_view<'a, P>(&'a self,
+                               view_path: P)
+                               -> action::ExecuteView<'a, HyperTransport, P, (), ()>
+        where P: IntoViewPath
     {
         action::ExecuteView::new(&self.transport, view_path)
     }

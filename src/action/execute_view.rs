@@ -4,7 +4,7 @@ use {DatabaseName, Error, IntoViewPath, ViewResponse};
 use transport::{Action, RequestOptions, Response, StatusCode, Transport};
 use transport::production::HyperTransport;
 use view::ViewResponseJsonable;
-use {serde, std};
+use serde;
 
 enum Inclusivity {
     Exclusive,
@@ -76,7 +76,7 @@ enum Inclusivity {
 ///
 /// // Execute a view to get players with at least 700 home runs.
 ///
-/// let view_response = client.execute_view::<i32, String, _>(
+/// let view_response = client.execute_view(
 ///                               "/baseball/_design/stat/_view/home_run")
 ///                           .with_descending(true)
 ///                           .with_end_key_inclusive(&700)
@@ -88,46 +88,39 @@ enum Inclusivity {
 ///     (714, "Babe Ruth"),
 /// ];
 ///
-/// let got = view_response.as_unreduced()
-///                        .expect("View response is not unreduced")
-///                        .rows()
+/// let got = view_response.rows()
 ///                        .iter()
-///                        .map(|x| (*x.key(), x.value().as_ref()))
-///                        .collect::<Vec<(i32, &str)>>();
+///                        .map(|x| (x.key::<i32>().unwrap().unwrap(),
+///                                  x.value::<String>().unwrap()))
+///                        .collect();
 ///
 /// assert_eq!(expected, got);
 /// ```
 ///
-pub struct ExecuteView<'a, T, P, K, V>
-    where K: serde::Deserialize + serde::Serialize + 'a,
+pub struct ExecuteView<'a, T, P, StartKey, EndKey>
+    where EndKey: serde::Serialize,
           P: IntoViewPath,
-          T: Transport + 'a,
-          V: serde::Deserialize
+          StartKey: serde::Serialize,
+          T: Transport + 'a
 {
     transport: &'a T,
     view_path: P,
-    phantom_key: std::marker::PhantomData<K>,
-    phantom_value: std::marker::PhantomData<V>,
     reduce: Option<bool>,
-    start_key: Option<&'a K>,
-    end_key: Option<(&'a K, Inclusivity)>,
+    start_key: Option<StartKey>,
+    end_key: Option<(EndKey, Inclusivity)>,
     limit: Option<u64>,
     descending: Option<bool>,
 }
 
-impl<'a, K, P, T, V> ExecuteView<'a, T, P, K, V>
-    where K: serde::Deserialize + serde::Serialize,
-          P: IntoViewPath,
-          T: Transport + 'a,
-          V: serde::Deserialize
+impl<'a, P, T> ExecuteView<'a, T, P, (), ()>
+    where P: IntoViewPath,
+          T: Transport + 'a
 {
     #[doc(hidden)]
     pub fn new(transport: &'a T, view_path: P) -> Self {
         ExecuteView {
             transport: transport,
             view_path: view_path,
-            phantom_key: std::marker::PhantomData,
-            phantom_value: std::marker::PhantomData,
             reduce: None,
             start_key: None,
             end_key: None,
@@ -135,7 +128,14 @@ impl<'a, K, P, T, V> ExecuteView<'a, T, P, K, V>
             descending: None,
         }
     }
+}
 
+impl<'a, EndKey, P, StartKey, T> ExecuteView<'a, T, P, StartKey, EndKey>
+    where EndKey: serde::Serialize,
+          P: IntoViewPath,
+          StartKey: serde::Serialize,
+          T: Transport + 'a
+{
     /// Modifies the action to explicitly reduce or not reduce the view.
     ///
     /// The `with_reduce` method abstracts CouchDB's `reduce` query parameter.
@@ -147,41 +147,6 @@ impl<'a, K, P, T, V> ExecuteView<'a, T, P, K, V>
         self.reduce = Some(reduce);
         self
     }
-
-    /// Modifies the action to include only records with a key greater than or
-    /// equal to a given key.
-    ///
-    /// The `with_start_key` method abstracts CouchDB's `startkey` query
-    /// parameter. By default, the CouchDB server includes all records.
-    ///
-    pub fn with_start_key(mut self, start_key: &'a K) -> Self {
-        self.start_key = Some(start_key);
-        self
-    }
-
-    /// Modifies the action to include only records with a key less than or
-    /// equal to a given key.
-    ///
-    /// The `with_end_key_inclusive` method abstracts CouchDB's `endkey` query
-    /// parameter. By default, the CouchDB server includes all records.
-    ///
-    pub fn with_end_key_inclusive(mut self, end_key: &'a K) -> Self {
-        self.end_key = Some((end_key, Inclusivity::Inclusive));
-        self
-    }
-
-    /// Modifies the action to include only records with a key less than a given
-    /// key.
-    ///
-    /// The `with_end_key_exclusive` method abstracts CouchDB's `endkey` and
-    /// `inclusive_end` query parameters. By default, the CouchDB server
-    /// includes all records.
-    ///
-    pub fn with_end_key_exclusive(mut self, end_key: &'a K) -> Self {
-        self.end_key = Some((end_key, Inclusivity::Exclusive));
-        self
-    }
-
     /// Modifies the action to retrieve at most a given number of documents.
     ///
     /// The `with_limit` method abstracts CouchDB's `limit` query parameter. By
@@ -210,23 +175,102 @@ impl<'a, K, P, T, V> ExecuteView<'a, T, P, K, V>
     }
 }
 
-impl<'a, K, P, V> ExecuteView<'a, HyperTransport, P, K, V>
-    where K: serde::Deserialize + serde::Serialize,
+impl<'a, EndKey, P, T> ExecuteView<'a, T, P, (), EndKey>
+    where EndKey: serde::Serialize,
           P: IntoViewPath,
-          V: serde::Deserialize
+          T: Transport + 'a
 {
-    pub fn run(self) -> Result<ViewResponse<K, V>, Error> {
+    /// Modifies the action to include only records with a key greater than or
+    /// equal to a given key.
+    ///
+    /// The `with_start_key` method abstracts CouchDB's `startkey` query
+    /// parameter. By default, the CouchDB server includes all records.
+    ///
+    pub fn with_start_key<StartKey>(self,
+                                    start_key: StartKey)
+                                    -> ExecuteView<'a, T, P, StartKey, EndKey>
+        where StartKey: serde::Serialize
+    {
+        ExecuteView {
+            transport: self.transport,
+            view_path: self.view_path,
+            reduce: self.reduce,
+            start_key: Some(start_key),
+            end_key: self.end_key,
+            limit: self.limit,
+            descending: self.descending,
+        }
+    }
+}
+
+impl<'a, P, StartKey, T> ExecuteView<'a, T, P, StartKey, ()>
+    where P: IntoViewPath,
+          StartKey: serde::Serialize,
+          T: Transport + 'a
+{
+    /// Modifies the action to include only records with a key less than or
+    /// equal to a given key.
+    ///
+    /// The `with_end_key_inclusive` method abstracts CouchDB's `endkey` query
+    /// parameter. By default, the CouchDB server includes all records.
+    ///
+    pub fn with_end_key_inclusive<EndKey>(self,
+                                          end_key: EndKey)
+                                          -> ExecuteView<'a, T, P, StartKey, EndKey>
+        where EndKey: serde::Serialize
+    {
+        ExecuteView {
+            transport: self.transport,
+            view_path: self.view_path,
+            reduce: self.reduce,
+            start_key: self.start_key,
+            end_key: Some((end_key, Inclusivity::Inclusive)),
+            limit: self.limit,
+            descending: self.descending,
+        }
+    }
+
+    /// Modifies the action to include only records with a key less than a given
+    /// key.
+    ///
+    /// The `with_end_key_exclusive` method abstracts CouchDB's `endkey` and
+    /// `inclusive_end` query parameters. By default, the CouchDB server
+    /// includes all records.
+    ///
+    pub fn with_end_key_exclusive<EndKey>(self,
+                                          end_key: EndKey)
+                                          -> ExecuteView<'a, T, P, StartKey, EndKey>
+        where EndKey: serde::Serialize
+    {
+        ExecuteView {
+            transport: self.transport,
+            view_path: self.view_path,
+            reduce: self.reduce,
+            start_key: self.start_key,
+            end_key: Some((end_key, Inclusivity::Exclusive)),
+            limit: self.limit,
+            descending: self.descending,
+        }
+    }
+}
+
+impl<'a, EndKey, P, StartKey> ExecuteView<'a, HyperTransport, P, StartKey, EndKey>
+    where EndKey: serde::Serialize,
+          P: IntoViewPath,
+          StartKey: serde::Serialize
+{
+    pub fn run(self) -> Result<ViewResponse, Error> {
         self.transport.exec_sync(self)
     }
 }
 
-impl<'a, K, P, T, V> Action<T> for ExecuteView<'a, T, P, K, V>
-    where K: serde::Deserialize + serde::Serialize,
+impl<'a, P, T, StartKey, EndKey> Action<T> for ExecuteView<'a, T, P, StartKey, EndKey>
+    where EndKey: serde::Serialize,
           P: IntoViewPath,
-          T: Transport + 'a,
-          V: serde::Deserialize
+          StartKey: serde::Serialize,
+          T: Transport + 'a
 {
-    type Output = ViewResponse<K, V>;
+    type Output = ViewResponse;
     type State = DatabaseName;
 
     fn make_request(self) -> Result<(T::Request, Self::State), Error> {
@@ -239,13 +283,13 @@ impl<'a, K, P, T, V> Action<T> for ExecuteView<'a, T, P, K, V>
 
         let options = match self.start_key {
             None => options,
-            Some(value) => try!(options.with_start_key(value)),
+            Some(ref value) => try!(options.with_start_key(value)),
         };
 
         let options = match self.end_key {
             None => options,
-            Some((key_value, Inclusivity::Inclusive)) => try!(options.with_end_key(key_value)),
-            Some((key_value, Inclusivity::Exclusive)) => {
+            Some((ref key_value, Inclusivity::Inclusive)) => try!(options.with_end_key(key_value)),
+            Some((ref key_value, Inclusivity::Exclusive)) => {
                 try!(options.with_end_key(key_value)).with_inclusive_end(false)
             }
         };
@@ -271,8 +315,8 @@ impl<'a, K, P, T, V> Action<T> for ExecuteView<'a, T, P, K, V>
                                   -> Result<Self::Output, Error> {
         match response.status_code() {
             StatusCode::Ok => {
-                let body: ViewResponseJsonable<K, V> = try!(response.decode_json_body());
-                ViewResponse::new_from_decoded(db_name, body)
+                let body: ViewResponseJsonable = try!(response.decode_json_body());
+                Ok(ViewResponse::new_from_decoded(db_name, body))
             }
             StatusCode::NotFound => Err(Error::not_found(response)),
             StatusCode::Unauthorized => Err(Error::unauthorized(response)),
@@ -302,8 +346,7 @@ mod tests {
                         DatabaseName::from("foo"));
 
         let got = {
-            let action = ExecuteView::<_, &'static str, String, i32>::new(&transport,
-                                                                          "/foo/_design/bar/_view/qux");
+            let action = ExecuteView::new(&transport, "/foo/_design/bar/_view/qux");
             action.make_request().unwrap()
         };
 
@@ -321,10 +364,8 @@ mod tests {
                         DatabaseName::from("foo"));
 
         let got = {
-            let action =
-                ExecuteView::<_, &'static str, String, i32>::new(&transport,
-                                                                 "/foo/_design/bar/_view/qux")
-                    .with_descending(true);
+            let action = ExecuteView::new(&transport, "/foo/_design/bar/_view/qux")
+                             .with_descending(true);
             action.make_request().unwrap()
         };
 
@@ -348,10 +389,8 @@ mod tests {
                         DatabaseName::from("foo"));
 
         let got = {
-            let action =
-                ExecuteView::<_, &'static str, String, i32>::new(&transport,
-                                                                 "/foo/_design/bar/_view/qux")
-                    .with_end_key_exclusive(&end_key);
+            let action = ExecuteView::new(&transport, "/foo/_design/bar/_view/qux")
+                             .with_end_key_exclusive(&end_key);
             action.make_request().unwrap()
         };
 
@@ -374,10 +413,8 @@ mod tests {
                         DatabaseName::from("foo"));
 
         let got = {
-            let action =
-                ExecuteView::<_, &'static str, String, i32>::new(&transport,
-                                                                 "/foo/_design/bar/_view/qux")
-                    .with_end_key_inclusive(&end_key);
+            let action = ExecuteView::new(&transport, "/foo/_design/bar/_view/qux")
+                             .with_end_key_inclusive(&end_key);
             action.make_request().unwrap()
         };
 
@@ -397,10 +434,7 @@ mod tests {
                         DatabaseName::from("foo"));
 
         let got = {
-            let action =
-                ExecuteView::<_, &'static str, String, i32>::new(&transport,
-                                                                 "/foo/_design/bar/_view/qux")
-                    .with_limit(42);
+            let action = ExecuteView::new(&transport, "/foo/_design/bar/_view/qux").with_limit(42);
             action.make_request().unwrap()
         };
 
@@ -418,10 +452,8 @@ mod tests {
                         DatabaseName::from("foo"));
 
         let got = {
-            let action =
-                ExecuteView::<_, &'static str, String, i32>::new(&transport,
-                                                                 "/foo/_design/bar/_view/qux")
-                    .with_reduce(false);
+            let action = ExecuteView::new(&transport, "/foo/_design/bar/_view/qux")
+                             .with_reduce(false);
             action.make_request().unwrap()
         };
 
@@ -444,10 +476,8 @@ mod tests {
                         DatabaseName::from("foo"));
 
         let got = {
-            let action =
-                ExecuteView::<_, &'static str, String, i32>::new(&transport,
-                                                                 "/foo/_design/bar/_view/qux")
-                    .with_start_key(&start_key);
+            let action = ExecuteView::new(&transport, "/foo/_design/bar/_view/qux")
+                             .with_start_key(&start_key);
             action.make_request().unwrap()
         };
 
@@ -470,8 +500,8 @@ mod tests {
 
         let got = ExecuteView::<MockTransport,
                                 ViewPath,
-                                _,
-                                _>::take_response(response, DatabaseName::from("foo"))
+                                (),
+                                ()>::take_response(response, DatabaseName::from("foo"))
                       .unwrap();
         assert_eq!(expected, got);
     }
@@ -496,13 +526,13 @@ mod tests {
              })
         });
 
-        let expected = ViewResponseBuilder::<String, i32, _>::new_unreduced(20, 10, "baseball")
-                           .with_row("Babe Ruth", 714, "babe_ruth")
-                           .with_row("Hank Aaron", 755, "hank_aaron")
+        let expected = ViewResponseBuilder::new_unreduced("baseball", 20, 10)
+                           .with_row("babe_ruth", "Babe Ruth", 714)
+                           .with_row("hank_aaron", "Hank Aaron", 755)
                            .unwrap();
 
         let db_name = DatabaseName::from("baseball");
-        let got = ExecuteView::<MockTransport, ViewPath, _, _>::take_response(response, db_name)
+        let got = ExecuteView::<MockTransport, ViewPath, (), ()>::take_response(response, db_name)
                       .unwrap();
         assert_eq!(expected, got);
     }

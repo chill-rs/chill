@@ -1,264 +1,145 @@
 use {DatabaseName, DocumentId, DocumentPath, Error};
-use {serde, std};
+use {serde, serde_json, std};
 
-/// Contains the response from the CouchDB server as a result of successfully
-/// executing a view.
-///
-/// A `ViewResponse` takes one of two forms, **reduced** or **unreduced**,
-/// depending on whether the view's <q>reduce</q> function ran. See the CouchDB
-/// documentation for more details.
-///
-/// Although `ViewResponse` implements the `Ord` and `PartialOrd` traits, Chill
-/// makes no guarantee how that ordering is defined and may change the
-/// definition in an upcoming release. Chill defines the ordering only so that
-/// applications may use `ViewResponse` in ordered collections such as trees.
-///
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub enum ViewResponse<K: serde::Deserialize, V: serde::Deserialize> {
-    /// Contains a reduced view response.
-    Reduced(ReducedView<V>),
-
-    /// Contains an unreduced view response.
-    Unreduced(UnreducedView<K, V>),
+#[derive(Clone, Debug, PartialEq)]
+pub struct ViewResponse {
+    total_rows: Option<u64>,
+    offset: Option<u64>,
+    rows: Vec<ViewRow>,
+    update_seq: Option<u64>,
 }
 
-impl<K: serde::Deserialize, V: serde::Deserialize> ViewResponse<K, V> {
+impl ViewResponse {
     #[doc(hidden)]
-    pub fn new_from_decoded(db_name: DatabaseName,
-                            mut response: ViewResponseJsonable<K, V>)
-                            -> Result<Self, Error> {
-        if 1 == response.rows.len() && response.total_rows.is_none() && response.offset.is_none() {
-            Ok(ViewResponse::Reduced(ReducedView {
-                update_seq: response.update_seq,
-                value: response.rows.pop().unwrap().value,
-            }))
-        } else {
+    pub fn new_from_decoded(db_name: DatabaseName, decoded: ViewResponseJsonable) -> Self {
 
-            let total_rows = match response.total_rows {
-                Some(x) => x,
-                None => {
-                    return Err(Error::UnexpectedResponse("missing 'total_rows' field"));
-                }
-            };
+        let rows = decoded.rows
+                          .into_iter()
+                          .map(|x| ViewRow::new_from_decoded(db_name.clone(), x))
+                          .collect();
 
-            let offset = match response.offset {
-                Some(x) => x,
-                None => {
-                    return Err(Error::UnexpectedResponse("missing 'offset' field"));
-                }
-            };
+        // let rows = try!(decoded.rows
+        //                         .into_iter()
+        //                         .map(|x| ViewRow::new_from_decoded(db_name.clone(), x))
+        //                         .collect::<Vec<_>>()
+        //                         .into_iter()
+        //                         .collect());
 
-            let rows = try!(response.rows
-                                    .into_iter()
-                                    .map(|x| ViewRow::new_from_decoded(db_name.clone(), x))
-                                    .collect::<Vec<_>>()
-                                    .into_iter()
-                                    .collect());
-
-            Ok(ViewResponse::Unreduced(UnreducedView {
-                total_rows: total_rows,
-                offset: offset,
-                update_seq: response.update_seq,
-                rows: rows,
-            }))
+        ViewResponse {
+            total_rows: decoded.total_rows,
+            offset: decoded.offset,
+            rows: rows,
+            update_seq: decoded.update_seq,
         }
     }
 
-    /// Returns the view response in its reduced form, if the response is
-    /// reduced.
-    pub fn as_reduced(&self) -> Option<&ReducedView<V>> {
-        match self {
-            &ViewResponse::Reduced(ref x) => Some(x),
-            _ => None,
-        }
-    }
 
-    /// Returns the view response in its reduced form, if the response is
-    /// reduced.
-    pub fn as_reduced_mut(&mut self) -> Option<&mut ReducedView<V>> {
-        match self {
-            &mut ViewResponse::Reduced(ref mut x) => Some(x),
-            _ => None,
-        }
-    }
-
-    /// Returns the view response in its unreduced form, if the response is
-    /// unreduced.
-    pub fn as_unreduced(&self) -> Option<&UnreducedView<K, V>> {
-        match self {
-            &ViewResponse::Unreduced(ref x) => Some(x),
-            _ => None,
-        }
-    }
-
-    /// Returns the view response in its unreduced form, if the response is
-    /// unreduced.
-    pub fn as_unreduced_mut(&mut self) -> Option<&mut UnreducedView<K, V>> {
-        match self {
-            &mut ViewResponse::Unreduced(ref mut x) => Some(x),
-            _ => None,
-        }
-    }
-}
-
-#[cfg(test)]
-mod view_response_tests {
-
-    use super::*;
-
-    #[test]
-    fn impls_send() {
-        fn f<T: Send>(_: T) {}
-        f(ViewResponse::Reduced::<(), i32>(ReducedView {
-            update_seq: None,
-            value: 42,
-        }));
-    }
-}
-
-/// Contains a view response in reduced form.
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct ReducedView<V: serde::Deserialize> {
-    update_seq: Option<u64>,
-    value: V,
-}
-
-impl<V: serde::Deserialize> ReducedView<V> {
-    /// Returns the view response's reduced value.
-    pub fn value(&self) -> &V {
-        &self.value
-    }
-
-    /// Returns the update sequence number the view reflects, if available.
-    pub fn update_sequence_number(&self) -> Option<u64> {
-        self.update_seq
-    }
-}
-
-/// Contains a view response in unreduced form.
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct UnreducedView<K: serde::Deserialize, V: serde::Deserialize> {
-    total_rows: u64,
-    offset: u64,
-    update_seq: Option<u64>,
-    rows: Vec<ViewRow<K, V>>,
-}
-
-impl<K: serde::Deserialize, V: serde::Deserialize> UnreducedView<K, V> {
-    /// Returns the number of all rows in the view response, including rows
-    /// excluded from the vector.
-    pub fn total_rows(&self) -> u64 {
+    /// Returns how many rows are in the view, including rows excluded in the
+    /// response, if available.
+    ///
+    /// The total number of rows is available if and only if the view is
+    /// unreduced. Even group-reduced views, which may contain multiple rows in
+    /// the response, have no total number of rows associated with them.
+    ///
+    pub fn total_rows(&self) -> Option<u64> {
         self.total_rows
     }
 
-    /// Returns the number of rows in the view response excluded before the first
-    /// row in the vector.
-    pub fn offset(&self) -> u64 {
+    /// Returns how many rows are excluded from the view response that are
+    /// ordered before the first row in the response, if available.
+    ///
+    /// The offset is available if and only if the view is unreduced.
+    ///
+    pub fn offset(&self) -> Option<u64> {
         self.offset
     }
 
-    /// Returns the update sequence number the view reflects, if available.
+    /// Returns the update sequence number that the view reflects, if available.
     pub fn update_sequence_number(&self) -> Option<u64> {
         self.update_seq
     }
 
     /// Returns the vector containing all rows in the view response.
-    pub fn rows(&self) -> &Vec<ViewRow<K, V>> {
+    pub fn rows(&self) -> &Vec<ViewRow> {
         &self.rows
     }
 }
 
-/// Marks that a view is reduced.
-///
-/// `ViewIsReduced` is a marker type that applications should not need to
-/// explicitly use. The Rust compiler should infer this type where appropriate.
-///
-pub struct ViewIsReduced;
-
-/// Marks that a view is unreduced.
-///
-/// `ViewIsUnreduced` is a marker type that applications should not need to
-/// explicitly use. The Rust compiler should infer this type where appropriate.
-///
-pub struct ViewIsUnreduced;
-
-/// Contains a single row in an unreduced view response.
-///
-/// See the CouchDB documentation for more details about view rows.
-///
-/// Although `ViewRow` implements the `Ord` and `PartialOrd` traits, Chill makes
-/// no guarantee how that ordering is defined and may change the definition in
-/// an upcoming release. One consequence is that if an application sorts view
-/// rows itself then the result may be in a different order than if the CouchDB
-/// server had sorted the rows. This is an anti-pattern; applications should
-/// rely on the server to do sorting. Chill defines the ordering only so that
-/// applications may use `ViewRow` in ordered collections such as trees.
-///
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct ViewRow<K: serde::Deserialize, V: serde::Deserialize> {
-    key: K,
-    value: V,
-    doc_path: DocumentPath,
+#[doc(hidden)]
+impl Default for ViewResponse {
+    fn default() -> Self {
+        ViewResponse {
+            total_rows: None,
+            offset: None,
+            rows: Vec::new(),
+            update_seq: None,
+        }
+    }
 }
 
-impl<K, V> ViewRow<K, V>
-    where K: serde::Deserialize,
-          V: serde::Deserialize
-{
-    fn new_from_decoded(db_name: DatabaseName, row: ViewRowJsonable<K, V>) -> Result<Self, Error> {
+#[derive(Clone, Debug, PartialEq)]
+pub struct ViewRow {
+    key: Option<serde_json::Value>,
+    value: serde_json::Value,
+    doc_path: Option<DocumentPath>,
+}
 
-        let key = match row.key {
-            Some(x) => x,
-            None => {
-                return Err(Error::UnexpectedResponse("missing key in row"));
-            }
-        };
+impl ViewRow {
+    fn new_from_decoded(db_name: DatabaseName, decoded: ViewRowJsonable) -> Self {
 
-        let doc_id = match row.id {
-            Some(x) => x,
-            None => {
-                return Err(Error::UnexpectedResponse("missing document id in row"));
-            }
-        };
+        let doc_path = decoded.id.map(|doc_id| DocumentPath::from((db_name, doc_id)));
 
-        Ok(ViewRow {
-            key: key,
-            value: row.value,
-            doc_path: DocumentPath::from((db_name, doc_id)),
-        })
+        ViewRow {
+            key: decoded.key,
+            value: decoded.value,
+            doc_path: doc_path,
+        }
     }
 
-    /// Returns the row's key.
-    pub fn key(&self) -> &K {
-        &self.key
+    /// Returns the row's key, if available.
+    ///
+    /// The key is available if and only if the view is unreduced or if the view
+    /// is reduced but grouped.
+    ///
+    pub fn key<K: serde::Deserialize>(&self) -> Result<Option<K>, Error> {
+
+        let decoded = match self.key {
+            None => None,
+            Some(ref key) => {
+                // FIXME: Optimize this to eliminate cloning and re-decoding.
+                try!(serde_json::from_value(key.clone())
+                         .map_err(|e| Error::JsonDecode { cause: e }))
+            }
+        };
+
+        Ok(decoded)
     }
 
     /// Returns the row's value.
-    pub fn value(&self) -> &V {
-        &self.value
+    pub fn value<V: serde::Deserialize>(&self) -> Result<V, Error> {
+        // FIXME: Optimize this to eliminate cloning and re-decoding.
+        serde_json::from_value(self.value.clone()).map_err(|e| Error::JsonDecode { cause: e })
     }
 
-    /// Returns the path of the row's document.
-    pub fn document_path(&self) -> &DocumentPath {
-        &self.doc_path
+    /// Returns the row's related document path, if available.
+    ///
+    /// The document path is available if and only if the view is unreduced.
+    ///
+    pub fn document_path(&self) -> Option<&DocumentPath> {
+        self.doc_path.as_ref()
     }
 }
 
 #[derive(Debug, PartialEq)]
-pub struct ViewResponseJsonable<K: serde::Deserialize, V: serde::Deserialize> {
+pub struct ViewResponseJsonable {
     total_rows: Option<u64>,
     offset: Option<u64>,
     update_seq: Option<u64>,
-    rows: Vec<ViewRowJsonable<K, V>>,
+    rows: Vec<ViewRowJsonable>,
 }
 
-impl<K, V> serde::Deserialize for ViewResponseJsonable<K, V>
-    where K: serde::Deserialize,
-          V: serde::Deserialize
-{
-    fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
-        where D: serde::Deserializer
-    {
+impl serde::Deserialize for ViewResponseJsonable {
+    fn deserialize<D: serde::Deserializer>(deserializer: &mut D) -> Result<Self, D::Error> {
         enum Field {
             Offset,
             Rows,
@@ -292,19 +173,10 @@ impl<K, V> serde::Deserialize for ViewResponseJsonable<K, V>
             }
         }
 
-        struct Visitor<K2, V2>
-            where K2: serde::Deserialize,
-                  V2: serde::Deserialize
-        {
-            _phantom_key: std::marker::PhantomData<K2>,
-            _phantom_value: std::marker::PhantomData<V2>,
-        }
+        struct Visitor;
 
-        impl<K2, V2> serde::de::Visitor for Visitor<K2, V2>
-            where K2: serde::Deserialize,
-                  V2: serde::Deserialize
-{
-            type Value = ViewResponseJsonable<K2, V2>;
+        impl serde::de::Visitor for Visitor {
+            type Value = ViewResponseJsonable;
 
             fn visit_map<Vis>(&mut self, mut visitor: Vis) -> Result<Self::Value, Vis::Error>
                 where Vis: serde::de::MapVisitor
@@ -351,149 +223,19 @@ impl<K, V> serde::Deserialize for ViewResponseJsonable<K, V>
         }
 
         static FIELDS: &'static [&'static str] = &["total_rows", "offset", "rows", "update_seq"];
-        deserializer.deserialize_struct("ViewResponseJsonable",
-                                        FIELDS,
-                                        Visitor::<K, V> {
-                                            _phantom_key: std::marker::PhantomData,
-                                            _phantom_value: std::marker::PhantomData,
-                                        })
-    }
-}
-
-#[cfg(test)]
-mod view_response_jsonable_tests {
-
-    use DocumentId;
-    use serde_json;
-    use super::{ViewResponseJsonable, ViewRowJsonable};
-
-    #[test]
-    fn deserialize_reduced_ok() {
-        let expected = ViewResponseJsonable::<String, i32> {
-            total_rows: None,
-            offset: None,
-            update_seq: None,
-            rows: vec![ViewRowJsonable {
-                           id: None,
-                           key: None,
-                           value: 42,
-                       }],
-        };
-        let got = serde_json::from_value({
-                      serde_json::builder::ObjectBuilder::new()
-                          .insert_array("rows", |x| {
-                              x.push_object(|x| {
-                                  x.insert("key", serde_json::Value::Null)
-                                   .insert("value", 42)
-                              })
-                          })
-                          .unwrap()
-                  })
-                      .unwrap();
-        assert_eq!(expected, got);
-    }
-
-    #[test]
-    fn deserialize_reduced_ok_with_update_seq() {
-        let expected = ViewResponseJsonable::<String, i32> {
-            total_rows: None,
-            offset: None,
-            update_seq: Some(17),
-            rows: vec![ViewRowJsonable {
-                           id: None,
-                           key: None,
-                           value: 42,
-                       }],
-        };
-        let got = serde_json::from_value({
-                      serde_json::builder::ObjectBuilder::new()
-                          .insert("update_seq", 17)
-                          .insert_array("rows", |x| {
-                              x.push_object(|x| {
-                                  x.insert("key", serde_json::Value::Null)
-                                   .insert("value", 42)
-                              })
-                          })
-                          .unwrap()
-                  })
-                      .unwrap();
-        assert_eq!(expected, got);
-    }
-
-    #[test]
-    fn deserialize_unreduced_ok() {
-        let expected = ViewResponseJsonable {
-            total_rows: Some(10),
-            offset: Some(5),
-            update_seq: None,
-            rows: vec![ViewRowJsonable {
-                           id: Some(DocumentId::from("foo")),
-                           key: Some(String::from("bar")),
-                           value: 42,
-                       }],
-        };
-        let got = serde_json::from_value({
-                      serde_json::builder::ObjectBuilder::new()
-                          .insert("total_rows", 10)
-                          .insert("offset", 5)
-                          .insert_array("rows", |x| {
-                              x.push_object(|x| {
-                                  x.insert("id", "foo")
-                                   .insert("key", "bar")
-                                   .insert("value", 42)
-                              })
-                          })
-                          .unwrap()
-                  })
-                      .unwrap();
-        assert_eq!(expected, got);
-    }
-
-    #[test]
-    fn deserialize_unreduced_ok_with_update_seq() {
-        let expected = ViewResponseJsonable {
-            total_rows: Some(10),
-            offset: Some(5),
-            update_seq: Some(17),
-            rows: vec![ViewRowJsonable {
-                           id: Some(DocumentId::from("foo")),
-                           key: Some(String::from("bar")),
-                           value: 42,
-                       }],
-        };
-        let got = serde_json::from_value({
-                      serde_json::builder::ObjectBuilder::new()
-                          .insert("total_rows", 10)
-                          .insert("offset", 5)
-                          .insert("update_seq", 17)
-                          .insert_array("rows", |x| {
-                              x.push_object(|x| {
-                                  x.insert("id", "foo")
-                                   .insert("key", "bar")
-                                   .insert("value", 42)
-                              })
-                          })
-                          .unwrap()
-                  })
-                      .unwrap();
-        assert_eq!(expected, got);
+        deserializer.deserialize_struct("ViewResponseJsonable", FIELDS, Visitor)
     }
 }
 
 #[derive(Debug, PartialEq)]
-pub struct ViewRowJsonable<K: serde::Deserialize, V: serde::Deserialize> {
-    key: Option<K>,
-    value: V,
+struct ViewRowJsonable {
+    key: Option<serde_json::Value>,
+    value: serde_json::Value,
     id: Option<DocumentId>,
 }
 
-impl<K, V> serde::Deserialize for ViewRowJsonable<K, V>
-    where K: serde::Deserialize,
-          V: serde::Deserialize
-{
-    fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
-        where D: serde::Deserializer
-    {
+impl serde::Deserialize for ViewRowJsonable {
+    fn deserialize<D: serde::Deserializer>(deserializer: &mut D) -> Result<Self, D::Error> {
         enum Field {
             Id,
             Key,
@@ -525,19 +267,10 @@ impl<K, V> serde::Deserialize for ViewRowJsonable<K, V>
             }
         }
 
-        struct Visitor<K2, V2>
-            where K2: serde::Deserialize,
-                  V2: serde::Deserialize
-        {
-            _phantom_key: std::marker::PhantomData<K2>,
-            _phantom_value: std::marker::PhantomData<V2>,
-        }
+        struct Visitor;
 
-        impl<K2, V2> serde::de::Visitor for Visitor<K2, V2>
-            where K2: serde::Deserialize,
-                  V2: serde::Deserialize
-{
-            type Value = ViewRowJsonable<K2, V2>;
+        impl serde::de::Visitor for Visitor {
+            type Value = ViewRowJsonable;
 
             fn visit_map<Vis>(&mut self, mut visitor: Vis) -> Result<Self::Value, Vis::Error>
                 where Vis: serde::de::MapVisitor
@@ -579,278 +312,459 @@ impl<K, V> serde::Deserialize for ViewRowJsonable<K, V>
         }
 
         static FIELDS: &'static [&'static str] = &["id", "key", "value"];
-        deserializer.deserialize_struct("ViewRowJsonable",
-                                        FIELDS,
-                                        Visitor::<K, V> {
-                                            _phantom_key: std::marker::PhantomData,
-                                            _phantom_value: std::marker::PhantomData,
-                                        })
+        deserializer.deserialize_struct("ViewRowJsonable", FIELDS, Visitor)
     }
 }
 
-#[cfg(test)]
-mod view_row_jsonable_tests {
+pub struct IsReduced;
+pub struct IsGrouped;
+pub struct IsUnreduced;
 
-    use DocumentId;
-    use serde_json;
-    use super::*;
-
-    #[test]
-    fn deserialize_ok_reduced() {
-        let expected = ViewRowJsonable::<String, i32> {
-            id: None,
-            key: None,
-            value: 42,
-        };
-        let got = serde_json::from_value({
-                      serde_json::builder::ObjectBuilder::new()
-                          .insert("key", serde_json::Value::Null)
-                          .insert("value", 42)
-                          .unwrap()
-                  })
-                      .unwrap();
-        assert_eq!(expected, got);
-    }
-
-    #[test]
-    fn deserialize_ok_unreduced() {
-        let expected = ViewRowJsonable {
-            id: Some(DocumentId::from("foo")),
-            key: Some(String::from("bar")),
-            value: 42,
-        };
-        let got = serde_json::from_value({
-                      serde_json::builder::ObjectBuilder::new()
-                          .insert("id", "foo")
-                          .insert("key", "bar")
-                          .insert("value", 42)
-                          .unwrap()
-                  })
-                      .unwrap();
-        assert_eq!(expected, got);
-    }
-
-    #[test]
-    fn deserialize_nok_missing_value() {
-        let json_text = serde_json::to_string(&{
-                            serde_json::builder::ObjectBuilder::new()
-                                .insert("id", "foo")
-                                .insert("key", "bar")
-                                .unwrap()
-                        })
-                            .unwrap();
-        let got = serde_json::from_str::<ViewRowJsonable<String, i32>>(&json_text);
-        expect_json_error_missing_field!(got, "value");
-    }
-}
-
-/// Builds a view response.
-///
-/// A `ViewResponseBuilder` constructs a view response as though the response
-/// originated from a CouchDB Server. This allows an application to mock a view
-/// response without using a production database.
-///
-/// # Examples
-///
-/// One point of inconvenience when using a `ViewResponseBuilder` is that type
-/// inference doesn't work when building an unreduced view response, so
-/// applications should use the turbofish (`::<Key, Value, _>`) to specify the
-/// key and value types, like so:
-///
-/// ```
-/// use chill::testing::ViewResponseBuilder;
-///
-/// ViewResponseBuilder::<String, i32, _>::new_unreduced(123,       // `total_rows`
-///                                                      0,         // `offset`
-///                                                      "baseball" // database name
-///                                                     )
-///     .with_row("Hammerin' Hank", 755, "hank_aaron_doc_id")
-///     .with_row("The Bambino", 714, "babe_ruth_doc_id")
-///     .unwrap();
-/// ```
-///
-/// Reduced views are easier because type inference _does_ work.
-///
-/// ```
-/// use chill::testing::ViewResponseBuilder;
-///
-/// // The view response key is inferred as () because reduced views have no
-/// // key.
-/// ViewResponseBuilder::new_reduced(1469).unwrap();
-/// ```
-///
 #[derive(Debug)]
-pub struct ViewResponseBuilder<K: serde::Deserialize, V: serde::Deserialize, M> {
-    phantom: std::marker::PhantomData<M>,
+pub struct ViewResponseBuilder<T> {
+    phantom: std::marker::PhantomData<T>,
     db_name: Option<DatabaseName>,
-    target: ViewResponse<K, V>,
+    target: ViewResponse,
 }
 
-impl<V: serde::Deserialize> ViewResponseBuilder<(), V, ViewIsReduced> {
-    /// Constructs a reduced view response.
-    pub fn new_reduced(value: V) -> Self {
+impl ViewResponseBuilder<IsReduced> {
+    pub fn new_reduced<V: serde::Serialize>(value: V) -> Self {
         ViewResponseBuilder {
             phantom: std::marker::PhantomData,
             db_name: None,
-            target: ViewResponse::Reduced(ReducedView {
-                update_seq: None,
-                value: value,
-            }),
+            target: ViewResponse {
+                rows: vec![ViewRow {
+                               key: None,
+                               value: serde_json::to_value(&value),
+                               doc_path: None,
+                           }],
+                ..ViewResponse::default()
+            },
         }
     }
 
-    /// Sets the update sequence number for the view response.
-    ///
-    /// The **update sequence number** corresponds to the `update_seq` field in
-    /// the view response. By default, its value is `None`.
-    ///
-    pub fn with_update_sequence_number(mut self, update_seq: u64) -> Self {
-        self.target.as_reduced_mut().unwrap().update_seq = Some(update_seq);
-        self
-    }
-
-    /// Returns the builder's view response.
-    pub fn unwrap(self) -> ViewResponse<(), V> {
-        self.target
+    pub fn new_reduced_empty() -> Self {
+        ViewResponseBuilder {
+            phantom: std::marker::PhantomData,
+            db_name: None,
+            target: ViewResponse::default(),
+        }
     }
 }
 
-impl<K: serde::Deserialize, V: serde::Deserialize> ViewResponseBuilder<K, V, ViewIsUnreduced> {
-    /// Constructs an unreduced view response.
-    ///
-    /// Any rows added via the `with_row` method will use the given database
-    /// name as part of their document path.
-    ///
-    pub fn new_unreduced<D: Into<DatabaseName>>(total_rows: u64, offset: u64, db_name: D) -> Self {
+impl ViewResponseBuilder<IsGrouped> {
+    pub fn new_grouped() -> Self {
+        ViewResponseBuilder {
+            phantom: std::marker::PhantomData,
+            db_name: None,
+            target: ViewResponse { rows: Vec::new(), ..ViewResponse::default() },
+        }
+    }
+
+    pub fn with_row<K, V>(mut self, key: K, value: V) -> Self
+        where K: serde::Serialize,
+              V: serde::Serialize
+    {
+
+        self.target.rows.push(ViewRow {
+            key: Some(serde_json::to_value(&key)),
+            value: serde_json::to_value(&value),
+            doc_path: None,
+        });
+
+        self
+    }
+}
+
+impl ViewResponseBuilder<IsUnreduced> {
+    pub fn new_unreduced<D>(db_name: D, total_rows: u64, offset: u64) -> Self
+        where D: Into<DatabaseName>
+    {
         ViewResponseBuilder {
             phantom: std::marker::PhantomData,
             db_name: Some(db_name.into()),
-            target: ViewResponse::Unreduced(UnreducedView {
-                total_rows: total_rows,
-                offset: offset,
+            target: ViewResponse {
+                total_rows: Some(total_rows),
+                offset: Some(offset),
                 update_seq: None,
                 rows: Vec::new(),
-            }),
+            },
         }
     }
 
-    /// Appends a new row into the view response.
-    pub fn with_row<D, IntoK, IntoV>(mut self, key: IntoK, value: IntoV, doc_id: D) -> Self
+    pub fn with_row<D, K, V>(mut self, doc_id: D, key: K, value: V) -> Self
         where D: Into<DocumentId>,
-              IntoK: Into<K>,
-              IntoV: Into<V>
+              K: serde::Serialize,
+              V: serde::Serialize
     {
-        let row = ViewRow {
-            key: key.into(),
-            value: value.into(),
-            doc_path: DocumentPath::from((self.db_name.clone().unwrap(), doc_id.into())),
-        };
+        self.target.rows.push(ViewRow {
+            key: Some(serde_json::to_value(&key)),
+            value: serde_json::to_value(&value),
+            doc_path: Some(DocumentPath::from((self.db_name.as_ref().unwrap().clone(),
+                                               doc_id.into()))),
+        });
 
-        self.target.as_unreduced_mut().unwrap().rows.push(row);
         self
     }
+}
 
+impl<T> ViewResponseBuilder<T> {
     /// Sets the update sequence number for the view response.
     ///
-    /// The **update sequence number** corresponds to the `update_seq` field in
-    /// the view response. By default, its value is `None`.
+    /// By default, the view response's update sequence number is `None`.
     ///
     pub fn with_update_sequence_number(mut self, update_seq: u64) -> Self {
-        self.target.as_unreduced_mut().unwrap().update_seq = Some(update_seq);
+        self.target.update_seq = Some(update_seq);
         self
     }
 
     /// Returns the builder's view response.
-    pub fn unwrap(self) -> ViewResponse<K, V> {
+    pub fn unwrap(self) -> ViewResponse {
         self.target
     }
 }
 
-impl<K: serde::Deserialize, M, V: serde::Deserialize> ViewResponseBuilder<K, V, M> {}
-
 #[cfg(test)]
-mod view_response_builder_tests {
+mod tests {
 
     use super::*;
-    use IntoDocumentPath;
+    use super::ViewRowJsonable;
+    use {DocumentId, Error, IntoDocumentPath};
+    use serde_json;
 
     #[test]
-    fn reduced_required() {
-        let expected = ViewResponse::Reduced({
-            ReducedView {
-                update_seq: None,
-                value: 42,
-            }
-        });
-        let got = ViewResponseBuilder::new_reduced(42).unwrap();
+    fn view_row_key_ok_none() {
+
+        let row = ViewRow {
+            key: None,
+            value: serde_json::Value::U64(42),
+            doc_path: None,
+        };
+
+        let got = row.key::<String>().unwrap();
+        assert_eq!(None, got);
+    }
+
+    #[test]
+    fn view_row_key_ok_some() {
+
+        let row = ViewRow {
+            key: Some(serde_json::Value::String(String::from("foo"))),
+            value: serde_json::Value::U64(42),
+            doc_path: Some("/db/doc".into_document_path().unwrap()),
+        };
+
+        let expected = Some(String::from("foo"));
+        let got = row.key::<String>().unwrap();
         assert_eq!(expected, got);
     }
 
     #[test]
-    fn reduced_with_update_sequence_number() {
-        let expected = ViewResponse::Reduced({
-            ReducedView {
-                update_seq: Some(517),
-                value: 42,
-            }
-        });
-        let got = ViewResponseBuilder::new_reduced(42).with_update_sequence_number(517).unwrap();
+    fn view_row_key_nok() {
+
+        let row = ViewRow {
+            key: Some(serde_json::Value::String(String::from("foo"))),
+            value: serde_json::Value::U64(42),
+            doc_path: Some("/db/doc".into_document_path().unwrap()),
+        };
+
+        match row.key::<u64>() {
+            Err(Error::JsonDecode { .. }) => (),
+            x @ _ => unexpected_result!(x),
+        }
+    }
+
+    #[test]
+    fn view_row_value_ok() {
+
+        let row = ViewRow {
+            key: None,
+            value: serde_json::Value::U64(42),
+            doc_path: None,
+        };
+
+        let expected: u64 = 42;
+        let got = row.value::<u64>().unwrap();
         assert_eq!(expected, got);
     }
 
     #[test]
-    fn unreduced_required() {
-        let expected = ViewResponse::Unreduced({
-            UnreducedView::<String, i32> {
-                total_rows: 20,
-                offset: 10,
-                update_seq: None,
-                rows: Vec::new(),
-            }
-        });
-        let got = ViewResponseBuilder::new_unreduced(20, 10, "foo").unwrap();
+    fn view_row_value_nok() {
+
+        let row = ViewRow {
+            key: None,
+            value: serde_json::Value::U64(42),
+            doc_path: None,
+        };
+
+        match row.value::<String>() {
+            Err(Error::JsonDecode { .. }) => (),
+            x @ _ => unexpected_result!(x),
+        }
+    }
+
+    #[test]
+    fn view_row_deserialize_ok_reduced() {
+
+        let expected = ViewRowJsonable {
+            id: None,
+            key: None,
+            value: serde_json::Value::U64(42),
+        };
+
+        let json_text = r#"{"key": null, "value": 42}"#;
+
+        let got = serde_json::from_str(&json_text).unwrap();
         assert_eq!(expected, got);
     }
 
     #[test]
-    fn unreduced_with_update_sequence_number() {
-        let expected = ViewResponse::Unreduced({
-            UnreducedView::<String, i32> {
-                total_rows: 20,
-                offset: 10,
-                update_seq: Some(517),
-                rows: Vec::new(),
-            }
-        });
-        let got = ViewResponseBuilder::new_unreduced(20, 10, "foo")
-                      .with_update_sequence_number(517)
+    fn view_row_deserialize_ok_unreduced() {
+
+        let expected = ViewRowJsonable {
+            id: Some(DocumentId::from("foo")),
+            key: Some(serde_json::Value::String(String::from("bar"))),
+            value: serde_json::Value::U64(42),
+        };
+
+        let json_text = r#"{"id": "foo", "key": "bar", "value": 42}"#;
+
+        let got = serde_json::from_str(&json_text).unwrap();
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn view_row_deserialize_nok_missing_value() {
+
+        let json_text = r#"{"id": "foo", "key": "bar"}"#;
+
+        let got = serde_json::from_str::<ViewRowJsonable>(&json_text);
+        expect_json_error_missing_field!(got, "value");
+    }
+
+    #[test]
+    fn view_response_deserialize_ok_reduced() {
+
+        let expected = ViewResponseJsonable {
+            total_rows: None,
+            offset: None,
+            update_seq: None,
+            rows: vec![ViewRowJsonable {
+                           id: None,
+                           key: None,
+                           value: serde_json::Value::U64(42),
+                       }],
+        };
+
+        let json_text = r#"{"rows": [
+            {"key": null, "value": 42}
+            ]}"#;
+
+        let got = serde_json::from_str(&json_text).unwrap();
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn view_response_deserialize_ok_reduced_with_update_seq() {
+
+        let expected = ViewResponseJsonable {
+            total_rows: None,
+            offset: None,
+            update_seq: Some(17),
+            rows: vec![ViewRowJsonable {
+                           id: None,
+                           key: None,
+                           value: serde_json::Value::U64(42),
+                       }],
+        };
+
+        let json_text = r#"{"update_seq": 17, "rows": [
+            {"key": null, "value": 42}
+            ]}"#;
+
+        let got = serde_json::from_str(&json_text).unwrap();
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn view_response_deserialize_ok_reduced_grouped() {
+
+        let expected = ViewResponseJsonable {
+            total_rows: None,
+            offset: None,
+            update_seq: None,
+            rows: vec![ViewRowJsonable {
+                           id: None,
+                           key: Some(serde_json::builder::ArrayBuilder::new()
+                                         .push(1)
+                                         .push(2)
+                                         .unwrap()),
+                           value: serde_json::Value::U64(42),
+                       },
+                       ViewRowJsonable {
+                           id: None,
+                           key: Some(serde_json::builder::ArrayBuilder::new()
+                                         .push(1)
+                                         .push(3)
+                                         .unwrap()),
+                           value: serde_json::Value::U64(43),
+                       },
+                       ViewRowJsonable {
+                           id: None,
+                           key: Some(serde_json::builder::ArrayBuilder::new()
+                                         .push(2)
+                                         .push(3)
+                                         .unwrap()),
+                           value: serde_json::Value::U64(44),
+                       }],
+        };
+
+        let json_text = r#"{"rows":[
+            {"key":[1,2],"value":42},
+            {"key":[1,3],"value":43},
+            {"key":[2,3],"value":44}
+            ]}"#;
+
+        let got = serde_json::from_str(&json_text).unwrap();
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn view_response_deserialize_ok_unreduced() {
+
+        let expected = ViewResponseJsonable {
+            total_rows: Some(10),
+            offset: Some(5),
+            update_seq: None,
+            rows: vec![ViewRowJsonable {
+                           id: Some(DocumentId::from("foo")),
+                           key: Some(serde_json::Value::String(String::from("bar"))),
+                           value: serde_json::Value::U64(42),
+                       },
+                       ViewRowJsonable {
+                           id: Some(DocumentId::from("qux")),
+                           key: Some(serde_json::Value::String(String::from("baz"))),
+                           value: serde_json::Value::U64(17),
+                       },
+            ],
+        };
+
+        let json_text = r#"{"total_rows": 10, "offset": 5, "rows": [
+            {"id": "foo", "key": "bar", "value": 42},
+            {"id": "qux", "key": "baz", "value": 17}
+            ]}"#;
+
+        let got = serde_json::from_str(&json_text).unwrap();
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn view_response_deserialize_ok_unreduced_with_update_seq() {
+
+        let expected = ViewResponseJsonable {
+            total_rows: Some(10),
+            offset: Some(5),
+            update_seq: Some(17),
+            rows: vec![ViewRowJsonable {
+                           id: Some(DocumentId::from("foo")),
+                           key: Some(serde_json::Value::String(String::from("bar"))),
+                           value: serde_json::Value::U64(42),
+                       }],
+        };
+
+        let json_text = r#"{"total_rows": 10, "offset": 5, "update_seq": 17, "rows": [
+            {"id": "foo", "key": "bar", "value": 42}
+            ]}"#;
+
+        let got = serde_json::from_str(&json_text).unwrap();
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn view_response_builder_reduced() {
+
+        let expected = ViewResponse {
+            total_rows: None,
+            offset: None,
+            update_seq: Some(99),
+            rows: vec![ViewRow {
+                           key: None,
+                           value: serde_json::Value::U64(42),
+                           doc_path: None,
+                       }],
+        };
+
+        let got = ViewResponseBuilder::new_reduced(42).with_update_sequence_number(99).unwrap();
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn view_response_builder_reduced_empty() {
+
+        let expected = ViewResponse {
+            total_rows: None,
+            offset: None,
+            update_seq: Some(99),
+            rows: Vec::new(),
+        };
+
+        let got = ViewResponseBuilder::new_reduced_empty().with_update_sequence_number(99).unwrap();
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn view_response_builder_grouped() {
+
+        let expected = ViewResponse {
+            total_rows: None,
+            offset: None,
+            update_seq: Some(99),
+            rows: vec![ViewRow {
+                           key: Some(serde_json::Value::Array(vec![serde_json::Value::U64(1)])),
+                           value: serde_json::Value::String(String::from("alpha")),
+                           doc_path: None,
+                       },
+                       ViewRow {
+                           key: Some(serde_json::Value::Array(vec![serde_json::Value::U64(2)])),
+                           value: serde_json::Value::String(String::from("bravo")),
+                           doc_path: None,
+                       }],
+        };
+
+        let got = ViewResponseBuilder::new_grouped()
+                      .with_update_sequence_number(99)
+                      .with_row(vec![1], "alpha")
+                      .with_row(vec![2], "bravo")
                       .unwrap();
+
         assert_eq!(expected, got);
     }
 
     #[test]
-    fn unreduced_with_row() {
-        let expected = ViewResponse::Unreduced({
-            UnreducedView::<String, i32> {
-                total_rows: 20,
-                offset: 10,
-                update_seq: None,
-                rows: vec![ViewRow {
-                               key: String::from("Babe Ruth"),
-                               value: 714,
-                               doc_path: "/baseball/babe_ruth".into_document_path().unwrap(),
-                           },
-                           ViewRow {
-                               key: String::from("Hank Aaron"),
-                               value: 755,
-                               doc_path: "/baseball/hank_aaron".into_document_path().unwrap(),
-                           }],
-            }
-        });
-        let got = ViewResponseBuilder::new_unreduced(20, 10, "baseball")
-                      .with_row("Babe Ruth", 714, "babe_ruth")
-                      .with_row("Hank Aaron", 755, "hank_aaron")
+    fn view_response_builder_unreduced() {
+
+        let expected = ViewResponse {
+            total_rows: Some(42),
+            offset: Some(17),
+            update_seq: Some(99),
+            rows: vec![ViewRow {
+                           key: Some(serde_json::Value::U64(1)),
+                           value: serde_json::Value::String(String::from("bravo")),
+                           doc_path: Some("/db/alpha".into_document_path().unwrap()),
+                       },
+                       ViewRow {
+                           key: Some(serde_json::Value::U64(2)),
+                           value: serde_json::Value::String(String::from("delta")),
+                           doc_path: Some("/db/charlie".into_document_path().unwrap()),
+                       }],
+        };
+
+        let got = ViewResponseBuilder::new_unreduced("db", 42, 17)
+                      .with_update_sequence_number(99)
+                      .with_row("alpha", 1, "bravo")
+                      .with_row("charlie", 2, "delta")
                       .unwrap();
+
         assert_eq!(expected, got);
     }
 }

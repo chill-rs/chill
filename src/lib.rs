@@ -34,4 +34,4 @@ pub use path::{AttachmentName, AttachmentPath, DatabaseName, DatabasePath, Desig
                IntoDesignDocumentPath, IntoDocumentPath, IntoViewPath, LocalDocumentName,
                NormalDocumentName, ViewName, ViewPath};
 pub use revision::Revision;
-pub use view::{ReducedView, UnreducedView, ViewResponse, ViewRow};
+pub use view::{ViewResponse, ViewRow};

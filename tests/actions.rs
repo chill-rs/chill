@@ -517,12 +517,12 @@ fn execute_view_ok_unreduced_default() {
           .run()
           .unwrap();
 
-    let expected = chill::testing::ViewResponseBuilder::new_unreduced(2, 0, "baseball")
-                       .with_row(714, 714, babe_id)
-                       .with_row(755, 755, hank_id)
+    let expected = chill::testing::ViewResponseBuilder::new_unreduced("baseball", 2, 0)
+                       .with_row(babe_id, 714, 714)
+                       .with_row(hank_id, 755, 755)
                        .unwrap();
 
-    let got = client.execute_view::<i32, i32, _>("/baseball/_design/stats/_view/home_runs")
+    let got = client.execute_view("/baseball/_design/stats/_view/home_runs")
                     .run()
                     .unwrap();
 
@@ -564,12 +564,12 @@ fn execute_view_ok_unreduced_with_descending() {
           .run()
           .unwrap();
 
-    let expected = chill::testing::ViewResponseBuilder::new_unreduced(2, 0, "baseball")
-                       .with_row(755, 755, hank_id)
-                       .with_row(714, 714, babe_id)
+    let expected = chill::testing::ViewResponseBuilder::new_unreduced("baseball", 2, 0)
+                       .with_row(hank_id, 755, 755)
+                       .with_row(babe_id, 714, 714)
                        .unwrap();
 
-    let got = client.execute_view::<i32, i32, _>("/baseball/_design/stats/_view/home_runs")
+    let got = client.execute_view("/baseball/_design/stats/_view/home_runs")
                     .with_descending(true)
                     .run()
                     .unwrap();
@@ -612,11 +612,11 @@ fn execute_view_ok_unreduced_with_end_key_inclusive() {
           .run()
           .unwrap();
 
-    let expected = chill::testing::ViewResponseBuilder::new_unreduced(2, 0, "baseball")
-                       .with_row(714, 714, babe_id)
+    let expected = chill::testing::ViewResponseBuilder::new_unreduced("baseball", 2, 0)
+                       .with_row(babe_id, 714, 714)
                        .unwrap();
 
-    let got = client.execute_view::<i32, i32, _>("/baseball/_design/stats/_view/home_runs")
+    let got = client.execute_view("/baseball/_design/stats/_view/home_runs")
                     .with_end_key_inclusive(&714)
                     .run()
                     .unwrap();
@@ -659,11 +659,11 @@ fn execute_view_ok_unreduced_with_end_key_exclusive() {
           .run()
           .unwrap();
 
-    let expected = chill::testing::ViewResponseBuilder::new_unreduced(2, 0, "baseball")
-                       .with_row(714, 714, babe_id)
+    let expected = chill::testing::ViewResponseBuilder::new_unreduced("baseball", 2, 0)
+                       .with_row(babe_id, 714, 714)
                        .unwrap();
 
-    let got = client.execute_view::<i32, i32, _>("/baseball/_design/stats/_view/home_runs")
+    let got = client.execute_view("/baseball/_design/stats/_view/home_runs")
                     .with_end_key_exclusive(&755)
                     .run()
                     .unwrap();
@@ -706,11 +706,11 @@ fn execute_view_ok_unreduced_with_start_key() {
           .run()
           .unwrap();
 
-    let expected = chill::testing::ViewResponseBuilder::new_unreduced(2, 1, "baseball")
-                       .with_row(755, 755, hank_id)
+    let expected = chill::testing::ViewResponseBuilder::new_unreduced("baseball", 2, 1)
+                       .with_row(hank_id, 755, 755)
                        .unwrap();
 
-    let got = client.execute_view::<i32, i32, _>("/baseball/_design/stats/_view/home_runs")
+    let got = client.execute_view("/baseball/_design/stats/_view/home_runs")
                     .with_start_key(&730)
                     .run()
                     .unwrap();
@@ -761,12 +761,12 @@ fn execute_view_ok_unreduced_with_reduce_false() {
           .run()
           .unwrap();
 
-    let expected = chill::testing::ViewResponseBuilder::new_unreduced(2, 0, "baseball")
-                       .with_row(714, 714, babe_id)
-                       .with_row(755, 755, hank_id)
+    let expected = chill::testing::ViewResponseBuilder::new_unreduced("baseball", 2, 0)
+                       .with_row(babe_id, 714, 714)
+                       .with_row(hank_id, 755, 755)
                        .unwrap();
 
-    let got = client.execute_view::<i32, i32, _>("/baseball/_design/stats/_view/home_runs")
+    let got = client.execute_view("/baseball/_design/stats/_view/home_runs")
                     .with_reduce(false)
                     .run()
                     .unwrap();
@@ -809,11 +809,11 @@ fn execute_view_ok_unreduced_with_limit() {
           .run()
           .unwrap();
 
-    let expected = chill::testing::ViewResponseBuilder::new_unreduced(2, 0, "baseball")
-                       .with_row(714, 714, babe_id)
+    let expected = chill::testing::ViewResponseBuilder::new_unreduced("baseball", 2, 0)
+                       .with_row(babe_id, 714, 714)
                        .unwrap();
 
-    let got = client.execute_view::<i32, i32, _>("/baseball/_design/stats/_view/home_runs")
+    let got = client.execute_view("/baseball/_design/stats/_view/home_runs")
                     .with_limit(1)
                     .run()
                     .unwrap();
@@ -866,7 +866,7 @@ fn execute_view_ok_reduced() {
 
     let expected = chill::testing::ViewResponseBuilder::new_reduced(714 + 755).unwrap();
 
-    let got = client.execute_view::<(), i32, _>("/baseball/_design/stats/_view/home_runs")
+    let got = client.execute_view("/baseball/_design/stats/_view/home_runs")
                     .run()
                     .unwrap();
 
