@@ -34,9 +34,9 @@ impl<'a, T: Transport + 'a> Action<T> for UpdateDocument<'a, T> {
 
     fn make_request(self) -> Result<(T::Request, Self::State), Error> {
         let options = RequestOptions::new()
-                          .with_accept_json()
-                          .with_revision_query(&self.doc.revision())
-                          .with_json_body(self.doc);
+            .with_accept_json()
+            .with_revision_query(&self.doc.revision())
+            .with_json_body(self.doc);
         let request = try!(self.transport.put(self.doc.path().iter(), options));
         Ok((request, ()))
     }
@@ -72,21 +72,21 @@ mod tests {
 
         let rev1 = Revision::parse("1-1234567890abcdef1234567890abcdef").unwrap();
         let doc = DocumentBuilder::new("/foo/bar", rev1.clone())
-                      .build_content(|x| {
-                          x.insert("field_1", 42)
-                           .insert("field_2", "hello")
-                      })
-                      .unwrap();
+            .build_content(|x| {
+                x.insert("field_1", 42)
+                    .insert("field_2", "hello")
+            })
+            .unwrap();
 
         let expected = ({
             let body = serde_json::builder::ObjectBuilder::new()
-                           .insert("field_1", 42)
-                           .insert("field_2", "hello")
-                           .unwrap();
+                .insert("field_1", 42)
+                .insert("field_2", "hello")
+                .unwrap();
             let options = RequestOptions::new()
-                              .with_accept_json()
-                              .with_revision_query(&rev1)
-                              .with_json_body(&body);
+                .with_accept_json()
+                .with_revision_query(&rev1)
+                .with_json_body(&body);
             transport.put(vec!["foo", "bar"], options).unwrap()
         },
                         ());
@@ -104,8 +104,8 @@ mod tests {
         let rev = Revision::parse("1-1234567890abcdef1234567890abcdef").unwrap();
         let response = MockResponse::new(StatusCode::Created).build_json_body(|x| {
             x.insert("ok", true)
-             .insert("id", "bar")
-             .insert("rev", rev.to_string())
+                .insert("id", "bar")
+                .insert("rev", rev.to_string())
         });
         let expected = rev;
         let got = UpdateDocument::<MockTransport>::take_response(response, ()).unwrap();
@@ -118,12 +118,11 @@ mod tests {
         let reason = "Document update conflict.";
         let response = MockResponse::new(StatusCode::Conflict).build_json_body(|x| {
             x.insert("error", error)
-             .insert("reason", reason)
+                .insert("reason", reason)
         });
         match UpdateDocument::<MockTransport>::take_response(response, ()) {
             Err(Error::DocumentConflict(ref error_response)) if error == error_response.error() &&
-                                                                reason ==
-                                                                error_response.reason() => (),
+                                                                reason == error_response.reason() => (),
             x @ _ => unexpected_result!(x),
         }
     }
@@ -134,7 +133,7 @@ mod tests {
         let reason = "no_db_file";
         let response = MockResponse::new(StatusCode::NotFound).build_json_body(|x| {
             x.insert("error", error)
-             .insert("reason", reason)
+                .insert("reason", reason)
         });
         match UpdateDocument::<MockTransport>::take_response(response, ()) {
             Err(Error::NotFound(ref error_response)) if error == error_response.error() &&
@@ -149,7 +148,7 @@ mod tests {
         let reason = "Authentication required.";
         let response = MockResponse::new(StatusCode::Unauthorized).build_json_body(|x| {
             x.insert("error", error)
-             .insert("reason", reason)
+                .insert("reason", reason)
         });
         match UpdateDocument::<MockTransport>::take_response(response, ()) {
             Err(Error::Unauthorized(ref error_response)) if error == error_response.error() &&

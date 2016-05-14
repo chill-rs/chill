@@ -603,9 +603,7 @@ impl<'a> Iterator for DatabasePathIter<'a> {
     fn next(&mut self) -> Option<Self::Item> {
 
         let (next, item) = match self {
-            &mut DatabasePathIter::DatabaseName(db_path) => {
-                (DatabasePathIter::Done, db_path.db_name.as_ref())
-            }
+            &mut DatabasePathIter::DatabaseName(db_path) => (DatabasePathIter::Done, db_path.db_name.as_ref()),
             &mut DatabasePathIter::Done => {
                 return None;
             }
@@ -1169,8 +1167,7 @@ impl<'a> Iterator for AttachmentPathIter<'a> {
                     (AttachmentPathIter::DocumentName(att_path), att_path.doc_id.prefix())
                 }
                 &mut AttachmentPathIter::DocumentName(att_path) => {
-                    (AttachmentPathIter::AttachmentName(att_path),
-                     Some(att_path.doc_id.name_as_str()))
+                    (AttachmentPathIter::AttachmentName(att_path), Some(att_path.doc_id.name_as_str()))
                 }
                 &mut AttachmentPathIter::AttachmentName(att_path) => {
                     (AttachmentPathIter::Done, Some(att_path.att_name.as_ref()))
@@ -1447,18 +1444,12 @@ impl<'a> Iterator for ViewPathIter<'a> {
             &mut ViewPathIter::DatabaseName(view_path) => {
                 (ViewPathIter::DocumentPrefix(view_path), view_path.db_name.as_ref())
             }
-            &mut ViewPathIter::DocumentPrefix(view_path) => {
-                (ViewPathIter::DocumentName(view_path), DESIGN_PREFIX)
-            }
+            &mut ViewPathIter::DocumentPrefix(view_path) => (ViewPathIter::DocumentName(view_path), DESIGN_PREFIX),
             &mut ViewPathIter::DocumentName(view_path) => {
                 (ViewPathIter::ViewPrefix(view_path), view_path.ddoc_name.as_ref())
             }
-            &mut ViewPathIter::ViewPrefix(view_path) => {
-                (ViewPathIter::ViewName(view_path), VIEW_PREFIX)
-            }
-            &mut ViewPathIter::ViewName(view_path) => {
-                (ViewPathIter::Done, view_path.view_name.as_ref())
-            }
+            &mut ViewPathIter::ViewPrefix(view_path) => (ViewPathIter::ViewName(view_path), VIEW_PREFIX),
+            &mut ViewPathIter::ViewName(view_path) => (ViewPathIter::Done, view_path.view_name.as_ref()),
             &mut ViewPathIter::Done => {
                 return None;
             }

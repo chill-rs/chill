@@ -298,14 +298,8 @@ impl serde::Deserialize for SavedAttachment {
             }
         }
 
-        static FIELDS: &'static [&'static str] = &["content_type",
-                                                   "data",
-                                                   "digest",
-                                                   "encoded_length",
-                                                   "encoding",
-                                                   "length",
-                                                   "revpos",
-                                                   "stub"];
+        static FIELDS: &'static [&'static str] =
+            &["content_type", "data", "digest", "encoded_length", "encoding", "length", "revpos", "stub"];
         deserializer.deserialize_struct("SavedAttachment", FIELDS, Visitor)
     }
 }
@@ -429,11 +423,7 @@ impl AttachmentBuilder<AttachmentIsSaved> {
     /// An attachment stub specifies the length of its content but does not
     /// store the content itself.
     ///
-    pub fn new_saved<D>(content_type: mime::Mime,
-                        digest: D,
-                        sequence_number: u64,
-                        content_length: u64)
-                        -> Self
+    pub fn new_saved<D>(content_type: mime::Mime, digest: D, sequence_number: u64, content_length: u64) -> Self
         where D: Into<String>
     {
         AttachmentBuilder {
@@ -449,11 +439,7 @@ impl AttachmentBuilder<AttachmentIsSaved> {
     }
 
     /// Constructs a saved attachment in full.
-    pub fn new_saved_with_content<C, D>(content_type: mime::Mime,
-                                        digest: D,
-                                        sequence_number: u64,
-                                        content: C)
-                                        -> Self
+    pub fn new_saved_with_content<C, D>(content_type: mime::Mime, digest: D, sequence_number: u64, content: C) -> Self
         where C: Into<Vec<u8>>,
               D: Into<String>
     {
@@ -498,8 +484,8 @@ mod tests {
     use base64;
     use serde_json;
     use super::*;
-    use super::{AttachmentEncodingInfo, Base64JsonDecodable, ContentTypeJsonDecodable,
-                Base64JsonEncodable, SavedAttachmentContent};
+    use super::{AttachmentEncodingInfo, Base64JsonDecodable, ContentTypeJsonDecodable, Base64JsonEncodable,
+                SavedAttachmentContent};
 
     #[test]
     fn attachment_serialize_saved() {
@@ -509,16 +495,16 @@ mod tests {
             digest: "md5-iMaiC8wqiFlD2NjLTemvCQ==".to_string(),
             sequence_number: 17,
             content: SavedAttachmentContent::Bytes("This is the attachment."
-                                                       .to_string()
-                                                       .into_bytes()),
+                .to_string()
+                .into_bytes()),
             encoding_info: None,
         });
 
         let encoded = serde_json::to_string(&attachment).unwrap();
 
         let expected = serde_json::builder::ObjectBuilder::new()
-                           .insert("stub", true)
-                           .unwrap();
+            .insert("stub", true)
+            .unwrap();
         let got = serde_json::from_str(&encoded).unwrap();
 
         assert_eq!(expected, got);
@@ -537,9 +523,9 @@ mod tests {
         let encoded = serde_json::to_string(&attachment).unwrap();
 
         let expected = serde_json::builder::ObjectBuilder::new()
-                           .insert("content_type", "text/plain")
-                           .insert("data", base64::encode(content).unwrap())
-                           .unwrap();
+            .insert("content_type", "text/plain")
+            .insert("data", base64::encode(content).unwrap())
+            .unwrap();
 
         let got = serde_json::from_str(&encoded).unwrap();
 
@@ -558,12 +544,12 @@ mod tests {
         });
 
         let source = serde_json::builder::ObjectBuilder::new()
-                         .insert("content_type", "text/plain")
-                         .insert("digest", "md5-iMaiC8wqiFlD2NjLTemvCQ==")
-                         .insert("length", 5)
-                         .insert("revpos", 11)
-                         .insert("stub", true)
-                         .unwrap();
+            .insert("content_type", "text/plain")
+            .insert("digest", "md5-iMaiC8wqiFlD2NjLTemvCQ==")
+            .insert("length", 5)
+            .insert("revpos", 11)
+            .insert("stub", true)
+            .unwrap();
 
         let source = serde_json::to_string(&source).unwrap();
         let got = serde_json::from_str(&source).unwrap();
@@ -578,16 +564,16 @@ mod tests {
             digest: "md5-iMaiC8wqiFlD2NjLTemvCQ==".to_string(),
             sequence_number: 17,
             content: SavedAttachmentContent::Bytes("This is the attachment."
-                                                       .to_string()
-                                                       .into_bytes()),
+                .to_string()
+                .into_bytes()),
             encoding_info: None,
         };
 
         let encoded = serde_json::to_string(&attachment).unwrap();
 
         let expected = serde_json::builder::ObjectBuilder::new()
-                           .insert("stub", true)
-                           .unwrap();
+            .insert("stub", true)
+            .unwrap();
         let got = serde_json::from_str(&encoded).unwrap();
 
         assert_eq!(expected, got);
@@ -605,12 +591,12 @@ mod tests {
         };
 
         let source = serde_json::builder::ObjectBuilder::new()
-                         .insert("content_type", "text/plain")
-                         .insert("digest", "md5-iMaiC8wqiFlD2NjLTemvCQ==")
-                         .insert("length", 5)
-                         .insert("revpos", 11)
-                         .insert("stub", true)
-                         .unwrap();
+            .insert("content_type", "text/plain")
+            .insert("digest", "md5-iMaiC8wqiFlD2NjLTemvCQ==")
+            .insert("length", 5)
+            .insert("revpos", 11)
+            .insert("stub", true)
+            .unwrap();
 
         let source = serde_json::to_string(&source).unwrap();
         let got = serde_json::from_str(&source).unwrap();
@@ -632,14 +618,14 @@ mod tests {
         };
 
         let source = serde_json::builder::ObjectBuilder::new()
-                         .insert("content_type", "text/plain")
-                         .insert("digest", "md5-iMaiC8wqiFlD2NjLTemvCQ==")
-                         .insert("encoded_length", 25)
-                         .insert("encoding", "gzip")
-                         .insert("length", 5)
-                         .insert("revpos", 11)
-                         .insert("stub", true)
-                         .unwrap();
+            .insert("content_type", "text/plain")
+            .insert("digest", "md5-iMaiC8wqiFlD2NjLTemvCQ==")
+            .insert("encoded_length", 25)
+            .insert("encoding", "gzip")
+            .insert("length", 5)
+            .insert("revpos", 11)
+            .insert("stub", true)
+            .unwrap();
 
         let source = serde_json::to_string(&source).unwrap();
         let got = serde_json::from_str(&source).unwrap();
@@ -658,11 +644,11 @@ mod tests {
         };
 
         let source = serde_json::builder::ObjectBuilder::new()
-                         .insert("content_type", "text/plain")
-                         .insert("data", "aGVsbG8=")
-                         .insert("digest", "md5-iMaiC8wqiFlD2NjLTemvCQ==")
-                         .insert("revpos", 11)
-                         .unwrap();
+            .insert("content_type", "text/plain")
+            .insert("data", "aGVsbG8=")
+            .insert("digest", "md5-iMaiC8wqiFlD2NjLTemvCQ==")
+            .insert("revpos", 11)
+            .unwrap();
 
         let source = serde_json::to_string(&source).unwrap();
         println!("JSON: {}", source);
@@ -674,11 +660,11 @@ mod tests {
     fn saved_attachment_deserialize_nok_missing_content_type() {
 
         let source = serde_json::builder::ObjectBuilder::new()
-                         .insert("digest", "md5-iMaiC8wqiFlD2NjLTemvCQ==")
-                         .insert("length", 5)
-                         .insert("revpos", 11)
-                         .insert("stub", true)
-                         .unwrap();
+            .insert("digest", "md5-iMaiC8wqiFlD2NjLTemvCQ==")
+            .insert("length", 5)
+            .insert("revpos", 11)
+            .insert("stub", true)
+            .unwrap();
 
         let source = serde_json::to_string(&source).unwrap();
         let got = serde_json::from_str::<SavedAttachment>(&source);
@@ -690,11 +676,11 @@ mod tests {
     fn saved_attachment_deserialize_nok_missing_digest() {
 
         let source = serde_json::builder::ObjectBuilder::new()
-                         .insert("content_type", "text/plain")
-                         .insert("length", 5)
-                         .insert("revpos", 11)
-                         .insert("stub", true)
-                         .unwrap();
+            .insert("content_type", "text/plain")
+            .insert("length", 5)
+            .insert("revpos", 11)
+            .insert("stub", true)
+            .unwrap();
 
         let source = serde_json::to_string(&source).unwrap();
         let got = serde_json::from_str::<SavedAttachment>(&source);
@@ -705,11 +691,11 @@ mod tests {
     fn saved_attachment_deserialize_nok_missing_revpos() {
 
         let source = serde_json::builder::ObjectBuilder::new()
-                         .insert("content_type", "text/plain")
-                         .insert("digest", "md5-iMaiC8wqiFlD2NjLTemvCQ==")
-                         .insert("length", 5)
-                         .insert("stub", true)
-                         .unwrap();
+            .insert("content_type", "text/plain")
+            .insert("digest", "md5-iMaiC8wqiFlD2NjLTemvCQ==")
+            .insert("length", 5)
+            .insert("stub", true)
+            .unwrap();
 
         let source = serde_json::to_string(&source).unwrap();
         let got = serde_json::from_str::<SavedAttachment>(&source);
@@ -729,9 +715,9 @@ mod tests {
         let encoded = serde_json::to_string(&attachment).unwrap();
 
         let expected = serde_json::builder::ObjectBuilder::new()
-                           .insert("content_type", "text/plain")
-                           .insert("data", base64::encode(content).unwrap())
-                           .unwrap();
+            .insert("content_type", "text/plain")
+            .insert("data", base64::encode(content).unwrap())
+            .unwrap();
 
         let got = serde_json::from_str(&encoded).unwrap();
 
@@ -756,8 +742,7 @@ mod tests {
 
     #[test]
     fn base64_json_encodable_deserialize_nok_bad_base64() {
-        let source = serde_json::Value::String("% percent signs are invalid in base64 %"
-                                                   .to_string());
+        let source = serde_json::Value::String("% percent signs are invalid in base64 %".to_string());
         let source = serde_json::to_string(&source).unwrap();
         let got = serde_json::from_str::<Base64JsonDecodable>(&source);
         expect_json_error_invalid_value!(got);

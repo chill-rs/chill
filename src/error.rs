@@ -165,9 +165,7 @@ impl std::error::Error for Error {
             &ServerResponse { ref status_code, .. } => {
                 match status_code.class() {
                     hyper::status::StatusClass::ClientError |
-                    hyper::status::StatusClass::ServerError => {
-                        "The CouchDB server responded with an error"
-                    }
+                    hyper::status::StatusClass::ServerError => "The CouchDB server responded with an error",
                     _ => "The CouchDB server responded with an unexpected status",
                 }
             }
@@ -213,9 +211,7 @@ impl std::fmt::Display for Error {
             &ChannelReceive { ref cause, description } => write!(f, "{}: {}", description, cause),
             &ContentNotAnObject => write!(f, "{}", description),
             &DatabaseExists(ref error_response) => write!(f, "{}: {}", description, error_response),
-            &DocumentConflict(ref error_response) => {
-                write!(f, "{}: {}", description, error_response)
-            }
+            &DocumentConflict(ref error_response) => write!(f, "{}: {}", description, error_response),
             &DocumentIsDeleted => write!(f, "{}", description),
             &Io { ref cause, description } => write!(f, "{}: {}", description, cause),
             &JsonDecode { ref cause } => write!(f, "{}: {}", description, cause),
@@ -223,9 +219,7 @@ impl std::fmt::Display for Error {
             &Mock { ref extra_description } => write!(f, "{}: {}", description, extra_description),
             &NotFound(ref error_response) => write!(f, "{}: {}", description, error_response),
             &PathParse(ref kind) => write!(f, "{}: {}", description, kind),
-            &ResponseNotJson(Some(ref content_type)) => {
-                write!(f, "{}: Content type is {}", description, content_type)
-            }
+            &ResponseNotJson(Some(ref content_type)) => write!(f, "{}: Content type is {}", description, content_type),
             &ResponseNotJson(None) => write!(f, "{}", description),
             &RevisionParse { ref kind } => write!(f, "{}: {}", description, kind),
             &ServerResponse { ref status_code, ref error_response } => {
@@ -241,9 +235,7 @@ impl std::fmt::Display for Error {
             }
             &Transport { ref kind } => write!(f, "{}: {}", description, kind),
             &Unauthorized(ref error_response) => write!(f, "{}: {}", description, error_response),
-            &UnexpectedResponse(sub_description) => {
-                write!(f, "{}: {}", description, sub_description)
-            }
+            &UnexpectedResponse(sub_description) => write!(f, "{}: {}", description, sub_description),
             &UrlNotSchemeRelative => write!(f, "{}", description),
             &UrlParse { ref cause } => write!(f, "{}: {}", description, cause),
         }
@@ -473,9 +465,8 @@ mod tests {
         };
         let got = format!("{}", source);
         let error_position = got.find("file_exists").unwrap();
-        let reason_position = got.find("The database could not be created, the file already \
-                                        exists.")
-                                 .unwrap();
+        let reason_position = got.find("The database could not be created, the file already exists.")
+            .unwrap();
         assert!(error_position < reason_position);
     }
 
@@ -486,9 +477,9 @@ mod tests {
             reason: "bar".to_string(),
         };
         let source = serde_json::builder::ObjectBuilder::new()
-                         .insert("error", "foo")
-                         .insert("reason", "bar")
-                         .unwrap();
+            .insert("error", "foo")
+            .insert("reason", "bar")
+            .unwrap();
         let source = serde_json::to_string(&source).unwrap();
         let got = serde_json::from_str(&source).unwrap();
         assert_eq!(expected, got);
@@ -497,8 +488,8 @@ mod tests {
     #[test]
     fn error_response_deserialize_with_with_no_error_field() {
         let source = serde_json::builder::ObjectBuilder::new()
-                         .insert("reason", "foo")
-                         .unwrap();
+            .insert("reason", "foo")
+            .unwrap();
         let source = serde_json::to_string(&source).unwrap();
         let got = serde_json::from_str::<ErrorResponse>(&source);
         expect_json_error_missing_field!(got, "error");
@@ -507,8 +498,8 @@ mod tests {
     #[test]
     fn error_response_deserialize_nok_with_no_reason_field() {
         let source = serde_json::builder::ObjectBuilder::new()
-                         .insert("error", "foo")
-                         .unwrap();
+            .insert("error", "foo")
+            .unwrap();
         let source = serde_json::to_string(&source).unwrap();
         let got = serde_json::from_str::<ErrorResponse>(&source);
         expect_json_error_missing_field!(got, "reason");

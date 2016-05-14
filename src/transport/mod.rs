@@ -26,10 +26,7 @@ pub trait Transport {
         where B: serde::Serialize,
               P: IntoIterator<Item = &'a str>;
 
-    fn delete<'a, B, P>(&self,
-                        path: P,
-                        options: RequestOptions<'a, B>)
-                        -> Result<Self::Request, Error>
+    fn delete<'a, B, P>(&self, path: P, options: RequestOptions<'a, B>) -> Result<Self::Request, Error>
         where B: serde::Serialize,
               P: IntoIterator<Item = &'a str>
     {
@@ -43,10 +40,7 @@ pub trait Transport {
         self.request(hyper::method::Method::Get, path, options)
     }
 
-    fn post<'a, B, P>(&self,
-                      path: P,
-                      options: RequestOptions<'a, B>)
-                      -> Result<Self::Request, Error>
+    fn post<'a, B, P>(&self, path: P, options: RequestOptions<'a, B>) -> Result<Self::Request, Error>
         where B: serde::Serialize,
               P: IntoIterator<Item = &'a str>
     {

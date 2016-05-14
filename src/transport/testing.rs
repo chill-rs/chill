@@ -52,9 +52,7 @@ impl Transport for MockTransport {
             start_key_query: options.start_key_query,
             body: match options.body {
                 None => None,
-                Some(RequestBody::Json(body)) => {
-                    Some(MockRequestBody::Json(serde_json::to_value(body)))
-                }
+                Some(RequestBody::Json(body)) => Some(MockRequestBody::Json(serde_json::to_value(body))),
             },
         })
     }

@@ -14,9 +14,9 @@ impl ViewResponse {
     pub fn new_from_decoded(db_name: DatabaseName, decoded: ViewResponseJsonable) -> Self {
 
         let rows = decoded.rows
-                          .into_iter()
-                          .map(|x| ViewRow::new_from_decoded(db_name.clone(), x))
-                          .collect();
+            .into_iter()
+            .map(|x| ViewRow::new_from_decoded(db_name.clone(), x))
+            .collect();
 
         // let rows = try!(decoded.rows
         //                         .into_iter()
@@ -400,8 +400,7 @@ impl ViewResponseBuilder<IsUnreduced> {
         self.target.rows.push(ViewRow {
             key: Some(serde_json::to_value(&key)),
             value: serde_json::to_value(&value),
-            doc_path: Some(DocumentPath::from((self.db_name.as_ref().unwrap().clone(),
-                                               doc_id.into()))),
+            doc_path: Some(DocumentPath::from((self.db_name.as_ref().unwrap().clone(), doc_id.into()))),
         });
 
         self
@@ -732,10 +731,10 @@ mod tests {
         };
 
         let got = ViewResponseBuilder::new_grouped()
-                      .with_update_sequence_number(99)
-                      .with_row(vec![1], "alpha")
-                      .with_row(vec![2], "bravo")
-                      .unwrap();
+            .with_update_sequence_number(99)
+            .with_row(vec![1], "alpha")
+            .with_row(vec![2], "bravo")
+            .unwrap();
 
         assert_eq!(expected, got);
     }
@@ -760,10 +759,10 @@ mod tests {
         };
 
         let got = ViewResponseBuilder::new_unreduced("db", 42, 17)
-                      .with_update_sequence_number(99)
-                      .with_row("alpha", 1, "bravo")
-                      .with_row("charlie", 2, "delta")
-                      .unwrap();
+            .with_update_sequence_number(99)
+            .with_row("alpha", 1, "bravo")
+            .with_row("charlie", 2, "delta")
+            .unwrap();
 
         assert_eq!(expected, got);
     }

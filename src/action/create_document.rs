@@ -108,9 +108,9 @@ mod tests {
         let transport = MockTransport::new();
 
         let body = serde_json::builder::ObjectBuilder::new()
-                       .insert("field_1", 42)
-                       .insert("field_2", "hello")
-                       .unwrap();
+            .insert("field_1", 42)
+            .insert("field_2", "hello")
+            .unwrap();
 
         let expected = ({
             let options = RequestOptions::new().with_accept_json().with_json_body(&body);
@@ -131,10 +131,10 @@ mod tests {
         let transport = MockTransport::new();
 
         let body = serde_json::builder::ObjectBuilder::new()
-                       .insert("_id", "bar")
-                       .insert("field_1", 42)
-                       .insert("field_2", "hello")
-                       .unwrap();
+            .insert("_id", "bar")
+            .insert("field_1", 42)
+            .insert("field_2", "hello")
+            .unwrap();
 
         let expected_request = {
             let options = RequestOptions::new().with_accept_json().with_json_body(&body);
@@ -154,12 +154,11 @@ mod tests {
         let rev = Revision::parse("1-967a00dff5e02add41819138abb3284d").unwrap();
         let response = MockResponse::new(StatusCode::Created).build_json_body(|x| {
             x.insert("ok", true)
-             .insert("id", "foo")
-             .insert("rev", rev.to_string())
+                .insert("id", "foo")
+                .insert("rev", rev.to_string())
         });
         let expected = (DocumentId::from("foo"), rev);
-        let got = CreateDocument::<MockTransport, DatabasePath, ()>::take_response(response, ())
-                      .unwrap();
+        let got = CreateDocument::<MockTransport, DatabasePath, ()>::take_response(response, ()).unwrap();
         assert_eq!(expected, got);
     }
 
@@ -169,12 +168,11 @@ mod tests {
         let reason = "Document update conflict.";
         let response = MockResponse::new(StatusCode::Conflict).build_json_body(|x| {
             x.insert("error", error)
-             .insert("reason", reason)
+                .insert("reason", reason)
         });
         match CreateDocument::<MockTransport, DatabasePath, ()>::take_response(response, ()) {
             Err(Error::DocumentConflict(ref error_response)) if error == error_response.error() &&
-                                                                reason ==
-                                                                error_response.reason() => (),
+                                                                reason == error_response.reason() => (),
             x @ _ => unexpected_result!(x),
         }
     }
@@ -185,7 +183,7 @@ mod tests {
         let reason = "Authentication required.";
         let response = MockResponse::new(StatusCode::Unauthorized).build_json_body(|x| {
             x.insert("error", error)
-             .insert("reason", reason)
+                .insert("reason", reason)
         });
         match CreateDocument::<MockTransport, DatabasePath, ()>::take_response(response, ()) {
             Err(Error::Unauthorized(ref error_response)) if error == error_response.error() &&

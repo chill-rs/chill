@@ -86,12 +86,11 @@ mod tests {
         let rev = Revision::parse("1-1234567890abcdef1234567890abcdef").unwrap();
         let response = MockResponse::new(StatusCode::Ok).build_json_body(|x| {
             x.insert("ok", "true")
-             .insert("id", "bar")
-             .insert("rev", rev.to_string())
+                .insert("id", "bar")
+                .insert("rev", rev.to_string())
         });
         let expected = rev;
-        let got = DeleteDocument::<MockTransport, DocumentPath>::take_response(response, ())
-                      .unwrap();
+        let got = DeleteDocument::<MockTransport, DocumentPath>::take_response(response, ()).unwrap();
         assert_eq!(expected, got);
     }
 
@@ -101,12 +100,11 @@ mod tests {
         let reason = "Document update conflict.";
         let response = MockResponse::new(StatusCode::Conflict).build_json_body(|x| {
             x.insert("error", error)
-             .insert("reason", reason)
+                .insert("reason", reason)
         });
         match DeleteDocument::<MockTransport, DocumentPath>::take_response(response, ()) {
             Err(Error::DocumentConflict(ref error_response)) if error == error_response.error() &&
-                                                                reason ==
-                                                                error_response.reason() => (),
+                                                                reason == error_response.reason() => (),
             x @ _ => unexpected_result!(x),
         }
     }
@@ -117,7 +115,7 @@ mod tests {
         let reason = "no_db_file";
         let response = MockResponse::new(StatusCode::NotFound).build_json_body(|x| {
             x.insert("error", error)
-             .insert("reason", reason)
+                .insert("reason", reason)
         });
         match DeleteDocument::<MockTransport, DocumentPath>::take_response(response, ()) {
             Err(Error::NotFound(ref error_response)) if error == error_response.error() &&
@@ -132,7 +130,7 @@ mod tests {
         let reason = "Authentication required.";
         let response = MockResponse::new(StatusCode::Unauthorized).build_json_body(|x| {
             x.insert("error", error)
-             .insert("reason", reason)
+                .insert("reason", reason)
         });
         match DeleteDocument::<MockTransport, DocumentPath>::take_response(response, ()) {
             Err(Error::Unauthorized(ref error_response)) if error == error_response.error() &&

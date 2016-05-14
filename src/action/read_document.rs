@@ -77,7 +77,7 @@ impl<'a, T: Transport + 'a, P: IntoDocumentPath> ReadDocument<'a, T, P> {
     /// Modifies the action to read the document of the given revision.
     ///
     /// The `with_revision` method abstracts the `rev` query parameter of the
-    /// HTTP request `GET /db/docid`. By default, the CouchDB 
+    /// HTTP request `GET /db/docid`. By default, the CouchDB
     ///
     pub fn with_revision(mut self, revision: &'a Revision) -> Self {
         self.revision = Some(revision);
@@ -128,9 +128,7 @@ impl<'a, T: Transport + 'a, P: IntoDocumentPath> Action<T> for ReadDocument<'a, 
         Ok((request, db_name))
     }
 
-    fn take_response<R: Response>(response: R,
-                                  db_name: Self::State)
-                                  -> Result<Self::Output, Error> {
+    fn take_response<R: Response>(response: R, db_name: Self::State) -> Result<Self::Output, Error> {
         match response.status_code() {
             StatusCode::Ok => {
                 let decoded_doc: JsonDecodableDocument = try!(response.decode_json_body());
@@ -204,14 +202,13 @@ mod tests {
         let transport = MockTransport::new();
         let expected = ({
             let options = RequestOptions::new()
-                              .with_accept_json()
-                              .with_attachments_query(false);
+                .with_accept_json()
+                .with_attachments_query(false);
             transport.get(vec!["foo", "bar"], options).unwrap()
         },
                         DatabaseName::from("foo"));
         let got = {
-            let action = ReadDocument::new(&transport, "/foo/bar")
-                             .with_attachment_content(AttachmentContent::None);
+            let action = ReadDocument::new(&transport, "/foo/bar").with_attachment_content(AttachmentContent::None);
             action.make_request().unwrap()
         };
         assert_eq!(expected, got);
@@ -222,14 +219,13 @@ mod tests {
         let transport = MockTransport::new();
         let expected = ({
             let options = RequestOptions::new()
-                              .with_accept_json()
-                              .with_attachments_query(true);
+                .with_accept_json()
+                .with_attachments_query(true);
             transport.get(vec!["foo", "bar"], options).unwrap()
         },
                         DatabaseName::from("foo"));
         let got = {
-            let action = ReadDocument::new(&transport, "/foo/bar")
-                             .with_attachment_content(AttachmentContent::All);
+            let action = ReadDocument::new(&transport, "/foo/bar").with_attachment_content(AttachmentContent::All);
             action.make_request().unwrap()
         };
         assert_eq!(expected, got);
@@ -242,22 +238,20 @@ mod tests {
         let rev = Revision::parse("1-1234567890abcdef1234567890abcdef").unwrap();
         let response = MockResponse::new(StatusCode::Ok).build_json_body(|x| {
             x.insert("_id", doc_id.to_string())
-             .insert("_rev", rev.to_string())
-             .insert("field_1", 42)
-             .insert("field_2", "hello")
+                .insert("_rev", rev.to_string())
+                .insert("field_1", 42)
+                .insert("field_2", "hello")
         });
 
         let expected = DocumentBuilder::new((db_name.clone(), doc_id), rev)
-                           .build_content(|x| {
-                               x.insert("field_1", 42)
-                                .insert("field_2", "hello")
-                           })
-                           .unwrap();
+            .build_content(|x| {
+                x.insert("field_1", 42)
+                    .insert("field_2", "hello")
+            })
+            .unwrap();
 
-        let got =
-            ReadDocument::<MockTransport, DocumentPath>::take_response(response,
-                                                                       DatabaseName::from(db_name))
-                .unwrap();
+        let got = ReadDocument::<MockTransport, DocumentPath>::take_response(response, DatabaseName::from(db_name))
+            .unwrap();
         assert_eq!(expected, got);
     }
 
@@ -267,10 +261,9 @@ mod tests {
         let reason = "no_db_file";
         let response = MockResponse::new(StatusCode::NotFound).build_json_body(|x| {
             x.insert("error", error)
-             .insert("reason", reason)
+                .insert("reason", reason)
         });
-        match ReadDocument::<MockTransport, DocumentPath>::take_response(response,
-                                                                         DatabaseName::from("foo")) {
+        match ReadDocument::<MockTransport, DocumentPath>::take_response(response, DatabaseName::from("foo")) {
             Err(Error::NotFound(ref error_response)) if error == error_response.error() &&
                                                         reason == error_response.reason() => (),
             x @ _ => unexpected_result!(x),
@@ -283,10 +276,9 @@ mod tests {
         let reason = "Authentication required.";
         let response = MockResponse::new(StatusCode::Unauthorized).build_json_body(|x| {
             x.insert("error", error)
-             .insert("reason", reason)
+                .insert("reason", reason)
         });
-        match ReadDocument::<MockTransport, DocumentPath>::take_response(response,
-                                                                         DatabaseName::from("foo")) {
+        match ReadDocument::<MockTransport, DocumentPath>::take_response(response, DatabaseName::from("foo")) {
             Err(Error::Unauthorized(ref error_response)) if error == error_response.error() &&
                                                             reason == error_response.reason() => (),
             x @ _ => unexpected_result!(x),

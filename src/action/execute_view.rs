@@ -204,9 +204,7 @@ impl<'a, EndKey, P, T> ExecuteView<'a, T, P, (), EndKey>
     /// The `with_start_key` method abstracts CouchDB's `startkey` query
     /// parameter. By default, the CouchDB server includes all records.
     ///
-    pub fn with_start_key<StartKey>(self,
-                                    start_key: StartKey)
-                                    -> ExecuteView<'a, T, P, StartKey, EndKey>
+    pub fn with_start_key<StartKey>(self, start_key: StartKey) -> ExecuteView<'a, T, P, StartKey, EndKey>
         where StartKey: serde::Serialize
     {
         ExecuteView {
@@ -233,9 +231,7 @@ impl<'a, P, StartKey, T> ExecuteView<'a, T, P, StartKey, ()>
     /// The `with_end_key_inclusive` method abstracts CouchDB's `endkey` query
     /// parameter. By default, the CouchDB server includes all records.
     ///
-    pub fn with_end_key_inclusive<EndKey>(self,
-                                          end_key: EndKey)
-                                          -> ExecuteView<'a, T, P, StartKey, EndKey>
+    pub fn with_end_key_inclusive<EndKey>(self, end_key: EndKey) -> ExecuteView<'a, T, P, StartKey, EndKey>
         where EndKey: serde::Serialize
     {
         ExecuteView {
@@ -257,9 +253,7 @@ impl<'a, P, StartKey, T> ExecuteView<'a, T, P, StartKey, ()>
     /// `inclusive_end` query parameters. By default, the CouchDB server
     /// includes all records.
     ///
-    pub fn with_end_key_exclusive<EndKey>(self,
-                                          end_key: EndKey)
-                                          -> ExecuteView<'a, T, P, StartKey, EndKey>
+    pub fn with_end_key_exclusive<EndKey>(self, end_key: EndKey) -> ExecuteView<'a, T, P, StartKey, EndKey>
         where EndKey: serde::Serialize
     {
         ExecuteView {
@@ -337,9 +331,7 @@ impl<'a, P, T, StartKey, EndKey> Action<T> for ExecuteView<'a, T, P, StartKey, E
         Ok((request, db_name))
     }
 
-    fn take_response<R: Response>(response: R,
-                                  db_name: Self::State)
-                                  -> Result<Self::Output, Error> {
+    fn take_response<R: Response>(response: R, db_name: Self::State) -> Result<Self::Output, Error> {
         match response.status_code() {
             StatusCode::Ok => {
                 let body: ViewResponseJsonable = try!(response.decode_json_body());
@@ -391,8 +383,7 @@ mod tests {
                         DatabaseName::from("foo"));
 
         let got = {
-            let action = ExecuteView::new(&transport, "/foo/_design/bar/_view/qux")
-                             .with_descending(true);
+            let action = ExecuteView::new(&transport, "/foo/_design/bar/_view/qux").with_descending(true);
             action.make_request().unwrap()
         };
 
@@ -407,17 +398,16 @@ mod tests {
 
         let expected = ({
             let options = RequestOptions::new()
-                              .with_end_key(&end_key)
-                              .unwrap()
-                              .with_inclusive_end(false)
-                              .with_accept_json();
+                .with_end_key(&end_key)
+                .unwrap()
+                .with_inclusive_end(false)
+                .with_accept_json();
             transport.get(vec!["foo", "_design", "bar", "_view", "qux"], options).unwrap()
         },
                         DatabaseName::from("foo"));
 
         let got = {
-            let action = ExecuteView::new(&transport, "/foo/_design/bar/_view/qux")
-                             .with_end_key_exclusive(&end_key);
+            let action = ExecuteView::new(&transport, "/foo/_design/bar/_view/qux").with_end_key_exclusive(&end_key);
             action.make_request().unwrap()
         };
 
@@ -432,16 +422,15 @@ mod tests {
 
         let expected = ({
             let options = RequestOptions::new()
-                              .with_end_key(&end_key)
-                              .unwrap()
-                              .with_accept_json();
+                .with_end_key(&end_key)
+                .unwrap()
+                .with_accept_json();
             transport.get(vec!["foo", "_design", "bar", "_view", "qux"], options).unwrap()
         },
                         DatabaseName::from("foo"));
 
         let got = {
-            let action = ExecuteView::new(&transport, "/foo/_design/bar/_view/qux")
-                             .with_end_key_inclusive(&end_key);
+            let action = ExecuteView::new(&transport, "/foo/_design/bar/_view/qux").with_end_key_inclusive(&end_key);
             action.make_request().unwrap()
         };
 
@@ -455,15 +444,14 @@ mod tests {
 
         let expected = ({
             let options = RequestOptions::new()
-                              .with_group(true)
-                              .with_accept_json();
+                .with_group(true)
+                .with_accept_json();
             transport.get(vec!["foo", "_design", "bar", "_view", "qux"], options).unwrap()
         },
                         DatabaseName::from("foo"));
 
         let got = {
-            let action = ExecuteView::new(&transport, "/foo/_design/bar/_view/qux")
-                             .with_exact_groups(true);
+            let action = ExecuteView::new(&transport, "/foo/_design/bar/_view/qux").with_exact_groups(true);
             action.make_request().unwrap()
         };
 
@@ -477,15 +465,14 @@ mod tests {
 
         let expected = ({
             let options = RequestOptions::new()
-                              .with_group_level(42)
-                              .with_accept_json();
+                .with_group_level(42)
+                .with_accept_json();
             transport.get(vec!["foo", "_design", "bar", "_view", "qux"], options).unwrap()
         },
                         DatabaseName::from("foo"));
 
         let got = {
-            let action = ExecuteView::new(&transport, "/foo/_design/bar/_view/qux")
-                             .with_group_level(42);
+            let action = ExecuteView::new(&transport, "/foo/_design/bar/_view/qux").with_group_level(42);
             action.make_request().unwrap()
         };
 
@@ -498,8 +485,8 @@ mod tests {
 
         let expected = ({
             let options = RequestOptions::new()
-                              .with_limit(42)
-                              .with_accept_json();
+                .with_limit(42)
+                .with_accept_json();
             transport.get(vec!["foo", "_design", "bar", "_view", "qux"], options).unwrap()
         },
                         DatabaseName::from("foo"));
@@ -523,8 +510,7 @@ mod tests {
                         DatabaseName::from("foo"));
 
         let got = {
-            let action = ExecuteView::new(&transport, "/foo/_design/bar/_view/qux")
-                             .with_reduce(false);
+            let action = ExecuteView::new(&transport, "/foo/_design/bar/_view/qux").with_reduce(false);
             action.make_request().unwrap()
         };
 
@@ -539,16 +525,15 @@ mod tests {
 
         let expected = ({
             let options = RequestOptions::new()
-                              .with_start_key(&start_key)
-                              .unwrap()
-                              .with_accept_json();
+                .with_start_key(&start_key)
+                .unwrap()
+                .with_accept_json();
             transport.get(vec!["foo", "_design", "bar", "_view", "qux"], options).unwrap()
         },
                         DatabaseName::from("foo"));
 
         let got = {
-            let action = ExecuteView::new(&transport, "/foo/_design/bar/_view/qux")
-                             .with_start_key(&start_key);
+            let action = ExecuteView::new(&transport, "/foo/_design/bar/_view/qux").with_start_key(&start_key);
             action.make_request().unwrap()
         };
 
@@ -562,18 +547,15 @@ mod tests {
             x.insert_array("rows", |x| {
                 x.push_object(|x| {
                     x.insert("key", serde_json::Value::Null)
-                     .insert("value", 42)
+                        .insert("value", 42)
                 })
             })
         });
 
         let expected = ViewResponseBuilder::new_reduced(42).unwrap();
 
-        let got = ExecuteView::<MockTransport,
-                                ViewPath,
-                                (),
-                                ()>::take_response(response, DatabaseName::from("foo"))
-                      .unwrap();
+        let got = ExecuteView::<MockTransport, ViewPath, (), ()>::take_response(response, DatabaseName::from("foo"))
+            .unwrap();
         assert_eq!(expected, got);
     }
 
@@ -582,29 +564,28 @@ mod tests {
 
         let response = MockResponse::new(StatusCode::Ok).build_json_body(|x| {
             x.insert("total_rows", 20)
-             .insert("offset", 10)
-             .insert_array("rows", |x| {
-                 x.push_object(|x| {
-                      x.insert("key", "Babe Ruth")
-                       .insert("value", 714)
-                       .insert("id", "babe_ruth")
-                  })
-                  .push_object(|x| {
-                      x.insert("key", "Hank Aaron")
-                       .insert("value", 755)
-                       .insert("id", "hank_aaron")
-                  })
-             })
+                .insert("offset", 10)
+                .insert_array("rows", |x| {
+                    x.push_object(|x| {
+                            x.insert("key", "Babe Ruth")
+                                .insert("value", 714)
+                                .insert("id", "babe_ruth")
+                        })
+                        .push_object(|x| {
+                            x.insert("key", "Hank Aaron")
+                                .insert("value", 755)
+                                .insert("id", "hank_aaron")
+                        })
+                })
         });
 
         let expected = ViewResponseBuilder::new_unreduced("baseball", 20, 10)
-                           .with_row("babe_ruth", "Babe Ruth", 714)
-                           .with_row("hank_aaron", "Hank Aaron", 755)
-                           .unwrap();
+            .with_row("babe_ruth", "Babe Ruth", 714)
+            .with_row("hank_aaron", "Hank Aaron", 755)
+            .unwrap();
 
         let db_name = DatabaseName::from("baseball");
-        let got = ExecuteView::<MockTransport, ViewPath, (), ()>::take_response(response, db_name)
-                      .unwrap();
+        let got = ExecuteView::<MockTransport, ViewPath, (), ()>::take_response(response, db_name).unwrap();
         assert_eq!(expected, got);
     }
 
@@ -614,11 +595,10 @@ mod tests {
         let reason = "missing_named_view";
         let response = MockResponse::new(StatusCode::NotFound).build_json_body(|x| {
             x.insert("error", error)
-             .insert("reason", reason)
+                .insert("reason", reason)
         });
         let db_name = DatabaseName::from("foo");
-        match ExecuteView::<MockTransport, ViewPath, String, i32>::take_response(response,
-                                                                                 db_name) {
+        match ExecuteView::<MockTransport, ViewPath, String, i32>::take_response(response, db_name) {
             Err(Error::NotFound(ref error_response)) if error == error_response.error() &&
                                                         reason == error_response.reason() => (),
             x @ _ => unexpected_result!(x),
@@ -631,11 +611,10 @@ mod tests {
         let reason = "Authentication required.";
         let response = MockResponse::new(StatusCode::Unauthorized).build_json_body(|x| {
             x.insert("error", error)
-             .insert("reason", reason)
+                .insert("reason", reason)
         });
         let db_name = DatabaseName::from("foo");
-        match ExecuteView::<MockTransport, ViewPath, String, i32>::take_response(response,
-                                                                                 db_name) {
+        match ExecuteView::<MockTransport, ViewPath, String, i32>::take_response(response, db_name) {
             Err(Error::Unauthorized(ref error_response)) if error == error_response.error() &&
                                                             reason == error_response.reason() => (),
             x @ _ => unexpected_result!(x),

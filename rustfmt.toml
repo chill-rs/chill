@@ -1,5 +1,5 @@
 ideal_width = 80
-max_width = 100
+max_width = 120
 newline_style = "Unix"
 normalise_comments = false
 report_todo = "Never"

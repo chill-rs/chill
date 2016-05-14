@@ -72,11 +72,9 @@ mod tests {
 
     #[test]
     fn take_response_created() {
-        let response = MockResponse::new(StatusCode::Created)
-                           .build_json_body(|x| x.insert("ok", true));
+        let response = MockResponse::new(StatusCode::Created).build_json_body(|x| x.insert("ok", true));
         let expected = ();
-        let got = CreateDatabase::<MockTransport, DatabasePath>::take_response(response, ())
-                      .unwrap();
+        let got = CreateDatabase::<MockTransport, DatabasePath>::take_response(response, ()).unwrap();
         assert_eq!(expected, got);
     }
 
@@ -86,13 +84,11 @@ mod tests {
         let reason = "The database could not be created, the file already exists.";
         let response = MockResponse::new(StatusCode::PreconditionFailed).build_json_body(|x| {
             x.insert("error", error)
-             .insert("reason", reason)
+                .insert("reason", reason)
         });
         match CreateDatabase::<MockTransport, DatabasePath>::take_response(response, ()) {
             Err(Error::DatabaseExists(ref error_response)) if error == error_response.error() &&
-                                                              reason == error_response.reason() => {
-                ()
-            }
+                                                              reason == error_response.reason() => (),
             x @ _ => unexpected_result!(x),
         }
     }
@@ -103,7 +99,7 @@ mod tests {
         let reason = "Authentication required.";
         let response = MockResponse::new(StatusCode::Unauthorized).build_json_body(|x| {
             x.insert("error", error)
-             .insert("reason", reason)
+                .insert("reason", reason)
         });
         match CreateDatabase::<MockTransport, DatabasePath>::take_response(response, ()) {
             Err(Error::Unauthorized(ref error_response)) if error == error_response.error() &&

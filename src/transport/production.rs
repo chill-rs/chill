@@ -92,8 +92,8 @@ impl HyperTransport {
 
         let response = {
             let b = self.hyper_client
-                        .request(request.method, request.url)
-                        .headers(request.headers);
+                .request(request.method, request.url)
+                .headers(request.headers);
 
             let b = if request.body.is_empty() {
                 b
@@ -219,9 +219,7 @@ impl Transport for HyperTransport {
 
         let body = match options.body {
             None => Vec::new(),
-            Some(RequestBody::Json(body)) => {
-                try!(serde_json::to_vec(body).map_err(|e| Error::JsonEncode { cause: e }))
-            }
+            Some(RequestBody::Json(body)) => try!(serde_json::to_vec(body).map_err(|e| Error::JsonEncode { cause: e })),
         };
 
         Ok(HyperRequest {
@@ -317,8 +315,8 @@ mod tests {
         let url = "http://example.com:5984/".parse().unwrap();
         let transport = HyperTransport::new(url).unwrap();
         let expected: url::Url = "http://example.com:5984/foo%2F%3F%23%20%25bar"
-                                     .parse()
-                                     .unwrap();
+            .parse()
+            .unwrap();
         let got = transport.make_request_url(vec!["foo/?# %bar"], &RequestOptions::<()>::default());
         assert_eq!(expected, got);
     }
@@ -329,13 +327,12 @@ mod tests {
         let transport = HyperTransport::new(url).unwrap();
         let expected: url::Url = "http://example.com:\
                                   5984/db/doc?rev=42-1234567890abcdef1234567890abcdef"
-                                     .parse()
-                                     .unwrap();
+            .parse()
+            .unwrap();
 
         let got = transport.make_request_url(vec!["db", "doc"], {
             &RequestOptions::<()>::new()
-                 .with_revision_query(&Revision::parse("42-1234567890abcdef1234567890abcdef")
-                                           .unwrap())
+                .with_revision_query(&Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap())
         });
         assert_eq!(expected, got);
     }

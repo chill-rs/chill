@@ -58,9 +58,7 @@ impl Client {
     }
 
     /// Builds an action to create a database.
-    pub fn create_database<'a, P>(&'a self,
-                                  db_path: P)
-                                  -> action::CreateDatabase<'a, HyperTransport, P>
+    pub fn create_database<'a, P>(&'a self, db_path: P) -> action::CreateDatabase<'a, HyperTransport, P>
         where P: IntoDatabasePath
     {
         action::CreateDatabase::new(&self.transport, db_path)
@@ -78,18 +76,14 @@ impl Client {
     }
 
     /// Builds an action to read a document.
-    pub fn read_document<'a, P>(&'a self,
-                                doc_path: P)
-                                -> action::ReadDocument<'a, HyperTransport, P>
+    pub fn read_document<'a, P>(&'a self, doc_path: P) -> action::ReadDocument<'a, HyperTransport, P>
         where P: IntoDocumentPath
     {
         action::ReadDocument::new(&self.transport, doc_path)
     }
 
     /// Builds an action to update a document.
-    pub fn update_document<'a>(&'a self,
-                               doc: &'a Document)
-                               -> action::UpdateDocument<'a, HyperTransport> {
+    pub fn update_document<'a>(&'a self, doc: &'a Document) -> action::UpdateDocument<'a, HyperTransport> {
         action::UpdateDocument::new(&self.transport, doc)
     }
 
@@ -104,9 +98,7 @@ impl Client {
     }
 
     /// Builds an action to execute a view.
-    pub fn execute_view<'a, P>(&'a self,
-                               view_path: P)
-                               -> action::ExecuteView<'a, HyperTransport, P, (), ()>
+    pub fn execute_view<'a, P>(&'a self, view_path: P) -> action::ExecuteView<'a, HyperTransport, P, (), ()>
         where P: IntoViewPath
     {
         action::ExecuteView::new(&self.transport, view_path)

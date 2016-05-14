@@ -64,9 +64,7 @@ impl std::str::FromStr for Revision {
                                                  }
                                              })) {
             0 => {
-                return Err(Error::RevisionParse {
-                    kind: RevisionParseErrorKind::ZeroSequenceNumber,
-                });
+                return Err(Error::RevisionParse { kind: RevisionParseErrorKind::ZeroSequenceNumber });
             }
             x @ _ => x,
         };
