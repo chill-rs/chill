@@ -872,3 +872,149 @@ fn execute_view_ok_reduced() {
 
     assert_eq!(expected, got);
 }
+
+#[test]
+fn execute_view_ok_grouped_exact() {
+
+    let (_server, client) = make_server_and_client();
+    client.create_database("/baseball").run().unwrap();
+
+    // FIXME: fix the stats
+
+    let up_content = serde_json::builder::ObjectBuilder::new()
+                         .insert("name", "Babe Ruth")
+                         .insert_object("home_runs", |x| {
+                             x.insert("1919", 29)
+                              .insert("1920", 54)
+                              .insert("1921", 59)
+                         })
+                         .unwrap();
+
+    client.create_document("/baseball", &up_content).run().unwrap();
+
+    let up_content = serde_json::builder::ObjectBuilder::new()
+                         .insert("name", "Hank Aaron")
+                         .insert_object("home_runs", |x| {
+                             x.insert("1966", 44)
+                              .insert("1967", 39)
+                              .insert("1968", 29)
+                         })
+                         .unwrap();
+
+    client.create_document("/baseball", &up_content).run().unwrap();
+
+    // TODO: Make use of a Design type when available.
+
+    let up_content = serde_json::builder::ObjectBuilder::new()
+                         .insert_object("views", |x| {
+                             x.insert_object("home_runs", |x| {
+                                 x.insert("map",
+                                          r#"function(doc) {
+                                               for (year in doc.home_runs) {
+                                                 emit([doc.home_runs[year], doc.name], 1);
+                                               }
+                                             }"#)
+                                  .insert("reduce", r#"_sum"#)
+                             })
+                         })
+                         .unwrap();
+    client.create_document("/baseball", &up_content)
+          .with_document_id("_design/stats")
+          .run()
+          .unwrap();
+
+    let new_key = |hr, name| {
+        serde_json::builder::ArrayBuilder::new()
+            .push(hr)
+            .push(name)
+            .unwrap()
+    };
+
+    let expected = chill::testing::ViewResponseBuilder::new_grouped()
+                       .with_row(new_key(29, "Babe Ruth"), 1)
+                       .with_row(new_key(29, "Hank Aaron"), 1)
+                       .with_row(new_key(39, "Hank Aaron"), 1)
+                       .with_row(new_key(44, "Hank Aaron"), 1)
+                       .with_row(new_key(54, "Babe Ruth"), 1)
+                       .with_row(new_key(59, "Babe Ruth"), 1)
+                       .unwrap();
+
+    let got = client.execute_view("/baseball/_design/stats/_view/home_runs")
+                    .with_exact_groups(true)
+                    .run()
+                    .unwrap();
+
+    assert_eq!(expected, got);
+}
+
+#[test]
+fn execute_view_ok_grouped_with_level() {
+
+    let (_server, client) = make_server_and_client();
+    client.create_database("/baseball").run().unwrap();
+
+    // FIXME: fix the stats
+
+    let up_content = serde_json::builder::ObjectBuilder::new()
+                         .insert("name", "Babe Ruth")
+                         .insert_object("home_runs", |x| {
+                             x.insert("1919", 29)
+                              .insert("1920", 54)
+                              .insert("1921", 59)
+                         })
+                         .unwrap();
+
+    client.create_document("/baseball", &up_content).run().unwrap();
+
+    let up_content = serde_json::builder::ObjectBuilder::new()
+                         .insert("name", "Hank Aaron")
+                         .insert_object("home_runs", |x| {
+                             x.insert("1966", 44)
+                              .insert("1967", 39)
+                              .insert("1968", 29)
+                         })
+                         .unwrap();
+
+    client.create_document("/baseball", &up_content).run().unwrap();
+
+    // TODO: Make use of a Design type when available.
+
+    let up_content = serde_json::builder::ObjectBuilder::new()
+                         .insert_object("views", |x| {
+                             x.insert_object("home_runs", |x| {
+                                 x.insert("map",
+                                          r#"function(doc) {
+                                               for (year in doc.home_runs) {
+                                                 emit([doc.home_runs[year], doc.name], 1);
+                                               }
+                                             }"#)
+                                  .insert("reduce", r#"_sum"#)
+                             })
+                         })
+                         .unwrap();
+    client.create_document("/baseball", &up_content)
+          .with_document_id("_design/stats")
+          .run()
+          .unwrap();
+
+    let new_key = |hr| {
+        serde_json::builder::ArrayBuilder::new()
+            .push(hr)
+            .unwrap()
+    };
+
+    let expected = chill::testing::ViewResponseBuilder::new_grouped()
+                       .with_row(new_key(29), 2)
+                       .with_row(new_key(39), 1)
+                       .with_row(new_key(44), 1)
+                       .with_row(new_key(54), 1)
+                       .with_row(new_key(59), 1)
+                       .unwrap();
+
+    let got = client.execute_view("/baseball/_design/stats/_view/home_runs")
+                    .with_group_level(1)
+                    .run()
+                    .unwrap();
+
+    assert_eq!(expected, got);
+}

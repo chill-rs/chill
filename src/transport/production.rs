@@ -143,6 +143,14 @@ impl HyperTransport {
                 query.append_pair("endkey", key_value);
             }
 
+            if let Some(yes_or_no) = options.group_query {
+                query.append_pair("group", bool_to_string(yes_or_no));
+            }
+
+            if let Some(level) = options.group_level_query {
+                query.append_pair("group_level", &level.to_string());
+            }
+
             if let Some(yes_or_no) = options.inclusive_end_query {
                 query.append_pair("inclusive_end", bool_to_string(yes_or_no));
             }

@@ -72,6 +72,8 @@ pub struct RequestOptions<'a, B: serde::Serialize + 'a> {
     attachments_query: Option<bool>,
     descending_query: Option<bool>,
     end_key_query: Option<String>,
+    group_query: Option<bool>,
+    group_level_query: Option<u32>,
     inclusive_end_query: Option<bool>,
     limit: Option<u64>,
     reduce_query: Option<bool>,
@@ -91,6 +93,8 @@ impl<'a> RequestOptions<'a, ()> {
             attachments_query: self.attachments_query,
             descending_query: self.descending_query,
             end_key_query: self.end_key_query,
+            group_query: self.group_query,
+            group_level_query: self.group_level_query,
             inclusive_end_query: self.inclusive_end_query,
             limit: self.limit,
             reduce_query: self.reduce_query,
@@ -121,6 +125,16 @@ impl<'a, B: serde::Serialize + 'a> RequestOptions<'a, B> {
         self.end_key_query = Some(try!(serde_json::to_string(key)
                                            .map_err(|e| Error::JsonEncode { cause: e })));
         Ok(self)
+    }
+
+    pub fn with_group(mut self, yes_or_no: bool) -> Self {
+        self.group_query = Some(yes_or_no);
+        self
+    }
+
+    pub fn with_group_level(mut self, level: u32) -> Self {
+        self.group_level_query = Some(level);
+        self
     }
 
     pub fn with_inclusive_end(mut self, yes_or_no: bool) -> Self {

@@ -11,6 +11,11 @@ enum Inclusivity {
     Inclusive,
 }
 
+enum GroupLevel {
+    Exact(bool),
+    Number(u32),
+}
+
 /// Executes a view on the CouchDB server and returns the result.
 ///
 /// Chill executes the view by sending an HTTP request to the CouchDB server to
@@ -111,6 +116,7 @@ pub struct ExecuteView<'a, T, P, StartKey, EndKey>
     end_key: Option<(EndKey, Inclusivity)>,
     limit: Option<u64>,
     descending: Option<bool>,
+    group_level: Option<GroupLevel>,
 }
 
 impl<'a, P, T> ExecuteView<'a, T, P, (), ()>
@@ -127,6 +133,7 @@ impl<'a, P, T> ExecuteView<'a, T, P, (), ()>
             end_key: None,
             limit: None,
             descending: None,
+            group_level: None,
         }
     }
 }
@@ -174,6 +181,16 @@ impl<'a, EndKey, P, StartKey, T> ExecuteView<'a, T, P, StartKey, EndKey>
         self.descending = Some(descending);
         self
     }
+
+    pub fn with_exact_groups(mut self, yes_or_no: bool) -> Self {
+        self.group_level = Some(GroupLevel::Exact(yes_or_no));
+        self
+    }
+
+    pub fn with_group_level(mut self, group_level: u32) -> Self {
+        self.group_level = Some(GroupLevel::Number(group_level));
+        self
+    }
 }
 
 impl<'a, EndKey, P, T> ExecuteView<'a, T, P, (), EndKey>
@@ -200,6 +217,7 @@ impl<'a, EndKey, P, T> ExecuteView<'a, T, P, (), EndKey>
             end_key: self.end_key,
             limit: self.limit,
             descending: self.descending,
+            group_level: self.group_level,
         }
     }
 }
@@ -228,6 +246,7 @@ impl<'a, P, StartKey, T> ExecuteView<'a, T, P, StartKey, ()>
             end_key: Some((end_key, Inclusivity::Inclusive)),
             limit: self.limit,
             descending: self.descending,
+            group_level: self.group_level,
         }
     }
 
@@ -251,6 +270,7 @@ impl<'a, P, StartKey, T> ExecuteView<'a, T, P, StartKey, ()>
             end_key: Some((end_key, Inclusivity::Exclusive)),
             limit: self.limit,
             descending: self.descending,
+            group_level: self.group_level,
         }
     }
 }
@@ -303,6 +323,12 @@ impl<'a, P, T, StartKey, EndKey> Action<T> for ExecuteView<'a, T, P, StartKey, E
         let options = match self.descending {
             None => options,
             Some(value) => options.with_descending_query(value),
+        };
+
+        let options = match self.group_level {
+            None => options,
+            Some(GroupLevel::Exact(value)) => options.with_group(value),
+            Some(GroupLevel::Number(value)) => options.with_group_level(value),
         };
 
         let view_path = try!(self.view_path.into_view_path());
@@ -416,6 +442,50 @@ mod tests {
         let got = {
             let action = ExecuteView::new(&transport, "/foo/_design/bar/_view/qux")
                              .with_end_key_inclusive(&end_key);
+            action.make_request().unwrap()
+        };
+
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn make_request_with_exact_groups() {
+
+        let transport = MockTransport::new();
+
+        let expected = ({
+            let options = RequestOptions::new()
+                              .with_group(true)
+                              .with_accept_json();
+            transport.get(vec!["foo", "_design", "bar", "_view", "qux"], options).unwrap()
+        },
+                        DatabaseName::from("foo"));
+
+        let got = {
+            let action = ExecuteView::new(&transport, "/foo/_design/bar/_view/qux")
+                             .with_exact_groups(true);
+            action.make_request().unwrap()
+        };
+
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn make_request_with_group_level() {
+
+        let transport = MockTransport::new();
+
+        let expected = ({
+            let options = RequestOptions::new()
+                              .with_group_level(42)
+                              .with_accept_json();
+            transport.get(vec!["foo", "_design", "bar", "_view", "qux"], options).unwrap()
+        },
+                        DatabaseName::from("foo"));
+
+        let got = {
+            let action = ExecuteView::new(&transport, "/foo/_design/bar/_view/qux")
+                             .with_group_level(42);
             action.make_request().unwrap()
         };
 

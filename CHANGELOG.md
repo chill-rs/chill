@@ -19,6 +19,12 @@
   storing _reduced_, _grouped_, and _unreduced_ view responses ([issue
   #49](issue_49)).
 
+### New
+
+* New support for the `group` query parameter when executing a view.
+* New support for the `group_level` query parameter when executing a
+  view.
+
 ## v0.1.2 (2016-05-07)
 
 The v0.1.2 release has a few small changes.
