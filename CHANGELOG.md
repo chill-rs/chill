@@ -7,10 +7,17 @@
 * Replace each owning and non-owning path-related type pair (e.g.,
   `DatabaseName` and `DatabaseNameRef`) with a single owning type (e.g.,
   `DatabaseName`) ([issue #33](issue_33)). This increases the number of
-  memory allocations in some use cases but vastly simplifies the API.
+  memory allocations in some cases but vastly simplifies the API.
 * Convert action-constructing `Client` methods to be infallible ([issue
   #34](issue_34)). This simplifies the API.
-* Remove deprecated `Document::id` method ([issue #42](issue_42)).
+* Remove some type parameters for view execution ([issue #40](issue_40)).
+  This affects these types: `ExecuteView`, `ViewResponse`, `ViewRow`,
+  and `ViewResponseBuilder`. This change simplifies the API by
+  eliminating the need for applications to explicitly specify types when
+  executing a view.
+* Convert `ViewResponse` from an enum to a struct and generalize for
+  storing _reduced_, _grouped_, and _unreduced_ view responses ([issue
+  #49](issue_49)).
 
 ## v0.1.2 (2016-05-07)
 
@@ -37,4 +44,6 @@ updating, and deleting documents.
 
 [issue_33]: https://github.com/chill-rs/chill/issues/33
 [issue_34]: https://github.com/chill-rs/chill/issues/34
+[issue_40]: https://github.com/chill-rs/chill/issues/40
 [issue_42]: https://github.com/chill-rs/chill/issues/42
+[issue_49]: https://github.com/chill-rs/chill/issues/49

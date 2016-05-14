@@ -84,15 +84,16 @@ enum Inclusivity {
 ///                           .unwrap();
 ///
 /// let expected = vec![
-///     (755, "Hank Aaron"),
-///     (714, "Babe Ruth"),
+///     "Hank Aaron - 755",
+///     "Babe Ruth - 714",
 /// ];
 ///
 /// let got = view_response.rows()
 ///                        .iter()
-///                        .map(|x| (x.key::<i32>().unwrap().unwrap(),
-///                                  x.value::<String>().unwrap()))
-///                        .collect();
+///                        .map(|x| format!("{} - {}",
+///                                        x.value::<String>().unwrap(),
+///                                        x.key::<i32>().unwrap().unwrap()))
+///                        .collect::<Vec<_>>();
 ///
 /// assert_eq!(expected, got);
 /// ```
