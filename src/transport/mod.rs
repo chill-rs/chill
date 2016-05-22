@@ -116,8 +116,7 @@ impl<'a, B: serde::Serialize + 'a> RequestOptions<'a, B> {
     }
 
     pub fn with_end_key<K: serde::Serialize>(mut self, key: &K) -> Result<Self, Error> {
-        self.end_key_query = Some(try!(serde_json::to_string(key)
-                                           .map_err(|e| Error::JsonEncode { cause: e })));
+        self.end_key_query = Some(try!(serde_json::to_string(key).map_err(|e| Error::JsonEncode { cause: e })));
         Ok(self)
     }
 
@@ -152,8 +151,7 @@ impl<'a, B: serde::Serialize + 'a> RequestOptions<'a, B> {
     }
 
     pub fn with_start_key<K: serde::Serialize>(mut self, key: &K) -> Result<Self, Error> {
-        self.start_key_query = Some(try!(serde_json::to_string(key)
-                                             .map_err(|e| Error::JsonEncode { cause: e })));
+        self.start_key_query = Some(try!(serde_json::to_string(key).map_err(|e| Error::JsonEncode { cause: e })));
         Ok(self)
     }
 }

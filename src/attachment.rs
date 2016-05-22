@@ -324,8 +324,7 @@ impl serde::Serialize for UnsavedAttachment {
                 let &mut Visitor(attachment) = self;
                 let content_type = attachment.content_type.clone();
                 try!(serializer.serialize_struct_elt("content_type", &content_type));
-                try!(serializer.serialize_struct_elt("data",
-                                                     &Base64JsonEncodable(&attachment.content)));
+                try!(serializer.serialize_struct_elt("data", &Base64JsonEncodable(&attachment.content)));
                 Ok(None)
             }
         }
@@ -350,8 +349,7 @@ impl serde::Deserialize for Base64JsonDecodable {
                 where E: serde::de::Error
             {
                 use std::error::Error;
-                let blob = try!(base64::u8de(value.as_bytes())
-                                    .map_err(|e| E::invalid_value(e.description())));
+                let blob = try!(base64::u8de(value.as_bytes()).map_err(|e| E::invalid_value(e.description())));
                 Ok(Base64JsonDecodable(blob))
             }
         }

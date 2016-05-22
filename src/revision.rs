@@ -53,29 +53,21 @@ impl std::str::FromStr for Revision {
 
         let mut parts = s.splitn(2, '-');
 
-        let sequence_number_str = try!(parts.next().ok_or(Error::RevisionParse {
-            kind: RevisionParseErrorKind::TooFewParts,
-        }));
+        let sequence_number_str = try!(parts.next()
+            .ok_or(Error::RevisionParse { kind: RevisionParseErrorKind::TooFewParts }));
 
         let sequence_number = match try!(u64::from_str_radix(sequence_number_str, 10)
-                                             .map_err(|e| {
-                                                 Error::RevisionParse {
-                                                     kind: RevisionParseErrorKind::NumberParse(e),
-                                                 }
-                                             })) {
+            .map_err(|e| Error::RevisionParse { kind: RevisionParseErrorKind::NumberParse(e) })) {
             0 => {
                 return Err(Error::RevisionParse { kind: RevisionParseErrorKind::ZeroSequenceNumber });
             }
             x @ _ => x,
         };
 
-        let digest_str = try!(parts.next().ok_or(Error::RevisionParse {
-            kind: RevisionParseErrorKind::TooFewParts,
-        }));
+        let digest_str = try!(parts.next().ok_or(Error::RevisionParse { kind: RevisionParseErrorKind::TooFewParts }));
 
-        let digest = try!(uuid::Uuid::parse_str(digest_str).map_err(|e| {
-            Error::RevisionParse { kind: RevisionParseErrorKind::DigestParse(e) }
-        }));
+        let digest = try!(uuid::Uuid::parse_str(digest_str)
+            .map_err(|e| Error::RevisionParse { kind: RevisionParseErrorKind::DigestParse(e) }));
 
         if digest_str.chars().any(|c| !c.is_digit(16)) {
             return Err(Error::RevisionParse { kind: RevisionParseErrorKind::DigestNotAllHex });
