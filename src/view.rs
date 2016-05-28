@@ -106,9 +106,8 @@ impl ViewRow {
         let decoded = match self.key {
             None => None,
             Some(ref key) => {
-                // FIXME: Optimize this to eliminate cloning and re-decoding.
-                try!(serde_json::from_value(key.clone())
-                         .map_err(|e| Error::JsonDecode { cause: e }))
+                // TODO: Optimize this to eliminate cloning and re-decoding.
+                try!(serde_json::from_value(key.clone()).map_err(|e| Error::JsonDecode { cause: e }))
             }
         };
 
@@ -117,7 +116,7 @@ impl ViewRow {
 
     /// Returns the row's value.
     pub fn value<V: serde::Deserialize>(&self) -> Result<V, Error> {
-        // FIXME: Optimize this to eliminate cloning and re-decoding.
+        // TODO: Optimize this to eliminate cloning and re-decoding.
         serde_json::from_value(self.value.clone()).map_err(|e| Error::JsonDecode { cause: e })
     }
 
@@ -595,25 +594,25 @@ mod tests {
             rows: vec![ViewRowJsonable {
                            id: None,
                            key: Some(serde_json::builder::ArrayBuilder::new()
-                                         .push(1)
-                                         .push(2)
-                                         .unwrap()),
+                               .push(1)
+                               .push(2)
+                               .unwrap()),
                            value: serde_json::Value::U64(42),
                        },
                        ViewRowJsonable {
                            id: None,
                            key: Some(serde_json::builder::ArrayBuilder::new()
-                                         .push(1)
-                                         .push(3)
-                                         .unwrap()),
+                               .push(1)
+                               .push(3)
+                               .unwrap()),
                            value: serde_json::Value::U64(43),
                        },
                        ViewRowJsonable {
                            id: None,
                            key: Some(serde_json::builder::ArrayBuilder::new()
-                                         .push(2)
-                                         .push(3)
-                                         .unwrap()),
+                               .push(2)
+                               .push(3)
+                               .unwrap()),
                            value: serde_json::Value::U64(44),
                        }],
         };

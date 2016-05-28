@@ -871,8 +871,6 @@ fn execute_view_ok_grouped_exact() {
     let (_server, client) = make_server_and_client();
     client.create_database("/baseball").run().unwrap();
 
-    // FIXME: fix the stats
-
     let up_content = serde_json::builder::ObjectBuilder::new()
         .insert("name", "Babe Ruth")
         .insert_object("home_runs", |x| {
@@ -944,8 +942,6 @@ fn execute_view_ok_grouped_with_level() {
 
     let (_server, client) = make_server_and_client();
     client.create_database("/baseball").run().unwrap();
-
-    // FIXME: fix the stats
 
     let up_content = serde_json::builder::ObjectBuilder::new()
         .insert("name", "Babe Ruth")
