@@ -1,6 +1,6 @@
 [package]
 name = "chill"
-version = "0.2.0"
+version = "0.2.1+master"
 authors = ["Craig M. Brandenburg <c.m.brandenburg@gmail.com>"]
 license = "MIT/Apache-2.0"
 description = "Client-side CouchDB library"

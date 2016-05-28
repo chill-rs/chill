@@ -1,5 +1,9 @@
 # Chill-rs Change Log
 
+## v0.2.1 (unreleased)
+
+No changes yet!
+
 ## v0.2.0 (2016-05-28)
 
 The v0.2.0 release introduces several breaking changes, mainly for the
