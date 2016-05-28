@@ -1,18 +1,21 @@
 # Chill-rs Change Log
 
-## v0.2.0 (unreleased)
+## v0.2.0 (2016-05-28)
+
+The v0.2.0 release introduces several breaking changes, mainly for the
+purpose of simplifying Chill's API.
 
 ### Breaking changes
 
 * Replace each owning and non-owning path-related type pair (e.g.,
   `DatabaseName` and `DatabaseNameRef`) with a single owning type (e.g.,
   `DatabaseName`) ([issue #33](issue_33)). This increases the number of
-  memory allocations in some cases but vastly simplifies the API.
+  memory allocations in some cases but vastly simplifies Chill's API.
 * Convert action-constructing `Client` methods to be infallible ([issue
-  #34](issue_34)). This simplifies the API.
+  #34](issue_34)). This simplifies Chill's API.
 * Remove some type parameters for view execution ([issue #40](issue_40)).
   This affects these types: `ExecuteView`, `ViewResponse`, `ViewRow`,
-  and `ViewResponseBuilder`. This change simplifies the API by
+  and `ViewResponseBuilder`. This change simplifies Chill's API by
   eliminating the need for applications to explicitly specify types when
   executing a view.
 * Convert `ViewResponse` from an enum to a struct and generalize for

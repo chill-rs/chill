@@ -1,11 +1,11 @@
 [package]
 name = "chill"
-version = "0.2.0+master"
+version = "0.2.0"
 authors = ["Craig M. Brandenburg <c.m.brandenburg@gmail.com>"]
 license = "MIT/Apache-2.0"
 description = "Client-side CouchDB library"
 repository = "https://github.com/chill-rs/chill"
-documentation = "https://chill-rs.github.io/chill/doc/v0.1.2/chill/"
+documentation = "https://chill-rs.github.io/chill/doc/v0.2.0/chill/"
 keywords = ["couchdb", "database", "nosql"]
 
 [dependencies]
