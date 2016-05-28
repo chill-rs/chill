@@ -1,0 +1,1 @@
+initSidebarItems({"enum":[["Error","Contains information for an error originating from or propagated by Chill."]],"struct":[["ErrorResponse","Error information returned from the CouchDB server when an error occurs while processing the client's request."]]});
