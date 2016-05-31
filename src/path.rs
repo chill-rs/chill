@@ -7,6 +7,22 @@ const DESIGN_PREFIX: &'static str = "_design";
 const LOCAL_PREFIX: &'static str = "_local";
 const VIEW_PREFIX: &'static str = "_view";
 
+fn percent_encode(x: &str) -> String {
+    use url::percent_encoding;
+    percent_encoding::percent_encode(x.as_bytes(), percent_encoding::PATH_SEGMENT_ENCODE_SET).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn percent_encode() {
+        use super::percent_encode;
+        assert_eq!("", percent_encode(""));
+        assert_eq!("alpha", percent_encode("alpha"));
+        assert_eq!("%2F%20%25%3F", percent_encode("/ %?"));
+    }
+}
+
 // PathExtractor is a utility for parsing a path string into its constituent
 // segments. E.g., the path string "/alpha/bravo" may be extracted into two
 // segments, "alpha" and "bravo".
@@ -380,6 +396,14 @@ impl DocumentId {
             &DocumentId::Local(ref x) => x.inner.as_ref(),
         }
     }
+
+    fn percent_encoded(&self) -> String {
+        let name_part = percent_encode(self.name_as_str());
+        match self.prefix() {
+            None => format!("{}", name_part),
+            Some(prefix) => format!("{}/{}", prefix, name_part),
+        }
+    }
 }
 
 impl std::fmt::Display for DocumentId {
@@ -501,23 +525,23 @@ mod document_id_tests {
     }
 
     #[test]
-    fn format_normal() {
+    fn display_normal() {
         let expected = "alpha";
-        let got = DocumentId::from("alpha").to_string();
+        let got = format!("{}", DocumentId::from("alpha"));
         assert_eq!(expected, got);
     }
 
     #[test]
-    fn format_design() {
+    fn display_design() {
         let expected = "_design/alpha";
-        let got = DocumentId::from("_design/alpha").to_string();
+        let got = format!("{}", DocumentId::from("_design/alpha"));
         assert_eq!(expected, got);
     }
 
     #[test]
-    fn format_local() {
+    fn display_local() {
         let expected = "_local/alpha";
-        let got = DocumentId::from("_local/alpha").to_string();
+        let got = format!("{}", DocumentId::from("_local/alpha"));
         assert_eq!(expected, got);
     }
 
@@ -565,6 +589,27 @@ mod document_id_tests {
         let got = serde_json::from_value(json).unwrap();
         assert_eq!(expected, got);
     }
+
+    #[test]
+    fn percent_encoded_normal() {
+        let expected = "alpha%2F%25%20bravo";
+        let got = DocumentId::from("alpha/% bravo").percent_encoded();
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn percent_encoded_design() {
+        let expected = "_design/alpha%2F%25%20bravo";
+        let got = DocumentId::from("_design/alpha/% bravo").percent_encoded();
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn percent_encoded_local() {
+        let expected = "_local/alpha%2F%25%20bravo";
+        let got = DocumentId::from("_local/alpha/% bravo").percent_encoded();
+        assert_eq!(expected, got);
+    }
 }
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -580,6 +625,12 @@ impl DatabasePath {
     #[doc(hidden)]
     pub fn iter(&self) -> DatabasePathIter {
         DatabasePathIter::DatabaseName(self)
+    }
+}
+
+impl std::fmt::Display for DatabasePath {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        write!(formatter, "/{}", percent_encode(self.db_name.as_ref()))
     }
 }
 
@@ -625,6 +676,13 @@ mod database_path_tests {
         let db_path = DatabasePath { db_name: DatabaseName::from("alpha") };
         let expected = vec!["alpha"];
         assert_eq!(expected, db_path.iter().collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn display() {
+        let expected = "/alpha%2F%25%20bravo";
+        let got = format!("{}", DatabasePath::from(DatabaseName::from("alpha/% bravo")));
+        assert_eq!(expected, got);
     }
 }
 
@@ -707,6 +765,15 @@ impl DocumentPath {
     #[doc(hidden)]
     pub fn iter(&self) -> DocumentPathIter {
         DocumentPathIter::DatabaseName(self)
+    }
+}
+
+impl std::fmt::Display for DocumentPath {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        write!(formatter,
+               "/{}/{}",
+               percent_encode(self.db_name.as_ref()),
+               self.doc_id.percent_encoded())
     }
 }
 
@@ -801,6 +868,15 @@ mod document_path_tests {
 
         let expected = vec!["alpha", "_local", "bravo"];
         let got = doc_path.iter().collect::<Vec<_>>();
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn display() {
+        let expected = "/alpha%2F%25%20bravo/_design/charlie%2F%25%20delta";
+        let doc_path = DocumentPath::from((DatabaseName::from("alpha/% bravo"),
+                                           DocumentId::from("_design/charlie/% delta")));
+        let got = format!("{}", doc_path);
         assert_eq!(expected, got);
     }
 }
@@ -938,6 +1014,16 @@ impl DesignDocumentPath {
     }
 }
 
+impl std::fmt::Display for DesignDocumentPath {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        write!(formatter,
+               "/{}/{}/{}",
+               percent_encode(self.db_name.as_ref()),
+               DESIGN_PREFIX,
+               percent_encode(self.ddoc_name.as_ref()))
+    }
+}
+
 impl<'a, T, U> From<(T, U)> for DesignDocumentPath
     where T: Into<DatabasePath>,
           U: Into<DesignDocumentName>
@@ -999,6 +1085,15 @@ mod design_document_path_tests {
 
         let expected = vec!["alpha", "_design", "bravo"];
         let got = ddoc_path.iter().collect::<Vec<_>>();
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn display() {
+        let expected = "/alpha%2F%25%20bravo/_design/charlie%2F%25%20delta";
+        let ddoc_path = DesignDocumentPath::from((DatabaseName::from("alpha/% bravo"),
+                                                  DesignDocumentName::from("charlie/% delta")));
+        let got = format!("{}", ddoc_path);
         assert_eq!(expected, got);
     }
 }
@@ -1116,6 +1211,16 @@ impl AttachmentPath {
     }
 }
 
+impl std::fmt::Display for AttachmentPath {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        write!(formatter,
+               "/{}/{}/{}",
+               percent_encode(self.db_name.as_ref()),
+               self.doc_id.percent_encoded(),
+               percent_encode(self.att_name.as_ref()))
+    }
+}
+
 impl<'a, T, U> From<(T, U)> for AttachmentPath
     where T: Into<DocumentPath>,
           U: Into<AttachmentName>
@@ -1230,6 +1335,16 @@ mod attachment_path_tests {
 
         let expected = vec!["alpha", "_local", "bravo", "charlie"];
         let got = att_path.iter().collect::<Vec<_>>();
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn display() {
+        let expected = "/alpha%2F%25%20bravo/_design/charlie%2F%25%20delta/echo%2F%25%20foxtrot";
+        let att_path = AttachmentPath::from((DatabaseName::from("alpha/% bravo"),
+                                             DocumentId::from("_design/charlie/% delta"),
+                                             AttachmentName::from("echo/% foxtrot")));
+        let got = format!("{}", att_path);
         assert_eq!(expected, got);
     }
 }
@@ -1397,6 +1512,17 @@ impl ViewPath {
     }
 }
 
+impl std::fmt::Display for ViewPath {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        write!(formatter,
+               "/{}/{}/{}/{}",
+               percent_encode(self.db_name.as_ref()),
+               DESIGN_PREFIX,
+               percent_encode(self.ddoc_name.as_ref()),
+               percent_encode(self.view_name.as_ref()))
+    }
+}
+
 impl<'a, T, U> From<(T, U)> for ViewPath
     where T: Into<DesignDocumentPath>,
           U: Into<ViewName>
@@ -1477,6 +1603,16 @@ mod view_path_tests {
 
         let expected = vec!["alpha", "_design", "bravo", "_view", "charlie"];
         let got = view_path.iter().collect::<Vec<_>>();
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn display() {
+        let expected = "/alpha%2F%25%20bravo/_design/charlie%2F%25%20delta/echo%2F%25%20foxtrot";
+        let view_path = ViewPath::from((DatabaseName::from("alpha/% bravo"),
+                                        DesignDocumentName::from("charlie/% delta"),
+                                        ViewName::from("echo/% foxtrot")));
+        let got = format!("{}", view_path);
         assert_eq!(expected, got);
     }
 }

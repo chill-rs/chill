@@ -2,7 +2,8 @@
 
 ## v0.2.1 (unreleased)
 
-No changes yet!
+* Implement the `Display` trait for all path types ([issue
+  #54](issue_54))..
 
 ## v0.2.0 (2016-05-28)
 
@@ -60,3 +61,4 @@ updating, and deleting documents.
 [issue_40]: https://github.com/chill-rs/chill/issues/40
 [issue_42]: https://github.com/chill-rs/chill/issues/42
 [issue_49]: https://github.com/chill-rs/chill/issues/49
+[issue_54]: https://github.com/chill-rs/chill/issues/54
