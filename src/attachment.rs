@@ -482,7 +482,7 @@ mod tests {
     use base64;
     use serde_json;
     use super::*;
-    use super::{AttachmentEncodingInfo, Base64JsonDecodable, ContentTypeJsonDecodable, Base64JsonEncodable,
+    use super::{AttachmentEncodingInfo, Base64JsonDecodable, Base64JsonEncodable, ContentTypeJsonDecodable,
                 SavedAttachmentContent};
 
     #[test]

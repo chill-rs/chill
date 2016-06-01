@@ -101,9 +101,7 @@ impl HyperTransport {
                 b.body(&request.body[..])
             };
 
-            let response = try!(b.send().map_err(|e| {
-                Error::Transport { kind: TransportErrorKind::Hyper(e) }
-            }));
+            let response = try!(b.send().map_err(|e| Error::Transport { kind: TransportErrorKind::Hyper(e) }));
 
             HyperResponse { hyper_response: response }
         };
