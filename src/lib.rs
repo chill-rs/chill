@@ -15,6 +15,7 @@ mod test_macro;
 
 mod attachment;
 mod client;
+mod design;
 mod document;
 mod error;
 mod revision;
@@ -27,6 +28,7 @@ pub mod testing;
 
 pub use attachment::{Attachment, SavedAttachment, UnsavedAttachment};
 pub use client::{Client, IntoUrl};
+pub use design::{Design, DesignBuilder, ViewFunction};
 pub use document::Document;
 pub use error::{Error, ErrorResponse};
 pub use path::{AttachmentName, AttachmentPath, DatabaseName, DatabasePath, DesignDocumentName, DesignDocumentPath,

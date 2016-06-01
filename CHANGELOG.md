@@ -2,6 +2,8 @@
 
 ## v0.2.1 (unreleased)
 
+* New types for working with design documents: `Design`,
+  `DesignBuilder`, and `ViewFunction` ([issue #17](issue_17)).
 * Implement the `Display` trait for all path types ([issue
   #54](issue_54))..
 
@@ -56,6 +58,7 @@ The v0.1.1 release extends Chill's coverage of the CouchDB API.
 This is the first release. It has minimal support for creating, reading,
 updating, and deleting documents.
 
+[issue_17]: https://github.com/chill-rs/chill/issues/17
 [issue_33]: https://github.com/chill-rs/chill/issues/33
 [issue_34]: https://github.com/chill-rs/chill/issues/34
 [issue_40]: https://github.com/chill-rs/chill/issues/40

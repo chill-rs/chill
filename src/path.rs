@@ -315,6 +315,16 @@ macro_rules! define_name_type {
         }
 
         #[doc(hidden)]
+        impl serde::Serialize for $type_name {
+            fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
+                where S: serde::Serializer
+            {
+                let s = self.to_string();
+                serializer.serialize_str(&s)
+            }
+        }
+
+        #[doc(hidden)]
         impl serde::Deserialize for $type_name {
             fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
                 where D: serde::Deserializer
