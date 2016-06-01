@@ -63,22 +63,22 @@ impl FakeServer {
                 [httpd]\n\
                 port = 0\n\
                 ")
-                  .map_err(|e| {
-                      Error::Io {
-                          cause: e,
-                          description: "Failed to write CouchDB server configuration file",
-                      }
-                  }));
+                .map_err(|e| {
+                    Error::Io {
+                        cause: e,
+                        description: "Failed to write CouchDB server configuration file",
+                    }
+                }));
         }
 
         let child = try!(new_test_server_command(&tmp_root)
-                             .spawn()
-                             .map_err(|e| {
-                                 Error::Io {
-                                     cause: e,
-                                     description: "Failed to spawn CouchDB server process",
-                                 }
-                             }));
+            .spawn()
+            .map_err(|e| {
+                Error::Io {
+                    cause: e,
+                    description: "Failed to spawn CouchDB server process",
+                }
+            }));
         let mut process = AutoKillProcess(child);
 
         let (tx, rx) = std::sync::mpsc::channel();
@@ -121,13 +121,13 @@ impl FakeServer {
 
         // Wait for the CouchDB server to start its HTTP service.
         let uri = try!(rx.recv()
-                         .map_err(|e| {
-                             t.join().unwrap_err();
-                             Error::ChannelReceive {
-                                 cause: e,
-                                 description: "Failed to extract URI from CouchDB server",
-                             }
-                         }));
+            .map_err(|e| {
+                t.join().unwrap_err();
+                Error::ChannelReceive {
+                    cause: e,
+                    description: "Failed to extract URI from CouchDB server",
+                }
+            }));
 
         Ok(FakeServer {
             _process: process,
