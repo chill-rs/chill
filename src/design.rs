@@ -42,7 +42,7 @@ pub struct ViewFunction {
 
 impl ViewFunction {
     /// Constructs a new `ViewFunction` that has no _reduce function_.
-    pub fn new_without_reduce<M: Into<String>>(map: M) -> Self {
+    pub fn new<M: Into<String>>(map: M) -> Self {
         ViewFunction {
             map: map.into(),
             reduce: None,
@@ -299,7 +299,7 @@ impl DesignBuilder {
     }
 
     /// Inserts a view into the design document content.
-    pub fn with_view<V>(mut self, view_name: V, view_function: ViewFunction) -> Self
+    pub fn insert_view<V>(mut self, view_name: V, view_function: ViewFunction) -> Self
         where V: Into<ViewName>
     {
         self.inner.views.insert(view_name.into(), view_function);
@@ -324,7 +324,7 @@ mod tests {
             _dummy: std::marker::PhantomData,
         };
 
-        let got = ViewFunction::new_without_reduce(map_function);
+        let got = ViewFunction::new(map_function);
 
         assert_eq!(expected, got);
     }
@@ -349,7 +349,7 @@ mod tests {
     #[test]
     fn view_function_serialize_without_reduce() {
 
-        let view_function = ViewFunction::new_without_reduce("function(doc) { emit(doc.key_thing, doc.value_thing); }");
+        let view_function = ViewFunction::new("function(doc) { emit(doc.key_thing, doc.value_thing); }");
 
         let encoded = serde_json::to_string(&view_function).unwrap();
 
@@ -381,7 +381,7 @@ mod tests {
     #[test]
     fn view_function_deserialize_ok_without_reduce() {
 
-        let expected = ViewFunction::new_without_reduce("function(doc) { emit(doc.key_thing, doc.value_thing); }");
+        let expected = ViewFunction::new("function(doc) { emit(doc.key_thing, doc.value_thing); }");
 
         let source = serde_json::builder::ObjectBuilder::new()
             .insert("map",
@@ -426,11 +426,11 @@ mod tests {
     fn design_serialize() {
 
         let design = DesignBuilder::new()
-            .with_view("alpha",
-                       ViewFunction::new_without_reduce("function(doc) { emit(doc.key_thing, doc.value_thing); }"))
-            .with_view("bravo",
-                       ViewFunction::new_with_reduce("function(doc) { emit(doc.key_thing_2, doc.value_thing_2); }",
-                                                     "_sum"))
+            .insert_view("alpha",
+                         ViewFunction::new("function(doc) { emit(doc.key_thing, doc.value_thing); }"))
+            .insert_view("bravo",
+                         ViewFunction::new_with_reduce("function(doc) { emit(doc.key_thing_2, doc.value_thing_2); }",
+                                                       "_sum"))
             .unwrap();
 
         let encoded = serde_json::to_string(&design).unwrap();
@@ -466,11 +466,11 @@ mod tests {
     fn design_deserialize_ok_with_views() {
 
         let expected = DesignBuilder::new()
-            .with_view("alpha",
-                       ViewFunction::new_without_reduce("function(doc) { emit(doc.key_thing, doc.value_thing); }"))
-            .with_view("bravo",
-                       ViewFunction::new_with_reduce("function(doc) { emit(doc.key_thing_2, doc.value_thing_2); }",
-                                                     "_sum"))
+            .insert_view("alpha",
+                         ViewFunction::new("function(doc) { emit(doc.key_thing, doc.value_thing); }"))
+            .insert_view("bravo",
+                         ViewFunction::new_with_reduce("function(doc) { emit(doc.key_thing_2, doc.value_thing_2); }",
+                                                       "_sum"))
             .unwrap();
 
         let source = serde_json::builder::ObjectBuilder::new()
