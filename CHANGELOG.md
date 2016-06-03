@@ -4,8 +4,8 @@
 
 * New types for working with design documents: `Design`,
   `DesignBuilder`, and `ViewFunction` ([issue #17](issue_17)).
-* Implement the `Display` trait for all path types ([issue
-  #54](issue_54))..
+* Implement `Display` for all path types ([issue #54](issue_54)).
+* Implement `Debug` for `Client` ([issue #53](issue_53)).
 
 ## v0.2.0 (2016-05-28)
 
@@ -64,4 +64,5 @@ updating, and deleting documents.
 [issue_40]: https://github.com/chill-rs/chill/issues/40
 [issue_42]: https://github.com/chill-rs/chill/issues/42
 [issue_49]: https://github.com/chill-rs/chill/issues/49
+[issue_53]: https://github.com/chill-rs/chill/issues/53
 [issue_54]: https://github.com/chill-rs/chill/issues/54
