@@ -494,16 +494,11 @@ fn execute_view_ok_unreduced_default() {
 
     let (hank_id, _) = client.create_document("/baseball", &up_content).run().unwrap();
 
-    // TODO: Make use of a Design type when available.
-
-    let up_content = serde_json::builder::ObjectBuilder::new()
-        .insert_object("views", |x| {
-            x.insert_object("home_runs", |x| {
-                x.insert("map",
-                         "function(doc) { emit(doc.home_runs, doc.home_runs) }")
-            })
-        })
+    let up_content = chill::DesignBuilder::new()
+        .insert_view("home_runs",
+                     chill::ViewFunction::new("function(doc) { emit(doc.home_runs, doc.home_runs) }"))
         .unwrap();
+
     client.create_document("/baseball", &up_content)
         .with_document_id("_design/stats")
         .run()
@@ -541,16 +536,11 @@ fn execute_view_ok_unreduced_with_descending() {
 
     let (hank_id, _) = client.create_document("/baseball", &up_content).run().unwrap();
 
-    // TODO: Make use of a Design type when available.
-
-    let up_content = serde_json::builder::ObjectBuilder::new()
-        .insert_object("views", |x| {
-            x.insert_object("home_runs", |x| {
-                x.insert("map",
-                         "function(doc) { emit(doc.home_runs, doc.home_runs) }")
-            })
-        })
+    let up_content = chill::DesignBuilder::new()
+        .insert_view("home_runs",
+                     chill::ViewFunction::new("function(doc) { emit(doc.home_runs, doc.home_runs) }"))
         .unwrap();
+
     client.create_document("/baseball", &up_content)
         .with_document_id("_design/stats")
         .run()
@@ -589,16 +579,11 @@ fn execute_view_ok_unreduced_with_end_key_inclusive() {
 
     client.create_document("/baseball", &up_content).run().unwrap();
 
-    // TODO: Make use of a Design type when available.
-
-    let up_content = serde_json::builder::ObjectBuilder::new()
-        .insert_object("views", |x| {
-            x.insert_object("home_runs", |x| {
-                x.insert("map",
-                         "function(doc) { emit(doc.home_runs, doc.home_runs) }")
-            })
-        })
+    let up_content = chill::DesignBuilder::new()
+        .insert_view("home_runs",
+                     chill::ViewFunction::new("function(doc) { emit(doc.home_runs, doc.home_runs) }"))
         .unwrap();
+
     client.create_document("/baseball", &up_content)
         .with_document_id("_design/stats")
         .run()
@@ -636,16 +621,11 @@ fn execute_view_ok_unreduced_with_end_key_exclusive() {
 
     client.create_document("/baseball", &up_content).run().unwrap();
 
-    // TODO: Make use of a Design type when available.
-
-    let up_content = serde_json::builder::ObjectBuilder::new()
-        .insert_object("views", |x| {
-            x.insert_object("home_runs", |x| {
-                x.insert("map",
-                         "function(doc) { emit(doc.home_runs, doc.home_runs) }")
-            })
-        })
+    let up_content = chill::DesignBuilder::new()
+        .insert_view("home_runs",
+                     chill::ViewFunction::new("function(doc) { emit(doc.home_runs, doc.home_runs) }"))
         .unwrap();
+
     client.create_document("/baseball", &up_content)
         .with_document_id("_design/stats")
         .run()
@@ -683,16 +663,11 @@ fn execute_view_ok_unreduced_with_start_key() {
 
     let (hank_id, _) = client.create_document("/baseball", &up_content).run().unwrap();
 
-    // TODO: Make use of a Design type when available.
-
-    let up_content = serde_json::builder::ObjectBuilder::new()
-        .insert_object("views", |x| {
-            x.insert_object("home_runs", |x| {
-                x.insert("map",
-                         "function(doc) { emit(doc.home_runs, doc.home_runs) }")
-            })
-        })
+    let up_content = chill::DesignBuilder::new()
+        .insert_view("home_runs",
+                     chill::ViewFunction::new("function(doc) { emit(doc.home_runs, doc.home_runs) }"))
         .unwrap();
+
     client.create_document("/baseball", &up_content)
         .with_document_id("_design/stats")
         .run()
@@ -730,24 +705,18 @@ fn execute_view_ok_unreduced_with_reduce_false() {
 
     let (hank_id, _rev) = client.create_document("/baseball", &up_content).run().unwrap();
 
-    // TODO: Make use of a Design type when available.
-
-    let up_content = serde_json::builder::ObjectBuilder::new()
-        .insert_object("views", |x| {
-            x.insert_object("home_runs", |x| {
-                x.insert("map",
-                            r#"function(doc) { emit(doc.home_runs, doc.home_runs) }"#)
-                    .insert("reduce",
-                            r#"function(keys, values) {
+    let up_content = chill::DesignBuilder::new()
+        .insert_view("home_runs",
+                     chill::ViewFunction::new_with_reduce("function(doc) { emit(doc.home_runs, doc.home_runs) }",
+                                                          r#"function(keys, values) {
                                                var c = 0;
                                                for (var i = 0; i < values.length; i++) {
                                                  c += values[i];
                                                }
                                                return c;
-                                             }"#)
-            })
-        })
+                                             }"#))
         .unwrap();
+
     client.create_document("/baseball", &up_content)
         .with_document_id("_design/stats")
         .run()
@@ -786,16 +755,11 @@ fn execute_view_ok_unreduced_with_limit() {
 
     client.create_document("/baseball", &up_content).run().unwrap();
 
-    // TODO: Make use of a Design type when available.
-
-    let up_content = serde_json::builder::ObjectBuilder::new()
-        .insert_object("views", |x| {
-            x.insert_object("home_runs", |x| {
-                x.insert("map",
-                         r#"function(doc) { emit(doc.home_runs, doc.home_runs) }"#)
-            })
-        })
+    let up_content = chill::DesignBuilder::new()
+        .insert_view("home_runs",
+                     chill::ViewFunction::new("function(doc) { emit(doc.home_runs, doc.home_runs) }"))
         .unwrap();
+
     client.create_document("/baseball", &up_content)
         .with_document_id("_design/stats")
         .run()
@@ -833,24 +797,18 @@ fn execute_view_ok_reduced() {
 
     client.create_document("/baseball", &up_content).run().unwrap();
 
-    // TODO: Make use of a Design type when available.
-
-    let up_content = serde_json::builder::ObjectBuilder::new()
-        .insert_object("views", |x| {
-            x.insert_object("home_runs", |x| {
-                x.insert("map",
-                            r#"function(doc) { emit(doc.home_runs, doc.home_runs) }"#)
-                    .insert("reduce",
-                            r#"function(keys, values) {
+    let up_content = chill::DesignBuilder::new()
+        .insert_view("home_runs",
+                     chill::ViewFunction::new_with_reduce(r#"function(doc) { emit(doc.home_runs, doc.home_runs) }"#,
+                                                          r#"function(keys, values) {
                                                var c = 0;
                                                for (var i = 0; i < values.length; i++) {
                                                  c += values[i];
                                                }
                                                return c;
-                                             }"#)
-            })
-        })
+                                             }"#))
         .unwrap();
+
     client.create_document("/baseball", &up_content)
         .with_document_id("_design/stats")
         .run()
@@ -893,21 +851,16 @@ fn execute_view_ok_grouped_exact() {
 
     client.create_document("/baseball", &up_content).run().unwrap();
 
-    // TODO: Make use of a Design type when available.
-
-    let up_content = serde_json::builder::ObjectBuilder::new()
-        .insert_object("views", |x| {
-            x.insert_object("home_runs", |x| {
-                x.insert("map",
-                            r#"function(doc) {
+    let up_content = chill::DesignBuilder::new()
+        .insert_view("home_runs",
+                     chill::ViewFunction::new_with_reduce(r#"function(doc) {
                                                for (year in doc.home_runs) {
                                                  emit([doc.home_runs[year], doc.name], 1);
                                                }
-                                             }"#)
-                    .insert("reduce", r#"_sum"#)
-            })
-        })
+                                             }"#,
+                                                          "_sum"))
         .unwrap();
+
     client.create_document("/baseball", &up_content)
         .with_document_id("_design/stats")
         .run()
@@ -965,21 +918,16 @@ fn execute_view_ok_grouped_with_level() {
 
     client.create_document("/baseball", &up_content).run().unwrap();
 
-    // TODO: Make use of a Design type when available.
-
-    let up_content = serde_json::builder::ObjectBuilder::new()
-        .insert_object("views", |x| {
-            x.insert_object("home_runs", |x| {
-                x.insert("map",
-                            r#"function(doc) {
+    let up_content = chill::DesignBuilder::new()
+        .insert_view("home_runs",
+                     chill::ViewFunction::new_with_reduce(r#"function(doc) {
                                                for (year in doc.home_runs) {
                                                  emit([doc.home_runs[year], doc.name], 1);
                                                }
-                                             }"#)
-                    .insert("reduce", r#"_sum"#)
-            })
-        })
+                                             }"#,
+                                                          "_sum"))
         .unwrap();
+
     client.create_document("/baseball", &up_content)
         .with_document_id("_design/stats")
         .run()
