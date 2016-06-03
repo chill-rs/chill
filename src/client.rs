@@ -45,6 +45,7 @@ impl<'a> IntoUrl for &'a String {
 /// A `Client` communicates with exactly one CouchDB server, as specified by the
 /// URI set when the `Client` is constructed.
 ///
+#[derive(Debug)]
 pub struct Client {
     transport: HyperTransport,
 }
