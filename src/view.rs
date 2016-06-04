@@ -1,5 +1,5 @@
-use {DatabaseName, DocumentId, DocumentPath, Error};
-use {serde, serde_json, std};
+use {DatabaseName, Document, DocumentId, DocumentPath, Error, serde, serde_json, std};
+use document::JsonDecodableDocument;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ViewResponse {
@@ -17,13 +17,6 @@ impl ViewResponse {
             .into_iter()
             .map(|x| ViewRow::new_from_decoded(db_name.clone(), x))
             .collect();
-
-        // let rows = try!(decoded.rows
-        //                         .into_iter()
-        //                         .map(|x| ViewRow::new_from_decoded(db_name.clone(), x))
-        //                         .collect::<Vec<_>>()
-        //                         .into_iter()
-        //                         .collect());
 
         ViewResponse {
             total_rows: decoded.total_rows,
@@ -82,17 +75,20 @@ pub struct ViewRow {
     key: Option<serde_json::Value>,
     value: serde_json::Value,
     doc_path: Option<DocumentPath>,
+    doc: Option<Document>,
 }
 
 impl ViewRow {
     fn new_from_decoded(db_name: DatabaseName, decoded: ViewRowJsonable) -> Self {
 
+        let doc = decoded.doc.map(|decodable_doc| Document::new_from_decoded(db_name.clone(), decodable_doc));
         let doc_path = decoded.id.map(|doc_id| DocumentPath::from((db_name, doc_id)));
 
         ViewRow {
             key: decoded.key,
             value: decoded.value,
             doc_path: doc_path,
+            doc: doc,
         }
     }
 
@@ -126,6 +122,10 @@ impl ViewRow {
     ///
     pub fn document_path(&self) -> Option<&DocumentPath> {
         self.doc_path.as_ref()
+    }
+
+    pub fn document(&self) -> Option<&Document> {
+        self.doc.as_ref()
     }
 }
 
@@ -231,11 +231,13 @@ struct ViewRowJsonable {
     key: Option<serde_json::Value>,
     value: serde_json::Value,
     id: Option<DocumentId>,
+    doc: Option<JsonDecodableDocument>,
 }
 
 impl serde::Deserialize for ViewRowJsonable {
     fn deserialize<D: serde::Deserializer>(deserializer: &mut D) -> Result<Self, D::Error> {
         enum Field {
+            Doc,
             Id,
             Key,
             Value,
@@ -254,6 +256,7 @@ impl serde::Deserialize for ViewRowJsonable {
                         where E: serde::de::Error
                     {
                         match value {
+                            "doc" => Ok(Field::Doc),
                             "id" => Ok(Field::Id),
                             "key" => Ok(Field::Key),
                             "value" => Ok(Field::Value),
@@ -274,12 +277,16 @@ impl serde::Deserialize for ViewRowJsonable {
             fn visit_map<Vis>(&mut self, mut visitor: Vis) -> Result<Self::Value, Vis::Error>
                 where Vis: serde::de::MapVisitor
             {
+                let mut doc = None;
                 let mut id = None;
                 let mut key = None;
                 let mut value = None;
 
                 loop {
                     match try!(visitor.visit_key()) {
+                        Some(Field::Doc) => {
+                            doc = Some(try!(visitor.visit_value()));
+                        }
                         Some(Field::Id) => {
                             id = Some(try!(visitor.visit_value()));
                         }
@@ -303,6 +310,7 @@ impl serde::Deserialize for ViewRowJsonable {
                 };
 
                 Ok(ViewRowJsonable {
+                    doc: doc,
                     key: key,
                     value: value,
                     id: id,
@@ -310,7 +318,7 @@ impl serde::Deserialize for ViewRowJsonable {
             }
         }
 
-        static FIELDS: &'static [&'static str] = &["id", "key", "value"];
+        static FIELDS: &'static [&'static str] = &["doc", "id", "key", "value"];
         deserializer.deserialize_struct("ViewRowJsonable", FIELDS, Visitor)
     }
 }
@@ -336,6 +344,7 @@ impl ViewResponseBuilder<IsReduced> {
                                key: None,
                                value: serde_json::to_value(&value),
                                doc_path: None,
+                               doc: None,
                            }],
                 ..ViewResponse::default()
             },
@@ -369,6 +378,7 @@ impl ViewResponseBuilder<IsGrouped> {
             key: Some(serde_json::to_value(&key)),
             value: serde_json::to_value(&value),
             doc_path: None,
+            doc: None,
         });
 
         self
@@ -400,6 +410,22 @@ impl ViewResponseBuilder<IsUnreduced> {
             key: Some(serde_json::to_value(&key)),
             value: serde_json::to_value(&value),
             doc_path: Some(DocumentPath::from((self.db_name.as_ref().unwrap().clone(), doc_id.into()))),
+            doc: None,
+        });
+
+        self
+    }
+
+    pub fn with_row_with_document<D, K, V>(mut self, doc_id: D, key: K, value: V, doc: Document) -> Self
+        where D: Into<DocumentId>,
+              K: serde::Serialize,
+              V: serde::Serialize
+    {
+        self.target.rows.push(ViewRow {
+            key: Some(serde_json::to_value(&key)),
+            value: serde_json::to_value(&value),
+            doc_path: Some(DocumentPath::from((self.db_name.as_ref().unwrap().clone(), doc_id.into()))),
+            doc: Some(doc),
         });
 
         self
@@ -427,8 +453,8 @@ mod tests {
 
     use super::*;
     use super::ViewRowJsonable;
-    use {DocumentId, Error, IntoDocumentPath};
-    use serde_json;
+    use {DocumentId, Error, IntoDocumentPath, Revision, serde_json, std};
+    use document::JsonDecodableDocument;
 
     #[test]
     fn view_row_key_ok_none() {
@@ -437,6 +463,7 @@ mod tests {
             key: None,
             value: serde_json::Value::U64(42),
             doc_path: None,
+            doc: None,
         };
 
         let got = row.key::<String>().unwrap();
@@ -450,6 +477,7 @@ mod tests {
             key: Some(serde_json::Value::String(String::from("foo"))),
             value: serde_json::Value::U64(42),
             doc_path: Some("/db/doc".into_document_path().unwrap()),
+            doc: None,
         };
 
         let expected = Some(String::from("foo"));
@@ -464,6 +492,7 @@ mod tests {
             key: Some(serde_json::Value::String(String::from("foo"))),
             value: serde_json::Value::U64(42),
             doc_path: Some("/db/doc".into_document_path().unwrap()),
+            doc: None,
         };
 
         match row.key::<u64>() {
@@ -479,6 +508,7 @@ mod tests {
             key: None,
             value: serde_json::Value::U64(42),
             doc_path: None,
+            doc: None,
         };
 
         let expected: u64 = 42;
@@ -493,6 +523,7 @@ mod tests {
             key: None,
             value: serde_json::Value::U64(42),
             doc_path: None,
+            doc: None,
         };
 
         match row.value::<String>() {
@@ -508,6 +539,7 @@ mod tests {
             id: None,
             key: None,
             value: serde_json::Value::U64(42),
+            doc: None,
         };
 
         let json_text = r#"{"key": null, "value": 42}"#;
@@ -523,9 +555,35 @@ mod tests {
             id: Some(DocumentId::from("foo")),
             key: Some(serde_json::Value::String(String::from("bar"))),
             value: serde_json::Value::U64(42),
+            doc: None,
         };
 
         let json_text = r#"{"id": "foo", "key": "bar", "value": 42}"#;
+
+        let got = serde_json::from_str(&json_text).unwrap();
+        assert_eq!(expected, got);
+    }
+
+    #[test]
+    fn view_row_deserialize_ok_unreduced_with_doc() {
+
+        let expected = ViewRowJsonable {
+            id: Some(DocumentId::from("foo")),
+            key: Some(serde_json::Value::String(String::from("bar"))),
+            value: serde_json::Value::U64(42),
+            doc: Some(JsonDecodableDocument {
+                doc_id: DocumentId::from("foo"),
+                revision: Revision::parse("1-1234567890abcdef1234567890abcdef").unwrap(),
+                deleted: false,
+                attachments: std::collections::HashMap::new(),
+                content: serde_json::builder::ObjectBuilder::new()
+                    .insert("doc_field", 17)
+                    .unwrap(),
+            }),
+        };
+
+        let json_text = r#"{"id": "foo", "key": "bar", "value": 42,
+            "doc": {"_id": "foo", "_rev": "1-1234567890abcdef1234567890abcdef", "doc_field": 17}}"#;
 
         let got = serde_json::from_str(&json_text).unwrap();
         assert_eq!(expected, got);
@@ -551,6 +609,7 @@ mod tests {
                            id: None,
                            key: None,
                            value: serde_json::Value::U64(42),
+                           doc: None,
                        }],
         };
 
@@ -573,6 +632,7 @@ mod tests {
                            id: None,
                            key: None,
                            value: serde_json::Value::U64(42),
+                           doc: None,
                        }],
         };
 
@@ -598,6 +658,7 @@ mod tests {
                                .push(2)
                                .unwrap()),
                            value: serde_json::Value::U64(42),
+                           doc: None,
                        },
                        ViewRowJsonable {
                            id: None,
@@ -606,6 +667,7 @@ mod tests {
                                .push(3)
                                .unwrap()),
                            value: serde_json::Value::U64(43),
+                           doc: None,
                        },
                        ViewRowJsonable {
                            id: None,
@@ -614,6 +676,7 @@ mod tests {
                                .push(3)
                                .unwrap()),
                            value: serde_json::Value::U64(44),
+                           doc: None,
                        }],
         };
 
@@ -638,11 +701,13 @@ mod tests {
                            id: Some(DocumentId::from("foo")),
                            key: Some(serde_json::Value::String(String::from("bar"))),
                            value: serde_json::Value::U64(42),
+            doc: None,
                        },
                        ViewRowJsonable {
                            id: Some(DocumentId::from("qux")),
                            key: Some(serde_json::Value::String(String::from("baz"))),
                            value: serde_json::Value::U64(17),
+            doc: None,
                        },
             ],
         };
@@ -667,6 +732,7 @@ mod tests {
                            id: Some(DocumentId::from("foo")),
                            key: Some(serde_json::Value::String(String::from("bar"))),
                            value: serde_json::Value::U64(42),
+                           doc: None,
                        }],
         };
 
@@ -689,6 +755,7 @@ mod tests {
                            key: None,
                            value: serde_json::Value::U64(42),
                            doc_path: None,
+                           doc: None,
                        }],
         };
 
@@ -721,11 +788,13 @@ mod tests {
                            key: Some(serde_json::Value::Array(vec![serde_json::Value::U64(1)])),
                            value: serde_json::Value::String(String::from("alpha")),
                            doc_path: None,
+                           doc: None,
                        },
                        ViewRow {
                            key: Some(serde_json::Value::Array(vec![serde_json::Value::U64(2)])),
                            value: serde_json::Value::String(String::from("bravo")),
                            doc_path: None,
+                           doc: None,
                        }],
         };
 
@@ -749,11 +818,13 @@ mod tests {
                            key: Some(serde_json::Value::U64(1)),
                            value: serde_json::Value::String(String::from("bravo")),
                            doc_path: Some("/db/alpha".into_document_path().unwrap()),
+                           doc: None,
                        },
                        ViewRow {
                            key: Some(serde_json::Value::U64(2)),
                            value: serde_json::Value::String(String::from("delta")),
                            doc_path: Some("/db/charlie".into_document_path().unwrap()),
+                           doc: None,
                        }],
         };
 

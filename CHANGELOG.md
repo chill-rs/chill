@@ -2,10 +2,15 @@
 
 ## v0.2.1 (unreleased)
 
-* New types for working with design documents: `Design`,
+* Add support for the `include_docs` query parameter when executing a
+  view ([issue #19](issue_19)).
+* Add new types for working with design documents: `Design`,
   `DesignBuilder`, and `ViewFunction` ([issue #17](issue_17)).
-* Implement `Display` for all path types ([issue #54](issue_54)).
-* Implement `Debug` for `Client` ([issue #53](issue_53)).
+* Add new type `DocumentBuilder` to help applications with testing.
+* Add an implementation of `Display` for all path types (e.g.,
+  `DatabasePath`, `DocumentPath`, etc.) ([issue #54](issue_54)).
+* Add an implementation of `Debug` for `Client` ([issue
+  #53](issue_53)).
 
 ## v0.2.0 (2016-05-28)
 

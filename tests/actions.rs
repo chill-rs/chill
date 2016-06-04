@@ -778,6 +778,59 @@ fn execute_view_ok_unreduced_with_limit() {
 }
 
 #[test]
+fn execute_view_ok_unreduced_with_documents() {
+
+    let (_server, client) = make_server_and_client();
+    client.create_database("/baseball").run().unwrap();
+
+    let babe_content = serde_json::builder::ObjectBuilder::new()
+        .insert("name", "Babe Ruth")
+        .insert("home_runs", 714)
+        .unwrap();
+
+    let (babe_id, babe_rev) = client.create_document("/baseball", &babe_content).run().unwrap();
+
+    let hank_content = serde_json::builder::ObjectBuilder::new()
+        .insert("name", "Hank Aaron")
+        .insert("home_runs", 755)
+        .unwrap();
+
+    let (hank_id, hank_rev) = client.create_document("/baseball", &hank_content).run().unwrap();
+
+    let design_content = chill::DesignBuilder::new()
+        .insert_view("home_runs",
+                     chill::ViewFunction::new("function(doc) { emit(doc.home_runs, doc.home_runs) }"))
+        .unwrap();
+
+    client.create_document("/baseball", &design_content)
+        .with_document_id("_design/stats")
+        .run()
+        .unwrap();
+
+    let expected = chill::testing::ViewResponseBuilder::new_unreduced("baseball", 2, 0)
+        .with_row_with_document(babe_id.clone(),
+                                714,
+                                714,
+                                chill::testing::DocumentBuilder::new(("/baseball", babe_id), babe_rev)
+                                    .with_content(&babe_content)
+                                    .unwrap())
+        .with_row_with_document(hank_id.clone(),
+                                755,
+                                755,
+                                chill::testing::DocumentBuilder::new(("/baseball", hank_id), hank_rev)
+                                    .with_content(&hank_content)
+                                    .unwrap())
+        .unwrap();
+
+    let got = client.execute_view("/baseball/_design/stats/_view/home_runs")
+        .with_documents(true)
+        .run()
+        .unwrap();
+
+    assert_eq!(expected, got);
+}
+
+#[test]
 fn execute_view_ok_reduced() {
 
     let (_server, client) = make_server_and_client();

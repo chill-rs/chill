@@ -149,6 +149,10 @@ impl HyperTransport {
                 query.append_pair("group_level", &level.to_string());
             }
 
+            if let Some(yes_or_no) = options.include_docs {
+                query.append_pair("include_docs", bool_to_string(yes_or_no));
+            }
+
             if let Some(yes_or_no) = options.inclusive_end_query {
                 query.append_pair("inclusive_end", bool_to_string(yes_or_no));
             }

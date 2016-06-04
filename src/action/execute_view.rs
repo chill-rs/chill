@@ -117,6 +117,7 @@ pub struct ExecuteView<'a, T, P, StartKey, EndKey>
     limit: Option<u64>,
     descending: Option<bool>,
     group_level: Option<GroupLevel>,
+    include_docs: Option<bool>,
 }
 
 impl<'a, P, T> ExecuteView<'a, T, P, (), ()>
@@ -134,6 +135,7 @@ impl<'a, P, T> ExecuteView<'a, T, P, (), ()>
             limit: None,
             descending: None,
             group_level: None,
+            include_docs: None,
         }
     }
 }
@@ -191,6 +193,11 @@ impl<'a, EndKey, P, StartKey, T> ExecuteView<'a, T, P, StartKey, EndKey>
         self.group_level = Some(GroupLevel::Number(group_level));
         self
     }
+
+    pub fn with_documents(mut self, yes_or_no: bool) -> Self {
+        self.include_docs = Some(yes_or_no);
+        self
+    }
 }
 
 impl<'a, EndKey, P, T> ExecuteView<'a, T, P, (), EndKey>
@@ -216,6 +223,7 @@ impl<'a, EndKey, P, T> ExecuteView<'a, T, P, (), EndKey>
             limit: self.limit,
             descending: self.descending,
             group_level: self.group_level,
+            include_docs: self.include_docs,
         }
     }
 }
@@ -243,6 +251,7 @@ impl<'a, P, StartKey, T> ExecuteView<'a, T, P, StartKey, ()>
             limit: self.limit,
             descending: self.descending,
             group_level: self.group_level,
+            include_docs: self.include_docs,
         }
     }
 
@@ -265,6 +274,7 @@ impl<'a, P, StartKey, T> ExecuteView<'a, T, P, StartKey, ()>
             limit: self.limit,
             descending: self.descending,
             group_level: self.group_level,
+            include_docs: self.include_docs,
         }
     }
 }
@@ -323,6 +333,11 @@ impl<'a, P, T, StartKey, EndKey> Action<T> for ExecuteView<'a, T, P, StartKey, E
             None => options,
             Some(GroupLevel::Exact(value)) => options.with_group(value),
             Some(GroupLevel::Number(value)) => options.with_group_level(value),
+        };
+
+        let options = match self.include_docs {
+            None => options,
+            Some(value) => options.with_include_docs(value),
         };
 
         let view_path = try!(self.view_path.into_view_path());

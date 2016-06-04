@@ -68,6 +68,7 @@ pub struct RequestOptions<'a, B: serde::Serialize + 'a> {
     end_key_query: Option<String>,
     group_query: Option<bool>,
     group_level_query: Option<u32>,
+    include_docs: Option<bool>,
     inclusive_end_query: Option<bool>,
     limit: Option<u64>,
     reduce_query: Option<bool>,
@@ -89,6 +90,7 @@ impl<'a> RequestOptions<'a, ()> {
             end_key_query: self.end_key_query,
             group_query: self.group_query,
             group_level_query: self.group_level_query,
+            include_docs: self.include_docs,
             inclusive_end_query: self.inclusive_end_query,
             limit: self.limit,
             reduce_query: self.reduce_query,
@@ -127,6 +129,11 @@ impl<'a, B: serde::Serialize + 'a> RequestOptions<'a, B> {
 
     pub fn with_group_level(mut self, level: u32) -> Self {
         self.group_level_query = Some(level);
+        self
+    }
+
+    pub fn with_include_docs(mut self, yes_or_no: bool) -> Self {
+        self.include_docs = Some(yes_or_no);
         self
     }
 

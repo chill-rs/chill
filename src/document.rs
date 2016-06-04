@@ -1,5 +1,4 @@
 use {Attachment, AttachmentName, AttachmentPath, DatabaseName, DocumentId, DocumentPath, Error, Revision};
-#[cfg(test)]
 use IntoDocumentPath;
 use attachment::AttachmentBuilder;
 use {mime, serde, serde_json, std};
@@ -10,7 +9,7 @@ use {mime, serde, serde_json, std};
 /// content, attachments, and meta-information.
 ///
 /// A `Document` may represent a document of any type: normal, design, or local.
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Document {
     doc_path: DocumentPath,
     revision: Revision,
@@ -495,11 +494,11 @@ mod document_tests {
 // not known at decode-time.
 #[derive(Debug, PartialEq)]
 pub struct JsonDecodableDocument {
-    doc_id: DocumentId,
-    revision: Revision,
-    deleted: bool,
-    attachments: std::collections::HashMap<AttachmentName, Attachment>,
-    content: serde_json::Value,
+    pub doc_id: DocumentId,
+    pub revision: Revision,
+    pub deleted: bool,
+    pub attachments: std::collections::HashMap<AttachmentName, Attachment>,
+    pub content: serde_json::Value,
 }
 
 impl serde::Deserialize for JsonDecodableDocument {
@@ -695,11 +694,9 @@ impl serde::Deserialize for WriteDocumentResponse {
     }
 }
 
-#[cfg(test)]
 #[derive(Debug)]
 pub struct DocumentBuilder(Document);
 
-#[cfg(test)]
 impl DocumentBuilder {
     pub fn new<P: IntoDocumentPath>(doc_path: P, revision: Revision) -> Self {
         DocumentBuilder(Document {
