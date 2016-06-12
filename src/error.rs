@@ -1,11 +1,5 @@
-use hyper;
-use mime;
-use serde;
-use serde_json;
-use std;
-use transport::Response;
-use url;
-use uuid;
+use {hyper, mime, serde, serde_json, std, url, uuid};
+use transport::{JsonResponse, StatusCode};
 
 /// Contains information for an error originating from or propagated by Chill.
 #[derive(Debug)]
@@ -15,9 +9,6 @@ pub enum Error {
         cause: std::sync::mpsc::RecvError,
         description: &'static str,
     },
-
-    #[doc(hidden)]
-    ContentNotAnObject,
 
     /// The database already exists.
     DatabaseExists(ErrorResponse),
@@ -67,7 +58,7 @@ pub enum Error {
 
     #[doc(hidden)]
     ServerResponse {
-        status_code: hyper::status::StatusCode,
+        status_code: StatusCode,
         error_response: Option<ErrorResponse>,
     },
 
@@ -93,51 +84,40 @@ pub enum Error {
 
 impl Error {
     #[doc(hidden)]
-    pub fn server_response<R: Response>(response: R) -> Self {
-
-        let status_code = response.status_code();
-
-        let error_response = match response.decode_json_body() {
-            Ok(x) => Some(x),
-            Err(Error::JsonDecode { .. }) => None,
-            Err(e) => {
-                return e;
-            }
-        };
-
+    pub fn server_response(response: &JsonResponse) -> Self {
         Error::ServerResponse {
-            status_code: status_code,
-            error_response: error_response,
+            status_code: response.status_code(),
+            error_response: response.decode_content().ok(),
         }
     }
 
     #[doc(hidden)]
-    pub fn database_exists<R: Response>(response: R) -> Self {
-        match response.decode_json_body() {
+    pub fn database_exists(response: &JsonResponse) -> Self {
+        match response.decode_content() {
             Ok(x) => Error::DatabaseExists(x),
             Err(x) => x,
         }
     }
 
     #[doc(hidden)]
-    pub fn document_conflict<R: Response>(response: R) -> Self {
-        match response.decode_json_body() {
+    pub fn document_conflict(response: &JsonResponse) -> Self {
+        match response.decode_content() {
             Ok(x) => Error::DocumentConflict(x),
             Err(x) => x,
         }
     }
 
     #[doc(hidden)]
-    pub fn not_found<R: Response>(response: R) -> Self {
-        match response.decode_json_body() {
+    pub fn not_found(response: &JsonResponse) -> Self {
+        match response.decode_content() {
             Ok(x) => Error::NotFound(x),
             Err(x) => x,
         }
     }
 
     #[doc(hidden)]
-    pub fn unauthorized<R: Response>(response: R) -> Self {
-        match response.decode_json_body() {
+    pub fn unauthorized(response: &JsonResponse) -> Self {
+        match response.decode_content() {
             Ok(x) => Error::Unauthorized(x),
             Err(x) => x,
         }
@@ -149,7 +129,6 @@ impl std::error::Error for Error {
         use Error::*;
         match self {
             &ChannelReceive { description, .. } => description,
-            &ContentNotAnObject => "Document content is not a JSON object",
             &DatabaseExists(..) => "The database already exists",
             &DocumentConflict(..) => "A conflicting document with the same id exists",
             &DocumentIsDeleted => "The document is deleted",
@@ -181,7 +160,6 @@ impl std::error::Error for Error {
         use Error::*;
         match self {
             &ChannelReceive { ref cause, .. } => Some(cause),
-            &ContentNotAnObject => None,
             &DatabaseExists(..) => None,
             &DocumentConflict(..) => None,
             &DocumentIsDeleted => None,
@@ -209,7 +187,6 @@ impl std::fmt::Display for Error {
         let description = std::error::Error::description(self);
         match self {
             &ChannelReceive { ref cause, description } => write!(f, "{}: {}", description, cause),
-            &ContentNotAnObject => write!(f, "{}", description),
             &DatabaseExists(ref error_response) => write!(f, "{}: {}", description, error_response),
             &DocumentConflict(ref error_response) => write!(f, "{}: {}", description, error_response),
             &DocumentIsDeleted => write!(f, "{}", description),

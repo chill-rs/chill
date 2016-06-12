@@ -1,8 +1,6 @@
-use {DocumentId, Error, IntoDatabasePath, Revision};
+use {DocumentId, DocumentPath, Error, IntoDatabasePath, Revision, serde, std};
 use document::WriteDocumentResponse;
-use {serde, serde_json};
-use transport::{Action, RequestOptions, Response, StatusCode, Transport};
-use transport::production::HyperTransport;
+use transport::{JsonResponse, JsonResponseDecoder, Request, StatusCode, Transport};
 
 pub struct CreateDocument<'a, T, P, C>
     where C: serde::Serialize + 'a,
@@ -10,7 +8,7 @@ pub struct CreateDocument<'a, T, P, C>
           T: Transport + 'a
 {
     transport: &'a T,
-    db_path: P,
+    db_path: Option<P>,
     content: &'a C,
     doc_id: Option<DocumentId>,
 }
@@ -24,7 +22,7 @@ impl<'a, C, P, T> CreateDocument<'a, T, P, C>
     pub fn new(transport: &'a T, db_path: P, content: &'a C) -> Self {
         CreateDocument {
             transport: transport,
-            db_path: db_path,
+            db_path: Some(db_path),
             content: content,
             doc_id: None,
         }
@@ -36,90 +34,61 @@ impl<'a, C, P, T> CreateDocument<'a, T, P, C>
         self.doc_id = Some(doc_id.into());
         self
     }
-}
 
-impl<'a, C, P> CreateDocument<'a, HyperTransport, P, C>
-    where C: serde::Serialize + 'a,
-          P: IntoDatabasePath
-{
-    pub fn run(self) -> Result<(DocumentId, Revision), Error> {
-        self.transport.exec_sync(self)
+    pub fn run(mut self) -> Result<(DocumentId, Revision), Error> {
+        self.transport.send(try!(self.make_request()),
+                            JsonResponseDecoder::new(handle_response))
+    }
+
+    fn make_request(&mut self) -> Result<Request, Error> {
+        let db_path = try!(std::mem::replace(&mut self.db_path, None).unwrap().into_database_path());
+
+        let request = try!(match self.doc_id {
+                None => self.transport.post(db_path.iter()),
+                Some(ref doc_id) => {
+                    let doc_path = DocumentPath::from((db_path, doc_id.clone()));
+                    self.transport.put(doc_path.iter())
+                }
+            }
+            .with_accept_json()
+            .with_json_content(self.content));
+
+        Ok(request)
     }
 }
 
-impl<'a, C, P, T> Action<T> for CreateDocument<'a, T, P, C>
-    where C: serde::Serialize + 'a,
-          P: IntoDatabasePath,
-          T: Transport + 'a
-{
-    type Output = (DocumentId, Revision);
-    type State = ();
-
-    fn make_request(self) -> Result<(T::Request, Self::State), Error> {
-
-        let body = {
-            let mut doc = serde_json::to_value(self.content);
-
-            match doc {
-                serde_json::Value::Object(ref mut fields) => {
-                    if let Some(ref doc_id) = self.doc_id {
-                        fields.insert(String::from("_id"), serde_json::to_value(doc_id));
-                    }
-                }
-                _ => {
-                    return Err(Error::ContentNotAnObject);
-                }
-            }
-
-            doc
-        };
-
-        let db_path = try!(self.db_path.into_database_path());
-        let options = RequestOptions::new().with_accept_json().with_json_body(&body);
-        let request = try!(self.transport.post(db_path.iter(), options));
-        Ok((request, ()))
-    }
-
-    fn take_response<R: Response>(response: R, _state: Self::State) -> Result<Self::Output, Error> {
-        match response.status_code() {
-            StatusCode::Created => {
-                let body: WriteDocumentResponse = try!(response.decode_json_body());
-                Ok((body.doc_id, body.revision))
-            }
-
-            StatusCode::Conflict => Err(Error::document_conflict(response)),
-            StatusCode::Unauthorized => Err(Error::unauthorized(response)),
-            _ => Err(Error::server_response(response)),
+fn handle_response(response: JsonResponse) -> Result<(DocumentId, Revision), Error> {
+    match response.status_code() {
+        StatusCode::Created => {
+            let content: WriteDocumentResponse = try!(response.decode_content());
+            Ok((content.doc_id, content.revision))
         }
+
+        StatusCode::Conflict => Err(Error::document_conflict(&response)),
+        StatusCode::Unauthorized => Err(Error::unauthorized(&response)),
+        _ => Err(Error::server_response(&response)),
     }
 }
 
 #[cfg(test)]
 mod tests {
 
-    use {DatabasePath, DocumentId, Error, Revision};
-    use serde_json;
-    use super::CreateDocument;
-    use transport::{Action, RequestOptions, StatusCode, Transport};
-    use transport::testing::{MockResponse, MockTransport};
+    use {DocumentId, Error, Revision, serde_json};
+    use super::*;
+    use transport::{JsonResponseBuilder, MockTransport, StatusCode, Transport};
 
     #[test]
     fn make_request_default() {
-        let transport = MockTransport::new();
 
-        let body = serde_json::builder::ObjectBuilder::new()
-            .insert("field_1", 42)
-            .insert("field_2", "hello")
+        let doc_content = serde_json::builder::ObjectBuilder::new()
+            .insert("field", 42)
             .unwrap();
 
-        let expected = ({
-            let options = RequestOptions::new().with_accept_json().with_json_body(&body);
-            transport.post(vec!["foo"], options).unwrap()
-        },
-                        ());
+        let transport = MockTransport::new();
+        let expected = transport.post(vec!["foo"]).with_accept_json().with_json_content(&doc_content).unwrap();
 
         let got = {
-            let action = CreateDocument::new(&transport, "/foo", &body);
+            let mut action = CreateDocument::new(&transport, "/foo", &doc_content);
             action.make_request().unwrap()
         };
 
@@ -128,66 +97,60 @@ mod tests {
 
     #[test]
     fn make_request_with_document_id() {
-        let transport = MockTransport::new();
 
-        let body = serde_json::builder::ObjectBuilder::new()
-            .insert("_id", "bar")
-            .insert("field_1", 42)
-            .insert("field_2", "hello")
+        let doc_content = serde_json::builder::ObjectBuilder::new()
+            .insert("field", 42)
             .unwrap();
 
-        let expected_request = {
-            let options = RequestOptions::new().with_accept_json().with_json_body(&body);
-            transport.post(vec!["foo"], options).unwrap()
-        };
+        let transport = MockTransport::new();
 
-        let (got_request, _) = {
-            let action = CreateDocument::new(&transport, "/foo", &body).with_document_id("bar");
+        let expected = transport.put(vec!["foo", "bar"]).with_accept_json().with_json_content(&doc_content).unwrap();
+
+        let got = {
+            let mut action = CreateDocument::new(&transport, "/foo", &doc_content).with_document_id("bar");
             action.make_request().unwrap()
         };
 
-        assert_eq!(expected_request, got_request);
+        assert_eq!(expected, got);
     }
 
     #[test]
-    fn take_response_created() {
-        let rev = Revision::parse("1-967a00dff5e02add41819138abb3284d").unwrap();
-        let response = MockResponse::new(StatusCode::Created).build_json_body(|x| {
-            x.insert("ok", true)
-                .insert("id", "foo")
-                .insert("rev", rev.to_string())
-        });
-        let expected = (DocumentId::from("foo"), rev);
-        let got = CreateDocument::<MockTransport, DatabasePath, ()>::take_response(response, ()).unwrap();
+    fn handle_response_created() {
+
+        let response = JsonResponseBuilder::new(StatusCode::Created)
+            .with_json_content_raw(r#"{"ok":true, "id": "foo", "rev": "1-1234567890abcdef1234567890abcdef"}"#)
+            .unwrap();
+
+        let expected = (DocumentId::from("foo"), Revision::parse("1-1234567890abcdef1234567890abcdef").unwrap());
+        let got = super::handle_response(response).unwrap();
         assert_eq!(expected, got);
     }
 
     #[test]
     fn take_response_conflict() {
-        let error = "conflict";
-        let reason = "Document update conflict.";
-        let response = MockResponse::new(StatusCode::Conflict).build_json_body(|x| {
-            x.insert("error", error)
-                .insert("reason", reason)
-        });
-        match CreateDocument::<MockTransport, DatabasePath, ()>::take_response(response, ()) {
-            Err(Error::DocumentConflict(ref error_response)) if error == error_response.error() &&
-                                                                reason == error_response.reason() => (),
+
+        let response = JsonResponseBuilder::new(StatusCode::Conflict)
+            .with_json_content_raw(r#"{"error":"conflict","reason":"Document update conflict."}"#)
+            .unwrap();
+
+        match super::handle_response(response) {
+            Err(Error::DocumentConflict(ref error_response)) if error_response.error() == "conflict" &&
+                                                                error_response.reason() ==
+                                                                "Document update conflict." => (),
             x @ _ => unexpected_result!(x),
         }
     }
 
     #[test]
     fn take_response_unauthorized() {
-        let error = "unauthorized";
-        let reason = "Authentication required.";
-        let response = MockResponse::new(StatusCode::Unauthorized).build_json_body(|x| {
-            x.insert("error", error)
-                .insert("reason", reason)
-        });
-        match CreateDocument::<MockTransport, DatabasePath, ()>::take_response(response, ()) {
-            Err(Error::Unauthorized(ref error_response)) if error == error_response.error() &&
-                                                            reason == error_response.reason() => (),
+
+        let response = JsonResponseBuilder::new(StatusCode::Unauthorized)
+            .with_json_content_raw(r#"{"error":"unauthorized","reason":"Authentication required."}"#)
+            .unwrap();
+
+        match super::handle_response(response) {
+            Err(Error::Unauthorized(ref error_response)) if error_response.error() == "unauthorized" &&
+                                                            error_response.reason() == "Authentication required." => (),
             x @ _ => unexpected_result!(x),
         }
     }

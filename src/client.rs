@@ -1,13 +1,5 @@
-use action;
-use Document;
-use Error;
-use IntoDatabasePath;
-use IntoDocumentPath;
-use IntoViewPath;
-use Revision;
-use serde;
-use transport::production::HyperTransport;
-use url;
+use {Document, Error, IntoDatabasePath, IntoDocumentPath, IntoViewPath, Revision, action, serde, url};
+use transport::HyperTransport;
 
 /// Describes a type that may be converted into a URL.
 ///
@@ -54,7 +46,7 @@ impl Client {
     /// Constructs a client for the given server.
     pub fn new<U: IntoUrl>(server_url: U) -> Result<Self, Error> {
         let server_url = try!(server_url.into_url());
-        let transport = try!(HyperTransport::new(server_url));
+        let transport = HyperTransport::new(server_url);
         Ok((Client { transport: transport }))
     }
 

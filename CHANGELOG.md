@@ -2,6 +2,8 @@
 
 ## v0.2.1 (unreleased)
 
+### New
+
 * Add support for the `include_docs` query parameter when executing a
   view ([issue #19](issue_19)).
 * Add new types for working with design documents: `Design`,
@@ -11,6 +13,12 @@
   `DatabasePath`, `DocumentPath`, etc.) ([issue #54](issue_54)).
 * Add an implementation of `Debug` for `Client` ([issue
   #53](issue_53)).
+
+### Notes
+
+* The transport layer has been rewritten. The new transport is more
+  generic and should make it easier to support asynchronous actions in
+  the future ([issue #51](issue_51)).
 
 ## v0.2.0 (2016-05-28)
 
@@ -69,5 +77,6 @@ updating, and deleting documents.
 [issue_40]: https://github.com/chill-rs/chill/issues/40
 [issue_42]: https://github.com/chill-rs/chill/issues/42
 [issue_49]: https://github.com/chill-rs/chill/issues/49
+[issue_51]: https://github.com/chill-rs/chill/issues/51
 [issue_53]: https://github.com/chill-rs/chill/issues/53
 [issue_54]: https://github.com/chill-rs/chill/issues/54

@@ -1,10 +1,9 @@
-use {Error, IntoDatabasePath};
-use transport::{Action, RequestOptions, Response, StatusCode, Transport};
-use transport::production::HyperTransport;
+use {Error, IntoDatabasePath, std};
+use transport::{JsonResponse, JsonResponseDecoder, Request, StatusCode, Transport};
 
 pub struct CreateDatabase<'a, T: Transport + 'a, P: IntoDatabasePath> {
     transport: &'a T,
-    db_path: P,
+    db_path: Option<P>,
 }
 
 impl<'a, P: IntoDatabasePath, T: Transport + 'a> CreateDatabase<'a, T, P> {
@@ -12,58 +11,44 @@ impl<'a, P: IntoDatabasePath, T: Transport + 'a> CreateDatabase<'a, T, P> {
     pub fn new(transport: &'a T, db_path: P) -> Self {
         CreateDatabase {
             transport: transport,
-            db_path: db_path,
+            db_path: Some(db_path),
         }
+    }
+
+    pub fn run(mut self) -> Result<(), Error> {
+        self.transport.send(try!(self.make_request()),
+                            JsonResponseDecoder::new(handle_response))
+    }
+
+    fn make_request(&mut self) -> Result<Request, Error> {
+        let db_path = try!(std::mem::replace(&mut self.db_path, None).unwrap().into_database_path());
+        Ok(self.transport.put(db_path.iter()).with_accept_json())
     }
 }
 
-impl<'a, P: IntoDatabasePath> CreateDatabase<'a, HyperTransport, P> {
-    pub fn run(self) -> Result<(), Error> {
-        self.transport.exec_sync(self)
-    }
-}
-
-impl<'a, P: IntoDatabasePath, T: Transport + 'a> Action<T> for CreateDatabase<'a, T, P> {
-    type Output = ();
-    type State = ();
-
-    fn make_request(self) -> Result<(T::Request, Self::State), Error> {
-        let db_path = try!(self.db_path.into_database_path());
-        let options = RequestOptions::new().with_accept_json();
-        let request = try!(self.transport.put(db_path.iter(), options));
-        Ok((request, ()))
-    }
-
-    fn take_response<R: Response>(response: R, _state: Self::State) -> Result<Self::Output, Error> {
-        match response.status_code() {
-            StatusCode::Created => Ok(()),
-            StatusCode::PreconditionFailed => Err(Error::database_exists(response)),
-            StatusCode::Unauthorized => Err(Error::unauthorized(response)),
-            _ => Err(Error::server_response(response)),
-        }
+fn handle_response(response: JsonResponse) -> Result<(), Error> {
+    match response.status_code() {
+        StatusCode::Created => Ok(()),
+        StatusCode::PreconditionFailed => Err(Error::database_exists(&response)),
+        StatusCode::Unauthorized => Err(Error::unauthorized(&response)),
+        _ => Err(Error::server_response(&response)),
     }
 }
 
 #[cfg(test)]
 mod tests {
 
-    use {DatabasePath, Error};
-    use super::CreateDatabase;
-    use transport::{Action, RequestOptions, StatusCode, Transport};
-    use transport::testing::{MockResponse, MockTransport};
+    use Error;
+    use super::*;
+    use transport::{JsonResponseBuilder, MockTransport, StatusCode, Transport};
 
     #[test]
     fn make_request_default() {
         let transport = MockTransport::new();
-
-        let expected = ({
-            let options = RequestOptions::new().with_accept_json();
-            transport.put(vec!["foo"], options).unwrap()
-        },
-                        ());
+        let expected = transport.put(vec!["foo"]).with_accept_json();
 
         let got = {
-            let action = CreateDatabase::new(&transport, "/foo");
+            let mut action = CreateDatabase::new(&transport, "/foo");
             action.make_request().unwrap()
         };
 
@@ -71,39 +56,35 @@ mod tests {
     }
 
     #[test]
-    fn take_response_created() {
-        let response = MockResponse::new(StatusCode::Created).build_json_body(|x| x.insert("ok", true));
-        let expected = ();
-        let got = CreateDatabase::<MockTransport, DatabasePath>::take_response(response, ()).unwrap();
-        assert_eq!(expected, got);
+    fn handle_response_created() {
+        let response = JsonResponseBuilder::new(StatusCode::Created)
+            .with_json_content_raw(r#"{"ok":true}"#)
+            .unwrap();
+        super::handle_response(response).unwrap();
     }
 
     #[test]
-    fn take_response_precondition_failed() {
-        let error = "file_exists";
-        let reason = "The database could not be created, the file already exists.";
-        let response = MockResponse::new(StatusCode::PreconditionFailed).build_json_body(|x| {
-            x.insert("error", error)
-                .insert("reason", reason)
-        });
-        match CreateDatabase::<MockTransport, DatabasePath>::take_response(response, ()) {
-            Err(Error::DatabaseExists(ref error_response)) if error == error_response.error() &&
-                                                              reason == error_response.reason() => (),
+    fn handle_response_precondition_failed() {
+        let response = JsonResponseBuilder::new(StatusCode::PreconditionFailed)
+            .with_json_content_raw(r#"{"error":"file_exists","reason":"The database could not be created, the file already exists."}"#)
+            .unwrap();
+        match super::handle_response(response) {
+            Err(Error::DatabaseExists(ref error_response)) if error_response.error() == "file_exists" &&
+                                                              error_response.reason() ==
+                                                              "The database could not be created, the file \
+                                                               already exists." => (),
             x @ _ => unexpected_result!(x),
         }
     }
 
     #[test]
-    fn take_response_unauthorized() {
-        let error = "unauthorized";
-        let reason = "Authentication required.";
-        let response = MockResponse::new(StatusCode::Unauthorized).build_json_body(|x| {
-            x.insert("error", error)
-                .insert("reason", reason)
-        });
-        match CreateDatabase::<MockTransport, DatabasePath>::take_response(response, ()) {
-            Err(Error::Unauthorized(ref error_response)) if error == error_response.error() &&
-                                                            reason == error_response.reason() => (),
+    fn handle_response_unauthorized() {
+        let response = JsonResponseBuilder::new(StatusCode::Unauthorized)
+            .with_json_content_raw(r#"{"error": "unauthorized", "reason": "Authentication required."}"#)
+            .unwrap();
+        match super::handle_response(response) {
+            Err(Error::Unauthorized(ref error_response)) if error_response.error() == "unauthorized" &&
+                                                            error_response.reason() == "Authentication required." => (),
             x @ _ => unexpected_result!(x),
         }
     }
