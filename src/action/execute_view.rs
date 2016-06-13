@@ -355,9 +355,8 @@ fn handle_response(response: JsonResponse, db_name: DatabaseName) -> Result<View
 #[cfg(test)]
 mod tests {
 
-    use {DatabaseName, Error, Revision};
+    use {DatabaseName, Error};
     use super::*;
-    use document::DocumentBuilder;
     use transport::{JsonResponseBuilder, MockTransport, StatusCode, Transport};
     use view::ViewResponseBuilder;
 
