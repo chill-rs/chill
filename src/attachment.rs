@@ -349,7 +349,7 @@ impl serde::Deserialize for Base64JsonDecodable {
                 where E: serde::de::Error
             {
                 use std::error::Error;
-                let blob = try!(base64::u8de(value.as_bytes()).map_err(|e| E::invalid_value(e.description())));
+                let blob = try!(base64::decode(value).map_err(|e| E::invalid_value(e.description())));
                 Ok(Base64JsonDecodable(blob))
             }
         }
@@ -366,7 +366,7 @@ impl<'a> serde::Serialize for Base64JsonEncodable<'a> {
         where S: serde::Serializer
     {
         let &Base64JsonEncodable(bytes) = self;
-        String::from_utf8(base64::u8en(bytes).unwrap()).unwrap().serialize(serializer)
+        base64::encode(bytes).serialize(serializer)
     }
 }
 
@@ -522,7 +522,7 @@ mod tests {
 
         let expected = serde_json::builder::ObjectBuilder::new()
             .insert("content_type", "text/plain")
-            .insert("data", base64::encode(content).unwrap())
+            .insert("data", base64::encode(content.as_bytes()))
             .unwrap();
 
         let got = serde_json::from_str(&encoded).unwrap();
@@ -714,7 +714,7 @@ mod tests {
 
         let expected = serde_json::builder::ObjectBuilder::new()
             .insert("content_type", "text/plain")
-            .insert("data", base64::encode(content).unwrap())
+            .insert("data", base64::encode(content.as_bytes()))
             .unwrap();
 
         let got = serde_json::from_str(&encoded).unwrap();

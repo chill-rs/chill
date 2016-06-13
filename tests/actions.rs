@@ -171,7 +171,7 @@ fn read_document_ok_with_attachment_stubs() {
             x.insert_object("photo.png", |x| {
                 x.insert("content_type", "image/png")
                     .insert("data",
-                            base64::encode("Pretend this is a PNG file.").unwrap())
+                            base64::encode("Pretend this is a PNG file.".as_bytes()))
             })
         })
         .unwrap();
@@ -217,7 +217,7 @@ fn read_document_ok_with_attachment_content() {
             x.insert_object("photo.png", |x| {
                 x.insert("content_type", "image/png")
                     .insert("data",
-                            base64::encode("Pretend this is a PNG file.").unwrap())
+                            base64::encode("Pretend this is a PNG file.".as_bytes()))
             })
         })
         .unwrap();
@@ -352,7 +352,7 @@ fn update_document_ok_update_attachment() {
             x.insert_object("photo.png", |x| {
                 x.insert("content_type", "image/png")
                     .insert("data",
-                            base64::encode("Pretend this is a PNG file.").unwrap())
+                            base64::encode("Pretend this is a PNG file.".as_bytes()))
             })
         })
         .unwrap();
@@ -409,7 +409,7 @@ fn update_document_ok_delete_attachment() {
             x.insert_object("photo.png", |x| {
                 x.insert("content_type", "image/png")
                     .insert("data",
-                            base64::encode("Pretend this is a PNG file.").unwrap())
+                            base64::encode("Pretend this is a PNG file.".as_bytes()))
             })
         })
         .unwrap();

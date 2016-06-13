@@ -281,7 +281,7 @@ mod document_tests {
                 x.insert_object("attachment_1", |x| x.insert("stub", true))
                     .insert_object("attachment_2", |x| {
                         x.insert("content_type", "text/html")
-                            .insert("data", base64::encode("<p>Yak yak yak</p>").unwrap())
+                            .insert("data", base64::encode("<p>Yak yak yak</p>".as_bytes()))
                     })
             })
             .unwrap();
