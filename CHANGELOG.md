@@ -1,5 +1,9 @@
 # Chill-rs Change Log
 
+## v0.2.2+master (unreleased)
+
+No changes yet!
+
 ## v0.2.1 (2016-06-18)
 
 The v0.2.1 release adds a few things to crate's API and includes a big
