@@ -1,0 +1,1 @@
+initSidebarItems({"mod":[["create_database",""],["create_document",""],["delete_document",""],["execute_view","Defines an action for executing a view."],["query_keys",""],["read_document","Defines an action for reading a document from the CouchDB server."],["update_document",""]]});

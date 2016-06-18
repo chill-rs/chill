@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["Design","Container for the content of a design document."],["DesignBuilder","Builder for a design document's content."],["ViewFunction","Container for a _map_ and optional _reduce_ function of a view."]]});
