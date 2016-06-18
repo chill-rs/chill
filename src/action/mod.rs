@@ -14,7 +14,7 @@ pub use self::update_document::UpdateDocument;
 
 pub mod query_keys {
 
-    use {Revision, serde, transport};
+    use {Error, Revision, serde, transport};
 
     macro_rules! define_query_key {
         ($key_name:ident, $key_str:expr) => {
@@ -62,14 +62,13 @@ pub mod query_keys {
     define_query_value_bool!(DescendingQueryKey);
 
     define_query_key!(EndKeyQueryKey, "endkey");
-    impl<T> transport::AsQueryValue<EndKeyQueryKey> for T
+    impl<T> transport::AsQueryValueFallible<EndKeyQueryKey> for T
         where T: serde::Serialize
     {
         type Value = String;
-        fn as_query_value(&self) -> Self::Value {
-            // FIXME: Figure out how not to snuff the error.
+        fn as_query_value_fallible(&self) -> Result<Self::Value, Error> {
             use serde_json;
-            serde_json::to_string(self).unwrap()
+            serde_json::to_string(self).map_err(|e| Error::JsonEncode { cause: e })
         }
     }
 
@@ -100,14 +99,13 @@ pub mod query_keys {
     }
 
     define_query_key!(StartKeyQueryKey, "startkey");
-    impl<T> transport::AsQueryValue<StartKeyQueryKey> for T
+    impl<T> transport::AsQueryValueFallible<StartKeyQueryKey> for T
         where T: serde::Serialize
     {
         type Value = String;
-        fn as_query_value(&self) -> Self::Value {
-            // FIXME: Figure out how not to snuff the error.
+        fn as_query_value_fallible(&self) -> Result<Self::Value, Error> {
             use serde_json;
-            serde_json::to_string(self).unwrap()
+            serde_json::to_string(self).map_err(|e| Error::JsonEncode { cause: e })
         }
     }
 }

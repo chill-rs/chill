@@ -20,6 +20,11 @@ pub trait AsQueryValue<K: AsQueryKey> {
     fn as_query_value(&self) -> Self::Value;
 }
 
+pub trait AsQueryValueFallible<K: AsQueryKey> {
+    type Value: AsRef<str>;
+    fn as_query_value_fallible(&self) -> Result<Self::Value, Error>;
+}
+
 #[derive(Debug, PartialEq)]
 pub struct Request {
     method: hyper::method::Method,
@@ -56,6 +61,15 @@ impl Request {
     {
         self.url.query_pairs_mut().append_pair(key.as_query_key().as_ref(), value.as_query_value().as_ref());
         self
+    }
+
+    pub fn with_query_fallible<K, V>(mut self, key: K, value: &V) -> Result<Self, Error>
+        where K: AsQueryKey,
+              V: AsQueryValueFallible<K>
+    {
+        self.url.query_pairs_mut().append_pair(key.as_query_key().as_ref(),
+                                               try!(value.as_query_value_fallible()).as_ref());
+        Ok(self)
     }
 
     #[cfg(test)]

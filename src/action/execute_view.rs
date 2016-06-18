@@ -304,14 +304,14 @@ impl<'a, EndKey, P, StartKey, T> ExecuteView<'a, T, P, StartKey, EndKey>
 
         let request = match self.start_key {
             None => request,
-            Some(ref key) => request.with_query(StartKeyQueryKey, key),
+            Some(ref key) => try!(request.with_query_fallible(StartKeyQueryKey, key)),
         };
 
         let request = match self.end_key {
             None => request,
-            Some((ref key, Inclusivity::Inclusive)) => request.with_query(EndKeyQueryKey, key),
+            Some((ref key, Inclusivity::Inclusive)) => try!(request.with_query_fallible(EndKeyQueryKey, key)),
             Some((ref key, Inclusivity::Exclusive)) => {
-                request.with_query(EndKeyQueryKey, key).with_query(InclusiveEndQueryKey, &false)
+                try!(request.with_query_fallible(EndKeyQueryKey, key)).with_query(InclusiveEndQueryKey, &false)
             }
         };
 
