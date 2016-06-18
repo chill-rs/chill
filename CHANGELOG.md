@@ -1,6 +1,9 @@
 # Chill-rs Change Log
 
-## v0.2.1 (unreleased)
+## v0.2.1 (2016-06-18)
+
+The v0.2.1 release adds a few things to crate's API and includes a big
+under-the-hood change that should not affect applications.
 
 ### New
 
@@ -22,9 +25,9 @@
 
 ### Notes
 
-* The transport layer has been rewritten. The new transport is more
-  generic and should make it easier to support asynchronous actions in
-  the future ([#51](issue_51)).
+* The transport layer has been rewritten ([#51](issue_51)). The new
+  transport is more generic and should make it easier to support
+  asynchronous actions in the future.
 
 ## v0.2.0 (2016-05-28)
 
