@@ -71,7 +71,6 @@ impl serde::Serialize for Attachment {
     fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
         where S: serde::Serializer
     {
-        use serde::Serialize;
         match self {
             &Attachment::Saved(ref x) => x.serialize(serializer),
             &Attachment::Unsaved(ref x) => x.serialize(serializer),
@@ -132,18 +131,9 @@ impl serde::Serialize for SavedAttachment {
     fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
         where S: serde::Serializer
     {
-        struct Visitor;
-
-        impl serde::ser::MapVisitor for Visitor {
-            fn visit<S>(&mut self, serializer: &mut S) -> Result<Option<()>, S::Error>
-                where S: serde::Serializer
-            {
-                try!(serializer.serialize_struct_elt("stub", true));
-                Ok(None)
-            }
-        }
-
-        serializer.serialize_struct("SavedAttachment", Visitor)
+        let mut state = try!(serializer.serialize_struct("SavedAttachment", 1));
+        try!(serializer.serialize_struct_elt(&mut state, "stub", true));
+        serializer.serialize_struct_end(state)
     }
 }
 impl serde::Deserialize for SavedAttachment {
@@ -315,21 +305,11 @@ impl serde::Serialize for UnsavedAttachment {
     fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
         where S: serde::Serializer
     {
-        struct Visitor<'a>(&'a UnsavedAttachment);
-
-        impl<'a> serde::ser::MapVisitor for Visitor<'a> {
-            fn visit<S>(&mut self, serializer: &mut S) -> Result<Option<()>, S::Error>
-                where S: serde::Serializer
-            {
-                let &mut Visitor(attachment) = self;
-                let content_type = attachment.content_type.clone();
-                try!(serializer.serialize_struct_elt("content_type", &content_type));
-                try!(serializer.serialize_struct_elt("data", &Base64JsonEncodable(&attachment.content)));
-                Ok(None)
-            }
-        }
-
-        serializer.serialize_struct("UnsavedAttachment", Visitor(self))
+        let content_type = self.content_type.clone();
+        let mut state = try!(serializer.serialize_struct("UnsavedAttachment", 2));
+        try!(serializer.serialize_struct_elt(&mut state, "content_type", &content_type));
+        try!(serializer.serialize_struct_elt(&mut state, "data", &Base64JsonEncodable(&self.content)));
+        serializer.serialize_struct_end(state)
     }
 }
 

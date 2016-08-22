@@ -142,22 +142,13 @@ impl serde::Serialize for ViewFunction {
     fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
         where S: serde::Serializer
     {
-        struct Visitor<'a>(&'a ViewFunction);
-
-        impl<'a> serde::ser::MapVisitor for Visitor<'a> {
-            fn visit<S>(&mut self, serializer: &mut S) -> Result<Option<()>, S::Error>
-                where S: serde::Serializer
-            {
-                let &mut Visitor(view_function) = self;
-                try!(serializer.serialize_struct_elt("map", &view_function.map));
-                if let Some(ref reduce) = view_function.reduce {
-                    try!(serializer.serialize_struct_elt("reduce", reduce));
-                }
-                Ok(None)
-            }
+        let len = if self.reduce.is_some() { 2 } else { 1 };
+        let mut state = try!(serializer.serialize_struct("ViewFunction", len));
+        try!(serializer.serialize_struct_elt(&mut state, "map", &self.map));
+        if let Some(ref reduce) = self.reduce {
+            try!(serializer.serialize_struct_elt(&mut state, "reduce", reduce));
         }
-
-        serializer.serialize_struct("ViewFunction", Visitor(self))
+        serializer.serialize_struct_end(state)
     }
 }
 
@@ -255,19 +246,9 @@ impl serde::Serialize for Design {
     fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
         where S: serde::Serializer
     {
-        struct Visitor<'a>(&'a Design);
-
-        impl<'a> serde::ser::MapVisitor for Visitor<'a> {
-            fn visit<S>(&mut self, serializer: &mut S) -> Result<Option<()>, S::Error>
-                where S: serde::Serializer
-            {
-                let &mut Visitor(design) = self;
-                try!(serializer.serialize_struct_elt("views", &design.views));
-                Ok(None)
-            }
-        }
-
-        serializer.serialize_struct("Design", Visitor(self))
+        let mut state = try!(serializer.serialize_struct("Design", 1));
+        try!(serializer.serialize_struct_elt(&mut state, "views", &self.views));
+        serializer.serialize_struct_end(state)
     }
 }
 

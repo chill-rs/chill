@@ -590,7 +590,7 @@ impl serde::Deserialize for JsonDecodableDocument {
                     },
                     deleted: deleted.unwrap_or(false),
                     attachments: attachments.unwrap_or(std::collections::HashMap::new()),
-                    content: content_builder.unwrap(),
+                    content: content_builder.build(),
                 })
             }
         }
@@ -704,7 +704,7 @@ impl DocumentBuilder {
             revision: revision,
             deleted: false,
             attachments: std::collections::HashMap::new(),
-            content: serde_json::builder::ObjectBuilder::new().unwrap(),
+            content: serde_json::builder::ObjectBuilder::new().build(),
         })
     }
 
@@ -724,7 +724,7 @@ impl DocumentBuilder {
     pub fn build_content<F>(self, f: F) -> Self
         where F: FnOnce(serde_json::builder::ObjectBuilder) -> serde_json::builder::ObjectBuilder
     {
-        self.with_content(&f(serde_json::builder::ObjectBuilder::new()).unwrap())
+        self.with_content(&f(serde_json::builder::ObjectBuilder::new()).build())
     }
 }
 
