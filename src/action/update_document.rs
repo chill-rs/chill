@@ -72,7 +72,7 @@ mod tests {
         let request_content = serde_json::builder::ObjectBuilder::new()
             .insert("field_1", 42)
             .insert("field_2", "hello")
-            .unwrap();
+            .build();
 
         let expected = transport.put(vec!["foo", "bar"])
             .with_accept_json()

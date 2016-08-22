@@ -456,7 +456,7 @@ mod tests {
         let source = serde_json::builder::ObjectBuilder::new()
             .insert("error", "foo")
             .insert("reason", "bar")
-            .unwrap();
+            .build();
         let source = serde_json::to_string(&source).unwrap();
         let got = serde_json::from_str(&source).unwrap();
         assert_eq!(expected, got);
@@ -466,7 +466,7 @@ mod tests {
     fn error_response_deserialize_with_with_no_error_field() {
         let source = serde_json::builder::ObjectBuilder::new()
             .insert("reason", "foo")
-            .unwrap();
+            .build();
         let source = serde_json::to_string(&source).unwrap();
         let got = serde_json::from_str::<ErrorResponse>(&source);
         expect_json_error_missing_field!(got, "error");
@@ -476,7 +476,7 @@ mod tests {
     fn error_response_deserialize_nok_with_no_reason_field() {
         let source = serde_json::builder::ObjectBuilder::new()
             .insert("error", "foo")
-            .unwrap();
+            .build();
         let source = serde_json::to_string(&source).unwrap();
         let got = serde_json::from_str::<ErrorResponse>(&source);
         expect_json_error_missing_field!(got, "reason");

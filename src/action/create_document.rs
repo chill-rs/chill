@@ -82,7 +82,7 @@ mod tests {
 
         let doc_content = serde_json::builder::ObjectBuilder::new()
             .insert("field", 42)
-            .unwrap();
+            .build();
 
         let transport = MockTransport::new();
         let expected = transport.post(vec!["foo"]).with_accept_json().with_json_content(&doc_content).unwrap();
@@ -100,7 +100,7 @@ mod tests {
 
         let doc_content = serde_json::builder::ObjectBuilder::new()
             .insert("field", 42)
-            .unwrap();
+            .build();
 
         let transport = MockTransport::new();
 

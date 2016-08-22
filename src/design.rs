@@ -336,7 +336,7 @@ mod tests {
 
         let expected = serde_json::builder::ObjectBuilder::new()
             .insert("map", &view_function.map)
-            .unwrap();
+            .build();
 
         let got = serde_json::from_str(&encoded).unwrap();
         assert_eq!(expected, got);
@@ -353,7 +353,7 @@ mod tests {
         let expected = serde_json::builder::ObjectBuilder::new()
             .insert("map", &view_function.map)
             .insert("reduce", &view_function.reduce)
-            .unwrap();
+            .build();
 
         let got = serde_json::from_str(&encoded).unwrap();
         assert_eq!(expected, got);
@@ -367,7 +367,7 @@ mod tests {
         let source = serde_json::builder::ObjectBuilder::new()
             .insert("map",
                     "function(doc) { emit(doc.key_thing, doc.value_thing); }")
-            .unwrap();
+            .build();
 
         let source = serde_json::to_string(&source).unwrap();
         let got = serde_json::from_str(&source).unwrap();
@@ -384,7 +384,7 @@ mod tests {
             .insert("map",
                     "function(doc) { emit(doc.key_thing, doc.value_thing); }")
             .insert("reduce", "_sum")
-            .unwrap();
+            .build();
 
         let source = serde_json::to_string(&source).unwrap();
         let got = serde_json::from_str(&source).unwrap();
@@ -396,7 +396,7 @@ mod tests {
 
         let source = serde_json::builder::ObjectBuilder::new()
             .insert("reduce", "_sum")
-            .unwrap();
+            .build();
 
         let source = serde_json::to_string(&source).unwrap();
         let got = serde_json::from_str::<ViewFunction>(&source);
@@ -428,7 +428,7 @@ mod tests {
                             .insert("reduce", "_sum")
                     })
             })
-            .unwrap();
+            .build();
 
         let got = serde_json::from_str(&encoded).unwrap();
         assert_eq!(expected, got);
@@ -437,7 +437,7 @@ mod tests {
     #[test]
     fn design_deserialize_ok_empty() {
         let expected = DesignBuilder::new().unwrap();
-        let source = serde_json::builder::ObjectBuilder::new().unwrap();
+        let source = serde_json::builder::ObjectBuilder::new().build();
         let source = serde_json::to_string(&source).unwrap();
         let got = serde_json::from_str(&source).unwrap();
         assert_eq!(expected, got);
@@ -466,7 +466,7 @@ mod tests {
                             .insert("reduce", "_sum")
                     })
             })
-            .unwrap();
+            .build();
 
         let source = serde_json::to_string(&source).unwrap();
         let got = serde_json::from_str(&source).unwrap();
