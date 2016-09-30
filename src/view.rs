@@ -578,7 +578,7 @@ mod tests {
                 attachments: std::collections::HashMap::new(),
                 content: serde_json::builder::ObjectBuilder::new()
                     .insert("doc_field", 17)
-                    .unwrap(),
+                    .build(),
             }),
         };
 
@@ -656,7 +656,7 @@ mod tests {
                            key: Some(serde_json::builder::ArrayBuilder::new()
                                .push(1)
                                .push(2)
-                               .unwrap()),
+                               .build()),
                            value: serde_json::Value::U64(42),
                            doc: None,
                        },
@@ -665,7 +665,7 @@ mod tests {
                            key: Some(serde_json::builder::ArrayBuilder::new()
                                .push(1)
                                .push(3)
-                               .unwrap()),
+                               .build()),
                            value: serde_json::Value::U64(43),
                            doc: None,
                        },
@@ -674,7 +674,7 @@ mod tests {
                            key: Some(serde_json::builder::ArrayBuilder::new()
                                .push(2)
                                .push(3)
-                               .unwrap()),
+                               .build()),
                            value: serde_json::Value::U64(44),
                            doc: None,
                        }],

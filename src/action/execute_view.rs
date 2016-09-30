@@ -56,7 +56,7 @@ enum GroupLevel {
 ///                            &serde_json::builder::ObjectBuilder::new()
 ///                                 .insert("name", name)
 ///                                 .insert("home_runs", home_runs)
-///                                 .unwrap())
+///                                 .build())
 ///           .run()
 ///           .unwrap();
 /// };
@@ -72,7 +72,7 @@ enum GroupLevel {
 ///                        x.insert("map", r#"function(doc) { emit(doc.home_runs, doc.name); }"#)
 ///                    })
 ///                })
-///                .unwrap()
+///                .build()
 ///       })
 ///       .with_document_id("_design/stat")
 ///       .run()

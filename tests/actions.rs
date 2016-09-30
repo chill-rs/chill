@@ -46,7 +46,7 @@ fn create_document_ok_default() {
     let up_content = serde_json::builder::ObjectBuilder::new()
         .insert("name", "Babe Ruth")
         .insert("nickname", "The Bambino")
-        .unwrap();
+        .build();
 
     let (doc_id, _rev) = client.create_document("/baseball", &up_content).run().unwrap();
 
@@ -66,7 +66,7 @@ fn create_document_ok_with_document_id() {
     let up_content = serde_json::builder::ObjectBuilder::new()
         .insert("name", "Babe Ruth")
         .insert("nickname", "The Bambino")
-        .unwrap();
+        .build();
 
     let (doc_id, _rev) = client.create_document("/baseball", &up_content)
         .with_document_id("babe_ruth")
@@ -90,7 +90,7 @@ fn create_document_nok_document_conflict() {
     let up_content = serde_json::builder::ObjectBuilder::new()
         .insert("name", "Babe Ruth")
         .insert("nickname", "The Bambino")
-        .unwrap();
+        .build();
 
     let (doc_id, _rev) = client.create_document("/baseball", &up_content).run().unwrap();
 
@@ -111,7 +111,7 @@ fn read_document_ok_default() {
     let up_content = serde_json::builder::ObjectBuilder::new()
         .insert("name", "Babe Ruth")
         .insert("nickname", "The Bambino")
-        .unwrap();
+        .build();
 
     let (doc_id, _rev) = client.create_document("/baseball", &up_content).run().unwrap();
 
@@ -131,7 +131,7 @@ fn read_document_ok_with_revision() {
     let up_content = serde_json::builder::ObjectBuilder::new()
         .insert("name", "Babe Ruth")
         .insert("nickname", "The Bambino")
-        .unwrap();
+        .build();
 
     let (doc_id, rev) = client.create_document("/baseball", &up_content).run().unwrap();
 
@@ -174,7 +174,7 @@ fn read_document_ok_with_attachment_stubs() {
                             base64::encode("Pretend this is a PNG file.".as_bytes()))
             })
         })
-        .unwrap();
+        .build();
 
     let (doc_id, _rev) = client.create_document("/baseball", &up_content).run().unwrap();
 
@@ -220,7 +220,7 @@ fn read_document_ok_with_attachment_content() {
                             base64::encode("Pretend this is a PNG file.".as_bytes()))
             })
         })
-        .unwrap();
+        .build();
 
     let (doc_id, _rev) = client.create_document("/baseball", &up_content).run().unwrap();
 
@@ -258,7 +258,7 @@ fn update_document_ok_default() {
     let up_content = serde_json::builder::ObjectBuilder::new()
         .insert("name", "Babe Ruth")
         .insert("nickname", "The Bambino")
-        .unwrap();
+        .build();
 
     let (doc_id, _rev) = client.create_document("/baseball", &up_content).run().unwrap();
 
@@ -298,7 +298,7 @@ fn update_document_ok_create_attachment() {
     let up_content = serde_json::builder::ObjectBuilder::new()
         .insert("name", "Babe Ruth")
         .insert("nickname", "The Bambino")
-        .unwrap();
+        .build();
 
     let (doc_id, _rev) = client.create_document("/baseball", &up_content).run().unwrap();
 
@@ -355,7 +355,7 @@ fn update_document_ok_update_attachment() {
                             base64::encode("Pretend this is a PNG file.".as_bytes()))
             })
         })
-        .unwrap();
+        .build();
 
     let (doc_id, _rev) = client.create_document("/baseball", &up_content).run().unwrap();
 
@@ -412,7 +412,7 @@ fn update_document_ok_delete_attachment() {
                             base64::encode("Pretend this is a PNG file.".as_bytes()))
             })
         })
-        .unwrap();
+        .build();
 
     let (doc_id, _rev) = client.create_document("/baseball", &up_content).run().unwrap();
 
@@ -452,7 +452,7 @@ fn delete_document_ok() {
     let up_content = serde_json::builder::ObjectBuilder::new()
         .insert("name", "Babe Ruth")
         .insert("nickname", "The Bambino")
-        .unwrap();
+        .build();
 
     let (doc_id, rev1) = client.create_document("/baseball", &up_content).run().unwrap();
 
@@ -483,14 +483,14 @@ fn execute_view_ok_unreduced_default() {
     let up_content = serde_json::builder::ObjectBuilder::new()
         .insert("name", "Babe Ruth")
         .insert("home_runs", 714)
-        .unwrap();
+        .build();
 
     let (babe_id, _) = client.create_document("/baseball", &up_content).run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
         .insert("name", "Hank Aaron")
         .insert("home_runs", 755)
-        .unwrap();
+        .build();
 
     let (hank_id, _) = client.create_document("/baseball", &up_content).run().unwrap();
 
@@ -525,14 +525,14 @@ fn execute_view_ok_unreduced_with_descending() {
     let up_content = serde_json::builder::ObjectBuilder::new()
         .insert("name", "Babe Ruth")
         .insert("home_runs", 714)
-        .unwrap();
+        .build();
 
     let (babe_id, _) = client.create_document("/baseball", &up_content).run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
         .insert("name", "Hank Aaron")
         .insert("home_runs", 755)
-        .unwrap();
+        .build();
 
     let (hank_id, _) = client.create_document("/baseball", &up_content).run().unwrap();
 
@@ -568,14 +568,14 @@ fn execute_view_ok_unreduced_with_end_key_inclusive() {
     let up_content = serde_json::builder::ObjectBuilder::new()
         .insert("name", "Babe Ruth")
         .insert("home_runs", 714)
-        .unwrap();
+        .build();
 
     let (babe_id, _) = client.create_document("/baseball", &up_content).run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
         .insert("name", "Hank Aaron")
         .insert("home_runs", 755)
-        .unwrap();
+        .build();
 
     client.create_document("/baseball", &up_content).run().unwrap();
 
@@ -610,14 +610,14 @@ fn execute_view_ok_unreduced_with_end_key_exclusive() {
     let up_content = serde_json::builder::ObjectBuilder::new()
         .insert("name", "Babe Ruth")
         .insert("home_runs", 714)
-        .unwrap();
+        .build();
 
     let (babe_id, _) = client.create_document("/baseball", &up_content).run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
         .insert("name", "Hank Aaron")
         .insert("home_runs", 755)
-        .unwrap();
+        .build();
 
     client.create_document("/baseball", &up_content).run().unwrap();
 
@@ -652,14 +652,14 @@ fn execute_view_ok_unreduced_with_start_key() {
     let up_content = serde_json::builder::ObjectBuilder::new()
         .insert("name", "Babe Ruth")
         .insert("home_runs", 714)
-        .unwrap();
+        .build();
 
     client.create_document("/baseball", &up_content).run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
         .insert("name", "Hank Aaron")
         .insert("home_runs", 755)
-        .unwrap();
+        .build();
 
     let (hank_id, _) = client.create_document("/baseball", &up_content).run().unwrap();
 
@@ -694,14 +694,14 @@ fn execute_view_ok_unreduced_with_reduce_false() {
     let up_content = serde_json::builder::ObjectBuilder::new()
         .insert("name", "Babe Ruth")
         .insert("home_runs", 714)
-        .unwrap();
+        .build();
 
     let (babe_id, _rev) = client.create_document("/baseball", &up_content).run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
         .insert("name", "Hank Aaron")
         .insert("home_runs", 755)
-        .unwrap();
+        .build();
 
     let (hank_id, _rev) = client.create_document("/baseball", &up_content).run().unwrap();
 
@@ -744,14 +744,14 @@ fn execute_view_ok_unreduced_with_limit() {
     let up_content = serde_json::builder::ObjectBuilder::new()
         .insert("name", "Babe Ruth")
         .insert("home_runs", 714)
-        .unwrap();
+        .build();
 
     let (babe_id, _rev) = client.create_document("/baseball", &up_content).run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
         .insert("name", "Hank Aaron")
         .insert("home_runs", 755)
-        .unwrap();
+        .build();
 
     client.create_document("/baseball", &up_content).run().unwrap();
 
@@ -786,14 +786,14 @@ fn execute_view_ok_unreduced_with_documents() {
     let babe_content = serde_json::builder::ObjectBuilder::new()
         .insert("name", "Babe Ruth")
         .insert("home_runs", 714)
-        .unwrap();
+        .build();
 
     let (babe_id, babe_rev) = client.create_document("/baseball", &babe_content).run().unwrap();
 
     let hank_content = serde_json::builder::ObjectBuilder::new()
         .insert("name", "Hank Aaron")
         .insert("home_runs", 755)
-        .unwrap();
+        .build();
 
     let (hank_id, hank_rev) = client.create_document("/baseball", &hank_content).run().unwrap();
 
@@ -839,14 +839,14 @@ fn execute_view_ok_reduced() {
     let up_content = serde_json::builder::ObjectBuilder::new()
         .insert("name", "Babe Ruth")
         .insert("home_runs", 714)
-        .unwrap();
+        .build();
 
     client.create_document("/baseball", &up_content).run().unwrap();
 
     let up_content = serde_json::builder::ObjectBuilder::new()
         .insert("name", "Hank Aaron")
         .insert("home_runs", 755)
-        .unwrap();
+        .build();
 
     client.create_document("/baseball", &up_content).run().unwrap();
 
@@ -889,7 +889,7 @@ fn execute_view_ok_grouped_exact() {
                 .insert("1920", 54)
                 .insert("1921", 59)
         })
-        .unwrap();
+        .build();
 
     client.create_document("/baseball", &up_content).run().unwrap();
 
@@ -900,7 +900,7 @@ fn execute_view_ok_grouped_exact() {
                 .insert("1967", 39)
                 .insert("1968", 29)
         })
-        .unwrap();
+        .build();
 
     client.create_document("/baseball", &up_content).run().unwrap();
 
@@ -923,7 +923,7 @@ fn execute_view_ok_grouped_exact() {
         serde_json::builder::ArrayBuilder::new()
             .push(hr)
             .push(name)
-            .unwrap()
+            .build()
     };
 
     let expected = chill::testing::ViewResponseBuilder::new_grouped()
@@ -956,7 +956,7 @@ fn execute_view_ok_grouped_with_level() {
                 .insert("1920", 54)
                 .insert("1921", 59)
         })
-        .unwrap();
+        .build();
 
     client.create_document("/baseball", &up_content).run().unwrap();
 
@@ -967,7 +967,7 @@ fn execute_view_ok_grouped_with_level() {
                 .insert("1967", 39)
                 .insert("1968", 29)
         })
-        .unwrap();
+        .build();
 
     client.create_document("/baseball", &up_content).run().unwrap();
 
@@ -989,7 +989,7 @@ fn execute_view_ok_grouped_with_level() {
     let new_key = |hr| {
         serde_json::builder::ArrayBuilder::new()
             .push(hr)
-            .unwrap()
+            .build()
     };
 
     let expected = chill::testing::ViewResponseBuilder::new_grouped()

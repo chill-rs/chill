@@ -42,7 +42,7 @@ use transport::{JsonResponse, JsonResponseDecoder, Request, StatusCode, Transpor
 /// let content = serde_json::builder::ObjectBuilder::new()
 ///                   .insert("name", "Babe Ruth")
 ///                   .insert("nickname", "The Bambino")
-///                   .unwrap();
+///                   .build();
 ///
 /// let (doc_id, rev) = client.create_document("/baseball", &content)
 ///                            .run()
