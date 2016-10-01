@@ -1,5 +1,9 @@
 # Chill-rs Change Log
 
+## v0.3.1 (unreleased)
+
+No changes yet!
+
 ## v0.3.0 (2016-10-01)
 
 The v0.3.0 release updates the `serde` dependency to version 0.8.
