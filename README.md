@@ -14,20 +14,15 @@ You can read more about its design and development here:
 
 ## Roadmap
 
-Chill's most recent release is **v0.2.1**, available as of **2016-06-18**.
+Chill's most recent release is **v0.3.0**, available as of **2016-10-01**.
 
-* [v0.2.1 change log][v0_2_1_change_log]
-* [v0.2.1 documentation][v0_2_1_documentation]
-* [v0.2.1 issues][v0_2_1_issues]
-* [v0.2.1 crates.io page][v0_2_1_crates_io]
+* [v0.3.0 change log][v0_3_0_change_log]
+* [v0.3.0 documentation][v0_3_0_documentation]
+* [v0.3.0 issues][v0_3_0_issues]
+* [v0.3.0 crates.io page][v0_3_0_crates_io]
 
-The next release will probably be **v0.2.2** and is scheduled for
-**2016-07-09**. Its focus is to add more coverage of the CouchDB API
-while preserving compatibility with the latest release. You can peek at
-upcoming changes by following these links:
-
-* [master branch change log][master_change_log]
-* [v0.2.2 issues][v0_2_2_issues]
+Active development is on hold and there are no definite plans for a
+future release, but pull requests will be accepted.
 
 ## License
 
@@ -49,8 +44,7 @@ feedback][feedback_email]!
 [cv_rethinking_couchdb]: https://cmbrandenburg.github.io/post/2016-02-23-rethinking_couchdb_in_rust/
 [feedback_email]: mailto:c.m.brandenburg@gmail.com
 [master_change_log]: https://github.com/chill-rs/chill/blob/master/CHANGELOG.md
-[v0_2_1_change_log]: https://github.com/chill-rs/chill/blob/v0.2.1/CHANGELOG.md
-[v0_2_1_crates_io]: https://crates.io/crates/chill/0.2.1
-[v0_2_1_documentation]: https://chill-rs.github.io/chill/doc/v0.2.1/chill/
-[v0_2_1_issues]: https://github.com/chill-rs/chill/issues?q=milestone%3Av0.2.1
-[v0_2_2_issues]: https://github.com/chill-rs/chill/issues?q=milestone%3Av0.2.2
+[v0_3_0_change_log]: https://github.com/chill-rs/chill/blob/v0.3.0/CHANGELOG.md
+[v0_3_0_crates_io]: https://crates.io/crates/chill/0.3.0
+[v0_3_0_documentation]: https://chill-rs.github.io/chill/doc/v0.3.0/chill/
+[v0_3_0_issues]: https://github.com/chill-rs/chill/issues?q=milestone%3Av0.3.0

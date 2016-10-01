@@ -49,9 +49,9 @@
 
             $ cargo clean &&
               cargo doc --no-deps &&
-              ver=$(grep '^version' Cargo.toml | head -n1 | sed -e 's/.*\([[:digit:]]\+\.[[:digit:]]\+\.[[:digit:]]\+\).*/\1/') &&
+              ver=$(grep '^version\s=' Cargo.toml | head -n1 | sed -Ee 's/.*"([0-9]+\.[0-9]+\.[0.9]+)"$/\1/')
               git checkout gh-pages &&
-              cp -a target/doc doc/v$ver &&
+              cp -pR target/doc doc/v$ver &&
               git add doc/v$ver
 
     1. Review `doc/v$ver/chill/index.html`.
