@@ -26,7 +26,7 @@
     1. Edit `Cargo.toml` to declare the correct version for this
        crate.
 
-        1. E.g., remove the `+master` suffix.
+        1. E.g., remove the `-master` suffix.
 
         1. Ensure the documentation link is correct.
 
@@ -79,7 +79,7 @@
 
 1. Prep for new work.
 
-    1. Edit `Cargo.toml` to increment the version, adding the `+master`
+    1. Edit `Cargo.toml` to increment the version, adding the `-master`
        suffix.
 
     1. Edit `CHANGELOG.md` to add the new “unreleased” section for the
