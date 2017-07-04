@@ -27,19 +27,13 @@ pub enum Error {
     },
 
     #[doc(hidden)]
-    JsonDecode {
-        cause: serde_json::Error,
-    },
+    JsonDecode { cause: serde_json::Error },
 
     #[doc(hidden)]
-    JsonEncode {
-        cause: serde_json::Error,
-    },
+    JsonEncode { cause: serde_json::Error },
 
     #[doc(hidden)]
-    Mock {
-        extra_description: String,
-    },
+    Mock { extra_description: String },
 
     /// The target resource—e.g., database, document, etc.—does not exist or is
     /// deleted.
@@ -52,9 +46,7 @@ pub enum Error {
     ResponseNotJson(Option<mime::Mime>),
 
     #[doc(hidden)]
-    RevisionParse {
-        kind: RevisionParseErrorKind,
-    },
+    RevisionParse { kind: RevisionParseErrorKind },
 
     #[doc(hidden)]
     ServerResponse {
@@ -63,9 +55,7 @@ pub enum Error {
     },
 
     #[doc(hidden)]
-    Transport {
-        kind: TransportErrorKind,
-    },
+    Transport { kind: TransportErrorKind },
 
     /// The client lacks permission to complete the action.
     Unauthorized(ErrorResponse),
@@ -77,9 +67,7 @@ pub enum Error {
     UrlNotSchemeRelative,
 
     #[doc(hidden)]
-    UrlParse {
-        cause: url::ParseError,
-    },
+    UrlParse { cause: url::ParseError },
 }
 
 impl Error {
@@ -186,11 +174,17 @@ impl std::fmt::Display for Error {
         use Error::*;
         let description = std::error::Error::description(self);
         match self {
-            &ChannelReceive { ref cause, description } => write!(f, "{}: {}", description, cause),
+            &ChannelReceive {
+                ref cause,
+                description,
+            } => write!(f, "{}: {}", description, cause),
             &DatabaseExists(ref error_response) => write!(f, "{}: {}", description, error_response),
             &DocumentConflict(ref error_response) => write!(f, "{}: {}", description, error_response),
             &DocumentIsDeleted => write!(f, "{}", description),
-            &Io { ref cause, description } => write!(f, "{}: {}", description, cause),
+            &Io {
+                ref cause,
+                description,
+            } => write!(f, "{}: {}", description, cause),
             &JsonDecode { ref cause } => write!(f, "{}: {}", description, cause),
             &JsonEncode { ref cause } => write!(f, "{}: {}", description, cause),
             &Mock { ref extra_description } => write!(f, "{}: {}", description, extra_description),
@@ -199,7 +193,10 @@ impl std::fmt::Display for Error {
             &ResponseNotJson(Some(ref content_type)) => write!(f, "{}: Content type is {}", description, content_type),
             &ResponseNotJson(None) => write!(f, "{}", description),
             &RevisionParse { ref kind } => write!(f, "{}: {}", description, kind),
-            &ServerResponse { ref status_code, ref error_response } => {
+            &ServerResponse {
+                ref status_code,
+                ref error_response,
+            } => {
                 try!(write!(f, "{} ({}", description, status_code));
                 try!(match status_code.canonical_reason() {
                     None => write!(f, ")"),
@@ -276,8 +273,10 @@ impl std::fmt::Display for RevisionParseErrorKind {
         use self::RevisionParseErrorKind::*;
         match self {
             &DigestNotAllHex => {
-                write!(f,
-                       "Digest part contains one or more non-hexadecimal characters")
+                write!(
+                    f,
+                    "Digest part contains one or more non-hexadecimal characters"
+                )
             }
             &DigestParse(ref cause) => write!(f, "The digest part is invalid: {}", cause),
             &NumberParse(ref cause) => write!(f, "The number part is invalid: {}", cause),
@@ -321,8 +320,9 @@ pub struct ErrorResponse {
 impl ErrorResponse {
     #[doc(hidden)]
     pub fn new<T, U>(error: T, reason: U) -> Self
-        where T: Into<String>,
-              U: Into<String>
+    where
+        T: Into<String>,
+        U: Into<String>,
     {
         ErrorResponse {
             error: error.into(),
@@ -351,7 +351,8 @@ impl std::fmt::Display for ErrorResponse {
 #[doc(hidden)]
 impl serde::Deserialize for ErrorResponse {
     fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
-        where D: serde::Deserializer
+    where
+        D: serde::Deserializer,
     {
         enum Field {
             Error,
@@ -360,7 +361,8 @@ impl serde::Deserialize for ErrorResponse {
 
         impl serde::Deserialize for Field {
             fn deserialize<D>(deserializer: &mut D) -> Result<Field, D::Error>
-                where D: serde::Deserializer
+            where
+                D: serde::Deserializer,
             {
                 struct Visitor;
 
@@ -368,7 +370,8 @@ impl serde::Deserialize for ErrorResponse {
                     type Value = Field;
 
                     fn visit_str<E>(&mut self, value: &str) -> Result<Field, E>
-                        where E: serde::de::Error
+                    where
+                        E: serde::de::Error,
                     {
                         match value {
                             "error" => Ok(Field::Error),
@@ -388,7 +391,8 @@ impl serde::Deserialize for ErrorResponse {
             type Value = ErrorResponse;
 
             fn visit_map<V>(&mut self, mut visitor: V) -> Result<Self::Value, V::Error>
-                where V: serde::de::MapVisitor
+            where
+                V: serde::de::MapVisitor,
             {
                 let mut error = None;
                 let mut reason = None;
@@ -431,8 +435,8 @@ impl serde::Deserialize for ErrorResponse {
 #[cfg(test)]
 mod tests {
 
-    use serde_json;
     use super::*;
+    use serde_json;
 
     #[test]
     fn error_response_display() {
@@ -442,8 +446,9 @@ mod tests {
         };
         let got = format!("{}", source);
         let error_position = got.find("file_exists").unwrap();
-        let reason_position = got.find("The database could not be created, the file already exists.")
-            .unwrap();
+        let reason_position = got.find(
+            "The database could not be created, the file already exists.",
+        ).unwrap();
         assert!(error_position < reason_position);
     }
 

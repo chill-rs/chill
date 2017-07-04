@@ -53,24 +53,33 @@ impl std::str::FromStr for Revision {
 
         let mut parts = s.splitn(2, '-');
 
-        let sequence_number_str = try!(parts.next()
-            .ok_or(Error::RevisionParse { kind: RevisionParseErrorKind::TooFewParts }));
+        let sequence_number_str = try!(parts.next().ok_or(Error::RevisionParse {
+            kind: RevisionParseErrorKind::TooFewParts,
+        }));
 
-        let sequence_number = match try!(u64::from_str_radix(sequence_number_str, 10)
-            .map_err(|e| Error::RevisionParse { kind: RevisionParseErrorKind::NumberParse(e) })) {
+        let sequence_number = match try!(u64::from_str_radix(sequence_number_str, 10).map_err(|e| {
+            Error::RevisionParse { kind: RevisionParseErrorKind::NumberParse(e) }
+        })) {
             0 => {
-                return Err(Error::RevisionParse { kind: RevisionParseErrorKind::ZeroSequenceNumber });
+                return Err(Error::RevisionParse {
+                    kind: RevisionParseErrorKind::ZeroSequenceNumber,
+                });
             }
             x @ _ => x,
         };
 
-        let digest_str = try!(parts.next().ok_or(Error::RevisionParse { kind: RevisionParseErrorKind::TooFewParts }));
+        let digest_str = try!(parts.next().ok_or(Error::RevisionParse {
+            kind: RevisionParseErrorKind::TooFewParts,
+        }));
 
-        let digest = try!(uuid::Uuid::parse_str(digest_str)
-            .map_err(|e| Error::RevisionParse { kind: RevisionParseErrorKind::DigestParse(e) }));
+        let digest = try!(uuid::Uuid::parse_str(digest_str).map_err(|e| {
+            Error::RevisionParse { kind: RevisionParseErrorKind::DigestParse(e) }
+        }));
 
         if digest_str.chars().any(|c| !c.is_digit(16)) {
-            return Err(Error::RevisionParse { kind: RevisionParseErrorKind::DigestNotAllHex });
+            return Err(Error::RevisionParse {
+                kind: RevisionParseErrorKind::DigestNotAllHex,
+            });
         }
 
         Ok(Revision {
@@ -88,7 +97,8 @@ impl From<Revision> for String {
 
 impl serde::Serialize for Revision {
     fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
-        where S: serde::Serializer
+    where
+        S: serde::Serializer,
     {
         let s = self.to_string();
         serializer.serialize_str(&s)
@@ -97,7 +107,8 @@ impl serde::Serialize for Revision {
 
 impl serde::Deserialize for Revision {
     fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
-        where D: serde::Deserializer
+    where
+        D: serde::Deserializer,
     {
         struct Visitor;
 
@@ -105,7 +116,8 @@ impl serde::Deserialize for Revision {
             type Value = Revision;
 
             fn visit_str<E>(&mut self, v: &str) -> Result<Self::Value, E>
-                where E: serde::de::Error
+            where
+                E: serde::de::Error,
             {
                 use std::error::Error;
                 Revision::parse(v).map_err(|e| E::invalid_value(e.description()))
@@ -119,9 +131,9 @@ impl serde::Deserialize for Revision {
 #[cfg(test)]
 mod tests {
 
+    use super::Revision;
     use Error;
     use serde_json;
-    use super::Revision;
 
     #[test]
     fn parse_ok() {

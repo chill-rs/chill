@@ -1,5 +1,6 @@
-use {Error, url};
+
 use super::{AsyncActionHandler, JsonResponse, Request, ResponseHandler, ResponseHeaders, StatusCode, Transport};
+use {Error, url};
 
 pub struct JsonResponseBuilder {
     inner: JsonResponse,
@@ -36,14 +37,16 @@ impl MockTransport {
 
 impl Transport for MockTransport {
     fn send<H, T>(&self, _request: Request, _response_handler: H) -> Result<T, Error>
-        where H: ResponseHandler<T>
+    where
+        H: ResponseHandler<T>,
     {
         unimplemented!();
     }
 
     fn send_async<H, A, T, U>(&self, _request: Request, _response_handler: H, _action_handler: A) -> Result<U, Error>
-        where A: AsyncActionHandler<T>,
-              H: ResponseHandler<U>
+    where
+        A: AsyncActionHandler<T>,
+        H: ResponseHandler<U>,
     {
         unimplemented!();
     }

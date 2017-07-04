@@ -103,10 +103,11 @@ enum GroupLevel {
 /// ```
 ///
 pub struct ExecuteView<'a, T, P, StartKey, EndKey>
-    where EndKey: serde::Serialize,
-          P: IntoViewPath,
-          StartKey: serde::Serialize,
-          T: Transport + 'a
+where
+    EndKey: serde::Serialize,
+    P: IntoViewPath,
+    StartKey: serde::Serialize,
+    T: Transport + 'a,
 {
     transport: &'a T,
     view_path: Option<P>,
@@ -120,8 +121,9 @@ pub struct ExecuteView<'a, T, P, StartKey, EndKey>
 }
 
 impl<'a, P, T> ExecuteView<'a, T, P, (), ()>
-    where P: IntoViewPath,
-          T: Transport + 'a
+where
+    P: IntoViewPath,
+    T: Transport + 'a,
 {
     #[doc(hidden)]
     pub fn new(transport: &'a T, view_path: P) -> Self {
@@ -140,10 +142,11 @@ impl<'a, P, T> ExecuteView<'a, T, P, (), ()>
 }
 
 impl<'a, EndKey, P, StartKey, T> ExecuteView<'a, T, P, StartKey, EndKey>
-    where EndKey: serde::Serialize,
-          P: IntoViewPath,
-          StartKey: serde::Serialize,
-          T: Transport + 'a
+where
+    EndKey: serde::Serialize,
+    P: IntoViewPath,
+    StartKey: serde::Serialize,
+    T: Transport + 'a,
 {
     /// Modifies the action to explicitly reduce or not reduce the view.
     ///
@@ -200,9 +203,10 @@ impl<'a, EndKey, P, StartKey, T> ExecuteView<'a, T, P, StartKey, EndKey>
 }
 
 impl<'a, EndKey, P, T> ExecuteView<'a, T, P, (), EndKey>
-    where EndKey: serde::Serialize,
-          P: IntoViewPath,
-          T: Transport + 'a
+where
+    EndKey: serde::Serialize,
+    P: IntoViewPath,
+    T: Transport + 'a,
 {
     /// Modifies the action to include only records with a key greater than or
     /// equal to a given key.
@@ -211,7 +215,8 @@ impl<'a, EndKey, P, T> ExecuteView<'a, T, P, (), EndKey>
     /// parameter. By default, the CouchDB server includes all records.
     ///
     pub fn with_start_key<StartKey>(self, start_key: StartKey) -> ExecuteView<'a, T, P, StartKey, EndKey>
-        where StartKey: serde::Serialize
+    where
+        StartKey: serde::Serialize,
     {
         ExecuteView {
             transport: self.transport,
@@ -228,9 +233,10 @@ impl<'a, EndKey, P, T> ExecuteView<'a, T, P, (), EndKey>
 }
 
 impl<'a, P, StartKey, T> ExecuteView<'a, T, P, StartKey, ()>
-    where P: IntoViewPath,
-          StartKey: serde::Serialize,
-          T: Transport + 'a
+where
+    P: IntoViewPath,
+    StartKey: serde::Serialize,
+    T: Transport + 'a,
 {
     /// Modifies the action to include only records with a key less than or
     /// equal to a given key.
@@ -239,7 +245,8 @@ impl<'a, P, StartKey, T> ExecuteView<'a, T, P, StartKey, ()>
     /// parameter. By default, the CouchDB server includes all records.
     ///
     pub fn with_end_key_inclusive<EndKey>(self, end_key: EndKey) -> ExecuteView<'a, T, P, StartKey, EndKey>
-        where EndKey: serde::Serialize
+    where
+        EndKey: serde::Serialize,
     {
         ExecuteView {
             transport: self.transport,
@@ -262,7 +269,8 @@ impl<'a, P, StartKey, T> ExecuteView<'a, T, P, StartKey, ()>
     /// includes all records.
     ///
     pub fn with_end_key_exclusive<EndKey>(self, end_key: EndKey) -> ExecuteView<'a, T, P, StartKey, EndKey>
-        where EndKey: serde::Serialize
+    where
+        EndKey: serde::Serialize,
     {
         ExecuteView {
             transport: self.transport,
@@ -279,20 +287,27 @@ impl<'a, P, StartKey, T> ExecuteView<'a, T, P, StartKey, ()>
 }
 
 impl<'a, EndKey, P, StartKey, T> ExecuteView<'a, T, P, StartKey, EndKey>
-    where EndKey: serde::Serialize,
-          P: IntoViewPath,
-          StartKey: serde::Serialize,
-          T: Transport
+where
+    EndKey: serde::Serialize,
+    P: IntoViewPath,
+    StartKey: serde::Serialize,
+    T: Transport,
 {
     pub fn run(mut self) -> Result<ViewResponse, Error> {
         let (request, db_name) = try!(self.make_request());
-        self.transport.send(request,
-                            JsonResponseDecoder::new(move |response| handle_response(response, db_name)))
+        self.transport.send(
+            request,
+            JsonResponseDecoder::new(move |response| handle_response(response, db_name)),
+        )
     }
 
     fn make_request(&mut self) -> Result<(Request, DatabaseName), Error> {
 
-        let view_path = try!(std::mem::replace(&mut self.view_path, None).unwrap().into_view_path());
+        let view_path = try!(
+            std::mem::replace(&mut self.view_path, None)
+                .unwrap()
+                .into_view_path()
+        );
         let db_name = view_path.database_name().clone();
 
         let request = self.transport.get(view_path.iter()).with_accept_json();
@@ -355,8 +370,8 @@ fn handle_response(response: JsonResponse, db_name: DatabaseName) -> Result<View
 #[cfg(test)]
 mod tests {
 
-    use {DatabaseName, Error};
     use super::*;
+    use {DatabaseName, Error};
     use transport::{JsonResponseBuilder, MockTransport, StatusCode, Transport};
     use view::ViewResponseBuilder;
 
@@ -364,8 +379,12 @@ mod tests {
     fn make_request_default() {
 
         let transport = MockTransport::new();
-        let expected = (transport.get(vec!["foo", "_design", "bar", "_view", "qux"]).with_accept_json(),
-                        DatabaseName::from("foo"));
+        let expected = (
+            transport
+                .get(vec!["foo", "_design", "bar", "_view", "qux"])
+                .with_accept_json(),
+            DatabaseName::from("foo"),
+        );
 
         let got = {
             let mut action = ExecuteView::new(&transport, "/foo/_design/bar/_view/qux");
@@ -379,10 +398,13 @@ mod tests {
     fn make_request_with_descending() {
 
         let transport = MockTransport::new();
-        let expected = (transport.get(vec!["foo", "_design", "bar", "_view", "qux"])
-            .with_accept_json()
-            .with_query_literal("descending", "true"),
-                        DatabaseName::from("foo"));
+        let expected = (
+            transport
+                .get(vec!["foo", "_design", "bar", "_view", "qux"])
+                .with_accept_json()
+                .with_query_literal("descending", "true"),
+            DatabaseName::from("foo"),
+        );
 
         let got = {
             let mut action = ExecuteView::new(&transport, "/foo/_design/bar/_view/qux").with_descending(true);
@@ -397,11 +419,14 @@ mod tests {
 
         let transport = MockTransport::new();
 
-        let expected = (transport.get(vec!["foo", "_design", "bar", "_view", "qux"])
-            .with_accept_json()
-            .with_query_literal("endkey", r#""my key""#)
-            .with_query_literal("inclusive_end", "false"),
-                        DatabaseName::from("foo"));
+        let expected = (
+            transport
+                .get(vec!["foo", "_design", "bar", "_view", "qux"])
+                .with_accept_json()
+                .with_query_literal("endkey", r#""my key""#)
+                .with_query_literal("inclusive_end", "false"),
+            DatabaseName::from("foo"),
+        );
 
         let end_key = String::from("my key");
         let got = {
@@ -418,10 +443,13 @@ mod tests {
 
         let transport = MockTransport::new();
 
-        let expected = (transport.get(vec!["foo", "_design", "bar", "_view", "qux"])
-            .with_accept_json()
-            .with_query_literal("endkey", r#""my key""#),
-                        DatabaseName::from("foo"));
+        let expected = (
+            transport
+                .get(vec!["foo", "_design", "bar", "_view", "qux"])
+                .with_accept_json()
+                .with_query_literal("endkey", r#""my key""#),
+            DatabaseName::from("foo"),
+        );
 
         let end_key = String::from("my key");
         let got = {
@@ -438,10 +466,13 @@ mod tests {
 
         let transport = MockTransport::new();
 
-        let expected = (transport.get(vec!["foo", "_design", "bar", "_view", "qux"])
-            .with_accept_json()
-            .with_query_literal("group", "true"),
-                        DatabaseName::from("foo"));
+        let expected = (
+            transport
+                .get(vec!["foo", "_design", "bar", "_view", "qux"])
+                .with_accept_json()
+                .with_query_literal("group", "true"),
+            DatabaseName::from("foo"),
+        );
 
         let got = {
             let mut action = ExecuteView::new(&transport, "/foo/_design/bar/_view/qux").with_exact_groups(true);
@@ -456,10 +487,13 @@ mod tests {
 
         let transport = MockTransport::new();
 
-        let expected = (transport.get(vec!["foo", "_design", "bar", "_view", "qux"])
-            .with_accept_json()
-            .with_query_literal("group_level", "42"),
-                        DatabaseName::from("foo"));
+        let expected = (
+            transport
+                .get(vec!["foo", "_design", "bar", "_view", "qux"])
+                .with_accept_json()
+                .with_query_literal("group_level", "42"),
+            DatabaseName::from("foo"),
+        );
 
         let got = {
             let mut action = ExecuteView::new(&transport, "/foo/_design/bar/_view/qux").with_group_level(42);
@@ -473,10 +507,13 @@ mod tests {
     fn make_request_with_limit() {
         let transport = MockTransport::new();
 
-        let expected = (transport.get(vec!["foo", "_design", "bar", "_view", "qux"])
-            .with_accept_json()
-            .with_query_literal("limit", "42"),
-                        DatabaseName::from("foo"));
+        let expected = (
+            transport
+                .get(vec!["foo", "_design", "bar", "_view", "qux"])
+                .with_accept_json()
+                .with_query_literal("limit", "42"),
+            DatabaseName::from("foo"),
+        );
 
         let got = {
             let mut action = ExecuteView::new(&transport, "/foo/_design/bar/_view/qux").with_limit(42);
@@ -490,10 +527,13 @@ mod tests {
     fn make_request_with_reduce() {
         let transport = MockTransport::new();
 
-        let expected = (transport.get(vec!["foo", "_design", "bar", "_view", "qux"])
-            .with_accept_json()
-            .with_query_literal("reduce", "false"),
-                        DatabaseName::from("foo"));
+        let expected = (
+            transport
+                .get(vec!["foo", "_design", "bar", "_view", "qux"])
+                .with_accept_json()
+                .with_query_literal("reduce", "false"),
+            DatabaseName::from("foo"),
+        );
 
         let got = {
             let mut action = ExecuteView::new(&transport, "/foo/_design/bar/_view/qux").with_reduce(false);
@@ -507,10 +547,13 @@ mod tests {
     fn make_request_with_start_key() {
         let transport = MockTransport::new();
 
-        let expected = (transport.get(vec!["foo", "_design", "bar", "_view", "qux"])
-            .with_accept_json()
-            .with_query_literal("startkey", r#""my key""#),
-                        DatabaseName::from("foo"));
+        let expected = (
+            transport
+                .get(vec!["foo", "_design", "bar", "_view", "qux"])
+                .with_accept_json()
+                .with_query_literal("startkey", r#""my key""#),
+            DatabaseName::from("foo"),
+        );
 
         let start_key = String::from("my key");
         let got = {
@@ -538,9 +581,11 @@ mod tests {
     fn handle_response_ok_unreduced() {
 
         let response = JsonResponseBuilder::new(StatusCode::Ok)
-            .with_json_content_raw("{\"total_rows\":20,\"offset\":10,\"rows\":[\
+            .with_json_content_raw(
+                "{\"total_rows\":20,\"offset\":10,\"rows\":[\
                                    {\"key\":\"Babe Ruth\",\"value\":714,\"id\":\"babe_ruth\"},\
-                                   {\"key\":\"Hank Aaron\",\"value\":755,\"id\":\"hank_aaron\"}]}")
+                                   {\"key\":\"Hank Aaron\",\"value\":755,\"id\":\"hank_aaron\"}]}",
+            )
             .unwrap();
 
         let expected = ViewResponseBuilder::new_unreduced("baseball", 20, 10)
@@ -562,8 +607,8 @@ mod tests {
 
         let db_name = DatabaseName::from("foo");
         match super::handle_response(response, db_name) {
-            Err(Error::NotFound(ref error_response)) if error_response.error() == "not_found" &&
-                                                        error_response.reason() == "missing_named_view" => (),
+            Err(Error::NotFound(ref error_response))
+                if error_response.error() == "not_found" && error_response.reason() == "missing_named_view" => (),
             x @ _ => unexpected_result!(x),
         }
     }
@@ -572,13 +617,16 @@ mod tests {
     fn handle_response_unauthorized() {
 
         let response = JsonResponseBuilder::new(StatusCode::Unauthorized)
-            .with_json_content_raw(r#"{"error":"unauthorized","reason":"Authentication required."}"#)
+            .with_json_content_raw(
+                r#"{"error":"unauthorized","reason":"Authentication required."}"#,
+            )
             .unwrap();
 
         let db_name = DatabaseName::from("foo");
         match super::handle_response(response, db_name) {
-            Err(Error::Unauthorized(ref error_response)) if error_response.error() == "unauthorized" &&
-                                                            error_response.reason() == "Authentication required." => (),
+            Err(Error::Unauthorized(ref error_response))
+                if error_response.error() == "unauthorized" && error_response.reason() == "Authentication required." =>
+                (),
             x @ _ => unexpected_result!(x),
         }
     }

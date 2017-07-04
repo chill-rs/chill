@@ -69,7 +69,8 @@ impl Attachment {
 #[doc(hidden)]
 impl serde::Serialize for Attachment {
     fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
-        where S: serde::Serializer
+    where
+        S: serde::Serializer,
     {
         match self {
             &Attachment::Saved(ref x) => x.serialize(serializer),
@@ -81,9 +82,12 @@ impl serde::Serialize for Attachment {
 #[doc(hidden)]
 impl serde::Deserialize for Attachment {
     fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
-        where D: serde::Deserializer
+    where
+        D: serde::Deserializer,
     {
-        Ok(Attachment::Saved(try!(SavedAttachment::deserialize(deserializer))))
+        Ok(Attachment::Saved(
+            try!(SavedAttachment::deserialize(deserializer)),
+        ))
     }
 }
 
@@ -129,7 +133,8 @@ impl SavedAttachment {
 
 impl serde::Serialize for SavedAttachment {
     fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
-        where S: serde::Serializer
+    where
+        S: serde::Serializer,
     {
         let mut state = try!(serializer.serialize_struct("SavedAttachment", 1));
         try!(serializer.serialize_struct_elt(&mut state, "stub", true));
@@ -138,7 +143,8 @@ impl serde::Serialize for SavedAttachment {
 }
 impl serde::Deserialize for SavedAttachment {
     fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
-        where D: serde::Deserializer
+    where
+        D: serde::Deserializer,
     {
         enum Field {
             ContentType,
@@ -153,7 +159,8 @@ impl serde::Deserialize for SavedAttachment {
 
         impl serde::Deserialize for Field {
             fn deserialize<D>(deserializer: &mut D) -> Result<Field, D::Error>
-                where D: serde::Deserializer
+            where
+                D: serde::Deserializer,
             {
                 struct Visitor;
 
@@ -161,7 +168,8 @@ impl serde::Deserialize for SavedAttachment {
                     type Value = Field;
 
                     fn visit_str<E>(&mut self, value: &str) -> Result<Field, E>
-                        where E: serde::de::Error
+                    where
+                        E: serde::de::Error,
                     {
                         match value {
                             "content_type" => Ok(Field::ContentType),
@@ -187,7 +195,8 @@ impl serde::Deserialize for SavedAttachment {
             type Value = SavedAttachment;
 
             fn visit_map<V>(&mut self, mut visitor: V) -> Result<Self::Value, V::Error>
-                where V: serde::de::MapVisitor
+            where
+                V: serde::de::MapVisitor,
             {
                 let mut content_type = None;
                 let mut data = None;
@@ -288,8 +297,16 @@ impl serde::Deserialize for SavedAttachment {
             }
         }
 
-        static FIELDS: &'static [&'static str] =
-            &["content_type", "data", "digest", "encoded_length", "encoding", "length", "revpos", "stub"];
+        static FIELDS: &'static [&'static str] = &[
+            "content_type",
+            "data",
+            "digest",
+            "encoded_length",
+            "encoding",
+            "length",
+            "revpos",
+            "stub",
+        ];
         deserializer.deserialize_struct("SavedAttachment", FIELDS, Visitor)
     }
 }
@@ -303,12 +320,21 @@ pub struct UnsavedAttachment {
 
 impl serde::Serialize for UnsavedAttachment {
     fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
-        where S: serde::Serializer
+    where
+        S: serde::Serializer,
     {
         let content_type = self.content_type.clone();
         let mut state = try!(serializer.serialize_struct("UnsavedAttachment", 2));
-        try!(serializer.serialize_struct_elt(&mut state, "content_type", &content_type));
-        try!(serializer.serialize_struct_elt(&mut state, "data", &Base64JsonEncodable(&self.content)));
+        try!(serializer.serialize_struct_elt(
+            &mut state,
+            "content_type",
+            &content_type,
+        ));
+        try!(serializer.serialize_struct_elt(
+            &mut state,
+            "data",
+            &Base64JsonEncodable(&self.content),
+        ));
         serializer.serialize_struct_end(state)
     }
 }
@@ -318,7 +344,8 @@ struct Base64JsonDecodable(Vec<u8>);
 
 impl serde::Deserialize for Base64JsonDecodable {
     fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
-        where D: serde::Deserializer
+    where
+        D: serde::Deserializer,
     {
         struct Visitor;
 
@@ -326,10 +353,13 @@ impl serde::Deserialize for Base64JsonDecodable {
             type Value = Base64JsonDecodable;
 
             fn visit_str<E>(&mut self, value: &str) -> Result<Self::Value, E>
-                where E: serde::de::Error
+            where
+                E: serde::de::Error,
             {
                 use std::error::Error;
-                let blob = try!(base64::decode(value).map_err(|e| E::invalid_value(e.description())));
+                let blob = try!(base64::decode(value).map_err(
+                    |e| E::invalid_value(e.description()),
+                ));
                 Ok(Base64JsonDecodable(blob))
             }
         }
@@ -343,7 +373,8 @@ struct Base64JsonEncodable<'a>(&'a Vec<u8>);
 
 impl<'a> serde::Serialize for Base64JsonEncodable<'a> {
     fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
-        where S: serde::Serializer
+    where
+        S: serde::Serializer,
     {
         let &Base64JsonEncodable(bytes) = self;
         base64::encode(bytes).serialize(serializer)
@@ -355,7 +386,8 @@ struct ContentTypeJsonDecodable(pub mime::Mime);
 
 impl serde::Deserialize for ContentTypeJsonDecodable {
     fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
-        where D: serde::Deserializer
+    where
+        D: serde::Deserializer,
     {
         struct Visitor;
 
@@ -363,7 +395,8 @@ impl serde::Deserialize for ContentTypeJsonDecodable {
             type Value = ContentTypeJsonDecodable;
 
             fn visit_str<E>(&mut self, v: &str) -> Result<Self::Value, E>
-                where E: serde::de::Error
+            where
+                E: serde::de::Error,
             {
                 let m = try!(v.parse().map_err(|_| E::invalid_value("Bad MIME string")));
                 Ok(ContentTypeJsonDecodable(m))
@@ -402,7 +435,8 @@ impl AttachmentBuilder<AttachmentIsSaved> {
     /// store the content itself.
     ///
     pub fn new_saved<D>(content_type: mime::Mime, digest: D, sequence_number: u64, content_length: u64) -> Self
-        where D: Into<String>
+    where
+        D: Into<String>,
     {
         AttachmentBuilder {
             target: Attachment::Saved(SavedAttachment {
@@ -418,8 +452,9 @@ impl AttachmentBuilder<AttachmentIsSaved> {
 
     /// Constructs a saved attachment in full.
     pub fn new_saved_with_content<C, D>(content_type: mime::Mime, digest: D, sequence_number: u64, content: C) -> Self
-        where C: Into<Vec<u8>>,
-              D: Into<String>
+    where
+        C: Into<Vec<u8>>,
+        D: Into<String>,
     {
         AttachmentBuilder {
             target: Attachment::Saved(SavedAttachment {
@@ -437,7 +472,8 @@ impl AttachmentBuilder<AttachmentIsSaved> {
 impl AttachmentBuilder<AttachmentIsUnsaved> {
     /// Constructs an unsaved attachment.
     pub fn new_unsaved<C>(content_type: mime::Mime, content: C) -> Self
-        where C: Into<Vec<u8>>
+    where
+        C: Into<Vec<u8>>,
     {
         AttachmentBuilder {
             target: Attachment::Unsaved(UnsavedAttachment {
@@ -459,11 +495,11 @@ impl<M> AttachmentBuilder<M> {
 #[cfg(test)]
 mod tests {
 
-    use base64;
-    use serde_json;
     use super::*;
     use super::{AttachmentEncodingInfo, Base64JsonDecodable, Base64JsonEncodable, ContentTypeJsonDecodable,
                 SavedAttachmentContent};
+    use base64;
+    use serde_json;
 
     #[test]
     fn attachment_serialize_saved() {
@@ -472,9 +508,7 @@ mod tests {
             content_type: mime!(Text / Plain),
             digest: "md5-iMaiC8wqiFlD2NjLTemvCQ==".to_string(),
             sequence_number: 17,
-            content: SavedAttachmentContent::Bytes("This is the attachment."
-                .to_string()
-                .into_bytes()),
+            content: SavedAttachmentContent::Bytes("This is the attachment.".to_string().into_bytes()),
             encoding_info: None,
         });
 
@@ -541,9 +575,7 @@ mod tests {
             content_type: mime!(Text / Plain),
             digest: "md5-iMaiC8wqiFlD2NjLTemvCQ==".to_string(),
             sequence_number: 17,
-            content: SavedAttachmentContent::Bytes("This is the attachment."
-                .to_string()
-                .into_bytes()),
+            content: SavedAttachmentContent::Bytes("This is the attachment.".to_string().into_bytes()),
             encoding_info: None,
         };
 

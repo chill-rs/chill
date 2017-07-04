@@ -3,9 +3,10 @@ use document::WriteDocumentResponse;
 use transport::{JsonResponse, JsonResponseDecoder, Request, StatusCode, Transport};
 
 pub struct CreateDocument<'a, T, P, C>
-    where C: serde::Serialize + 'a,
-          P: IntoDatabasePath,
-          T: Transport + 'a
+where
+    C: serde::Serialize + 'a,
+    P: IntoDatabasePath,
+    T: Transport + 'a,
 {
     transport: &'a T,
     db_path: Option<P>,
@@ -14,9 +15,10 @@ pub struct CreateDocument<'a, T, P, C>
 }
 
 impl<'a, C, P, T> CreateDocument<'a, T, P, C>
-    where C: serde::Serialize + 'a,
-          P: IntoDatabasePath,
-          T: Transport + 'a
+where
+    C: serde::Serialize + 'a,
+    P: IntoDatabasePath,
+    T: Transport + 'a,
 {
     #[doc(hidden)]
     pub fn new(transport: &'a T, db_path: P, content: &'a C) -> Self {
@@ -29,29 +31,37 @@ impl<'a, C, P, T> CreateDocument<'a, T, P, C>
     }
 
     pub fn with_document_id<D>(mut self, doc_id: D) -> Self
-        where D: Into<DocumentId>
+    where
+        D: Into<DocumentId>,
     {
         self.doc_id = Some(doc_id.into());
         self
     }
 
     pub fn run(mut self) -> Result<(DocumentId, Revision), Error> {
-        self.transport.send(try!(self.make_request()),
-                            JsonResponseDecoder::new(handle_response))
+        self.transport.send(
+            try!(self.make_request()),
+            JsonResponseDecoder::new(handle_response),
+        )
     }
 
     fn make_request(&mut self) -> Result<Request, Error> {
-        let db_path = try!(std::mem::replace(&mut self.db_path, None).unwrap().into_database_path());
+        let db_path = try!(
+            std::mem::replace(&mut self.db_path, None)
+                .unwrap()
+                .into_database_path()
+        );
 
-        let request = try!(match self.doc_id {
+        let request = try!(
+            match self.doc_id {
                 None => self.transport.post(db_path.iter()),
                 Some(ref doc_id) => {
                     let doc_path = DocumentPath::from((db_path, doc_id.clone()));
                     self.transport.put(doc_path.iter())
                 }
-            }
-            .with_accept_json()
-            .with_json_content(self.content));
+            }.with_accept_json()
+                .with_json_content(self.content)
+        );
 
         Ok(request)
     }
@@ -73,8 +83,8 @@ fn handle_response(response: JsonResponse) -> Result<(DocumentId, Revision), Err
 #[cfg(test)]
 mod tests {
 
-    use {DocumentId, Error, Revision, serde_json};
     use super::*;
+    use {DocumentId, Error, Revision, serde_json};
     use transport::{JsonResponseBuilder, MockTransport, StatusCode, Transport};
 
     #[test]
@@ -85,7 +95,11 @@ mod tests {
             .build();
 
         let transport = MockTransport::new();
-        let expected = transport.post(vec!["foo"]).with_accept_json().with_json_content(&doc_content).unwrap();
+        let expected = transport
+            .post(vec!["foo"])
+            .with_accept_json()
+            .with_json_content(&doc_content)
+            .unwrap();
 
         let got = {
             let mut action = CreateDocument::new(&transport, "/foo", &doc_content);
@@ -104,7 +118,11 @@ mod tests {
 
         let transport = MockTransport::new();
 
-        let expected = transport.put(vec!["foo", "bar"]).with_accept_json().with_json_content(&doc_content).unwrap();
+        let expected = transport
+            .put(vec!["foo", "bar"])
+            .with_accept_json()
+            .with_json_content(&doc_content)
+            .unwrap();
 
         let got = {
             let mut action = CreateDocument::new(&transport, "/foo", &doc_content).with_document_id("bar");
@@ -118,10 +136,15 @@ mod tests {
     fn handle_response_created() {
 
         let response = JsonResponseBuilder::new(StatusCode::Created)
-            .with_json_content_raw(r#"{"ok":true, "id": "foo", "rev": "1-1234567890abcdef1234567890abcdef"}"#)
+            .with_json_content_raw(
+                r#"{"ok":true, "id": "foo", "rev": "1-1234567890abcdef1234567890abcdef"}"#,
+            )
             .unwrap();
 
-        let expected = (DocumentId::from("foo"), Revision::parse("1-1234567890abcdef1234567890abcdef").unwrap());
+        let expected = (
+            DocumentId::from("foo"),
+            Revision::parse("1-1234567890abcdef1234567890abcdef").unwrap(),
+        );
         let got = super::handle_response(response).unwrap();
         assert_eq!(expected, got);
     }
@@ -130,13 +153,14 @@ mod tests {
     fn take_response_conflict() {
 
         let response = JsonResponseBuilder::new(StatusCode::Conflict)
-            .with_json_content_raw(r#"{"error":"conflict","reason":"Document update conflict."}"#)
+            .with_json_content_raw(
+                r#"{"error":"conflict","reason":"Document update conflict."}"#,
+            )
             .unwrap();
 
         match super::handle_response(response) {
-            Err(Error::DocumentConflict(ref error_response)) if error_response.error() == "conflict" &&
-                                                                error_response.reason() ==
-                                                                "Document update conflict." => (),
+            Err(Error::DocumentConflict(ref error_response))
+                if error_response.error() == "conflict" && error_response.reason() == "Document update conflict." => (),
             x @ _ => unexpected_result!(x),
         }
     }
@@ -145,12 +169,15 @@ mod tests {
     fn take_response_unauthorized() {
 
         let response = JsonResponseBuilder::new(StatusCode::Unauthorized)
-            .with_json_content_raw(r#"{"error":"unauthorized","reason":"Authentication required."}"#)
+            .with_json_content_raw(
+                r#"{"error":"unauthorized","reason":"Authentication required."}"#,
+            )
             .unwrap();
 
         match super::handle_response(response) {
-            Err(Error::Unauthorized(ref error_response)) if error_response.error() == "unauthorized" &&
-                                                            error_response.reason() == "Authentication required." => (),
+            Err(Error::Unauthorized(ref error_response))
+                if error_response.error() == "unauthorized" && error_response.reason() == "Authentication required." =>
+                (),
             x @ _ => unexpected_result!(x),
         }
     }

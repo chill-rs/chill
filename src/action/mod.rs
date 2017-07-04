@@ -63,7 +63,8 @@ pub mod query_keys {
 
     define_query_key!(EndKeyQueryKey, "endkey");
     impl<T> transport::AsQueryValueFallible<EndKeyQueryKey> for T
-        where T: serde::Serialize
+    where
+        T: serde::Serialize,
     {
         type Value = String;
         fn as_query_value_fallible(&self) -> Result<Self::Value, Error> {
@@ -100,7 +101,8 @@ pub mod query_keys {
 
     define_query_key!(StartKeyQueryKey, "startkey");
     impl<T> transport::AsQueryValueFallible<StartKeyQueryKey> for T
-        where T: serde::Serialize
+    where
+        T: serde::Serialize,
     {
         type Value = String;
         fn as_query_value_fallible(&self) -> Result<Self::Value, Error> {

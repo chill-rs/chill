@@ -1,14 +1,14 @@
 #[cfg(test)]
 mod testing;
 
-use {Error, hyper, serde, serde_json, std, url};
-use error::TransportErrorKind;
-use std::io::prelude::*;
 
 #[cfg(test)]
 pub use self::testing::{JsonResponseBuilder, MockTransport};
+use {Error, hyper, serde, serde_json, std, url};
+use error::TransportErrorKind;
 pub use hyper::method::Method;
 pub use hyper::status::StatusCode;
+use std::io::prelude::*;
 
 pub trait AsQueryKey {
     type Key: AsRef<str>;
@@ -50,43 +50,59 @@ impl Request {
     }
 
     pub fn with_json_content<C: serde::Serialize>(mut self, content: &C) -> Result<Self, Error> {
-        self.headers.set(hyper::header::ContentType(mime!(Application / Json)));
-        self.body = try!(serde_json::to_vec(content).map_err(|e| Error::JsonEncode { cause: e }));
+        self.headers.set(hyper::header::ContentType(
+            mime!(Application / Json),
+        ));
+        self.body = try!(serde_json::to_vec(content).map_err(|e| {
+            Error::JsonEncode { cause: e }
+        }));
         Ok(self)
     }
 
     pub fn with_query<K, V>(mut self, key: K, value: &V) -> Self
-        where K: AsQueryKey,
-              V: AsQueryValue<K>
+    where
+        K: AsQueryKey,
+        V: AsQueryValue<K>,
     {
-        self.url.query_pairs_mut().append_pair(key.as_query_key().as_ref(), value.as_query_value().as_ref());
+        self.url.query_pairs_mut().append_pair(
+            key.as_query_key().as_ref(),
+            value.as_query_value().as_ref(),
+        );
         self
     }
 
     pub fn with_query_fallible<K, V>(mut self, key: K, value: &V) -> Result<Self, Error>
-        where K: AsQueryKey,
-              V: AsQueryValueFallible<K>
+    where
+        K: AsQueryKey,
+        V: AsQueryValueFallible<K>,
     {
-        self.url.query_pairs_mut().append_pair(key.as_query_key().as_ref(),
-                                               try!(value.as_query_value_fallible()).as_ref());
+        self.url.query_pairs_mut().append_pair(
+            key.as_query_key().as_ref(),
+            try!(value.as_query_value_fallible()).as_ref(),
+        );
         Ok(self)
     }
 
     #[cfg(test)]
     pub fn with_query_literal<K, V>(mut self, key: K, value: V) -> Self
-        where K: AsRef<str>,
-              V: AsRef<str>
+    where
+        K: AsRef<str>,
+        V: AsRef<str>,
     {
-        self.url.query_pairs_mut().append_pair(key.as_ref(), value.as_ref());
+        self.url.query_pairs_mut().append_pair(
+            key.as_ref(),
+            value.as_ref(),
+        );
         self
     }
 }
 
 pub trait ResponseHandler<T> {
-    fn handle_response_status_and_headers(&mut self,
-                                          status_code: StatusCode,
-                                          headers: ResponseHeaders)
-                                          -> Result<(), Error>;
+    fn handle_response_status_and_headers(
+        &mut self,
+        status_code: StatusCode,
+        headers: ResponseHeaders,
+    ) -> Result<(), Error>;
     fn handle_response_content(&mut self, content: Vec<u8>) -> Result<(), Error>;
     fn handle_response_eof(self) -> Result<T, Error>;
 }
@@ -96,7 +112,8 @@ pub trait JsonResponseHandler<T> {
 }
 
 impl<F, T> JsonResponseHandler<T> for F
-    where F: FnOnce(JsonResponse) -> Result<T, Error>
+where
+    F: FnOnce(JsonResponse) -> Result<T, Error>,
 {
     fn handle_json_response(self, response: JsonResponse) -> Result<T, Error> {
         self(response)
@@ -104,7 +121,8 @@ impl<F, T> JsonResponseHandler<T> for F
 }
 
 pub struct JsonResponseDecoder<H, T>
-    where H: JsonResponseHandler<T>
+where
+    H: JsonResponseHandler<T>,
 {
     handler: H,
     status_code: StatusCode,
@@ -114,7 +132,8 @@ pub struct JsonResponseDecoder<H, T>
 }
 
 impl<H, T> JsonResponseDecoder<H, T>
-    where H: JsonResponseHandler<T>
+where
+    H: JsonResponseHandler<T>,
 {
     pub fn new(handler: H) -> Self {
         JsonResponseDecoder {
@@ -128,12 +147,14 @@ impl<H, T> JsonResponseDecoder<H, T>
 }
 
 impl<H, T> ResponseHandler<T> for JsonResponseDecoder<H, T>
-    where H: JsonResponseHandler<T>
+where
+    H: JsonResponseHandler<T>,
 {
-    fn handle_response_status_and_headers(&mut self,
-                                          status_code: StatusCode,
-                                          mut headers: ResponseHeaders)
-                                          -> Result<(), Error> {
+    fn handle_response_status_and_headers(
+        &mut self,
+        status_code: StatusCode,
+        mut headers: ResponseHeaders,
+    ) -> Result<(), Error> {
 
         try!(headers.extract_content_type_as_json());
 
@@ -213,20 +234,26 @@ impl JsonResponse {
 }
 
 pub trait Transport {
-    fn send<H, T>(&self, request: Request, response_handler: H) -> Result<T, Error> where H: ResponseHandler<T>;
+    fn send<H, T>(&self, request: Request, response_handler: H) -> Result<T, Error>
+    where
+        H: ResponseHandler<T>;
     fn send_async<H, A, T, U>(&self, request: Request, response_handler: H, action_handler: A) -> Result<U, Error>
-        where A: AsyncActionHandler<T>,
-              H: ResponseHandler<U>;
+    where
+        A: AsyncActionHandler<T>,
+        H: ResponseHandler<U>;
 
     fn make_base_url(&self) -> url::Url;
 
     fn request<P>(&self, method: hyper::method::Method, path_segments: P) -> Request
-        where P: IntoIterator,
-              P::Item: AsRef<str>
+    where
+        P: IntoIterator,
+        P::Item: AsRef<str>,
     {
         let url = {
             let mut u = self.make_base_url();
-            u.path_segments_mut().expect("Server URL is not cannot-be-base").extend(path_segments);
+            u.path_segments_mut()
+                .expect("Server URL is not cannot-be-base")
+                .extend(path_segments);
             u
         };
 
@@ -234,29 +261,33 @@ pub trait Transport {
     }
 
     fn delete<P>(&self, path_segments: P) -> Request
-        where P: IntoIterator,
-              P::Item: AsRef<str>
+    where
+        P: IntoIterator,
+        P::Item: AsRef<str>,
     {
         self.request(hyper::method::Method::Delete, path_segments)
     }
 
     fn get<P>(&self, path_segments: P) -> Request
-        where P: IntoIterator,
-              P::Item: AsRef<str>
+    where
+        P: IntoIterator,
+        P::Item: AsRef<str>,
     {
         self.request(hyper::method::Method::Get, path_segments)
     }
 
     fn post<P>(&self, path_segments: P) -> Request
-        where P: IntoIterator,
-              P::Item: AsRef<str>
+    where
+        P: IntoIterator,
+        P::Item: AsRef<str>,
     {
         self.request(hyper::method::Method::Post, path_segments)
     }
 
     fn put<P>(&self, path_segments: P) -> Request
-        where P: IntoIterator,
-              P::Item: AsRef<str>
+    where
+        P: IntoIterator,
+        P::Item: AsRef<str>,
     {
         self.request(hyper::method::Method::Put, path_segments)
     }
@@ -267,7 +298,8 @@ pub trait AsyncActionHandler<T> {
 }
 
 impl<F, T> AsyncActionHandler<T> for F
-    where F: FnOnce(Result<T, Error>)
+where
+    F: FnOnce(Result<T, Error>),
 {
     fn handle(self, result: Result<T, Error>) {
         self(result)
@@ -291,7 +323,8 @@ impl HyperTransport {
 
 impl Transport for HyperTransport {
     fn send<H, T>(&self, request: Request, mut response_handler: H) -> Result<T, Error>
-        where H: ResponseHandler<T>
+    where
+        H: ResponseHandler<T>,
     {
         let mut response = {
             let requester = self.hyper_client
@@ -304,12 +337,17 @@ impl Transport for HyperTransport {
                 requester.body(&request.body[..])
             };
 
-            try!(requester.send().map_err(|e| Error::Transport { kind: TransportErrorKind::Hyper(e) }))
+            try!(requester.send().map_err(|e| {
+                Error::Transport { kind: TransportErrorKind::Hyper(e) }
+            }))
         };
 
         let headers = std::mem::replace(&mut response.headers, hyper::header::Headers::new());
         let headers = ResponseHeaders::from(headers);
-        try!(response_handler.handle_response_status_and_headers(response.status, headers));
+        try!(response_handler.handle_response_status_and_headers(
+            response.status,
+            headers,
+        ));
 
         let mut body = Vec::new();
         try!(response.read_to_end(&mut body).map_err(|e| {
@@ -324,8 +362,9 @@ impl Transport for HyperTransport {
     }
 
     fn send_async<H, A, T, U>(&self, _request: Request, _response_handler: H, _action_handler: A) -> Result<U, Error>
-        where A: AsyncActionHandler<T>,
-              H: ResponseHandler<U>
+    where
+        A: AsyncActionHandler<T>,
+        H: ResponseHandler<U>,
     {
         unimplemented!();
     }

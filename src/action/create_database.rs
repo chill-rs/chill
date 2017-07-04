@@ -16,12 +16,18 @@ impl<'a, P: IntoDatabasePath, T: Transport + 'a> CreateDatabase<'a, T, P> {
     }
 
     pub fn run(mut self) -> Result<(), Error> {
-        self.transport.send(try!(self.make_request()),
-                            JsonResponseDecoder::new(handle_response))
+        self.transport.send(
+            try!(self.make_request()),
+            JsonResponseDecoder::new(handle_response),
+        )
     }
 
     fn make_request(&mut self) -> Result<Request, Error> {
-        let db_path = try!(std::mem::replace(&mut self.db_path, None).unwrap().into_database_path());
+        let db_path = try!(
+            std::mem::replace(&mut self.db_path, None)
+                .unwrap()
+                .into_database_path()
+        );
         Ok(self.transport.put(db_path.iter()).with_accept_json())
     }
 }
@@ -38,8 +44,8 @@ fn handle_response(response: JsonResponse) -> Result<(), Error> {
 #[cfg(test)]
 mod tests {
 
-    use Error;
     use super::*;
+    use Error;
     use transport::{JsonResponseBuilder, MockTransport, StatusCode, Transport};
 
     #[test]
@@ -66,12 +72,15 @@ mod tests {
     #[test]
     fn handle_response_precondition_failed() {
         let response = JsonResponseBuilder::new(StatusCode::PreconditionFailed)
-            .with_json_content_raw(r#"{"error":"file_exists","reason":"The database could not be created, the file already exists."}"#)
+            .with_json_content_raw(
+                r#"{"error":"file_exists","reason":"The database could not be created, the file already exists."}"#,
+            )
             .unwrap();
         match super::handle_response(response) {
-            Err(Error::DatabaseExists(ref error_response)) if error_response.error() == "file_exists" &&
-                                                              error_response.reason() ==
-                                                              "The database could not be created, the file \
+            Err(Error::DatabaseExists(ref error_response))
+                if error_response.error() == "file_exists" &&
+                       error_response.reason() ==
+                           "The database could not be created, the file \
                                                                already exists." => (),
             x @ _ => unexpected_result!(x),
         }
@@ -80,11 +89,14 @@ mod tests {
     #[test]
     fn handle_response_unauthorized() {
         let response = JsonResponseBuilder::new(StatusCode::Unauthorized)
-            .with_json_content_raw(r#"{"error": "unauthorized", "reason": "Authentication required."}"#)
+            .with_json_content_raw(
+                r#"{"error": "unauthorized", "reason": "Authentication required."}"#,
+            )
             .unwrap();
         match super::handle_response(response) {
-            Err(Error::Unauthorized(ref error_response)) if error_response.error() == "unauthorized" &&
-                                                            error_response.reason() == "Authentication required." => (),
+            Err(Error::Unauthorized(ref error_response))
+                if error_response.error() == "unauthorized" && error_response.reason() == "Authentication required." =>
+                (),
             x @ _ => unexpected_result!(x),
         }
     }

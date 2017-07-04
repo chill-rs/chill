@@ -4,14 +4,16 @@ use document::WriteDocumentResponse;
 use transport::{JsonResponse, JsonResponseDecoder, Request, StatusCode, Transport};
 
 pub struct UpdateDocument<'a, T>
-    where T: Transport + 'a
+where
+    T: Transport + 'a,
 {
     transport: &'a T,
     doc: &'a Document,
 }
 
 impl<'a, T> UpdateDocument<'a, T>
-    where T: Transport + 'a
+where
+    T: Transport + 'a,
 {
     #[doc(hidden)]
     pub fn new(transport: &'a T, doc: &'a Document) -> Self {
@@ -22,8 +24,10 @@ impl<'a, T> UpdateDocument<'a, T>
     }
 
     pub fn run(mut self) -> Result<Revision, Error> {
-        self.transport.send(try!(self.make_request()),
-                            JsonResponseDecoder::new(handle_response))
+        self.transport.send(
+            try!(self.make_request()),
+            JsonResponseDecoder::new(handle_response),
+        )
     }
 
     fn make_request(&mut self) -> Result<Request, Error> {
@@ -51,8 +55,8 @@ fn handle_response(response: JsonResponse) -> Result<Revision, Error> {
 #[cfg(test)]
 mod tests {
 
-    use {Error, Revision, serde_json};
     use super::*;
+    use {Error, Revision, serde_json};
     use document::DocumentBuilder;
     use transport::{JsonResponseBuilder, MockTransport, StatusCode, Transport};
 
@@ -61,12 +65,10 @@ mod tests {
 
         let transport = MockTransport::new();
 
-        let doc = DocumentBuilder::new("/foo/bar",
-                                       Revision::parse("1-1234567890abcdef1234567890abcdef").unwrap())
-            .build_content(|x| {
-                x.insert("field_1", 42)
-                    .insert("field_2", "hello")
-            })
+        let doc = DocumentBuilder::new(
+            "/foo/bar",
+            Revision::parse("1-1234567890abcdef1234567890abcdef").unwrap(),
+        ).build_content(|x| x.insert("field_1", 42).insert("field_2", "hello"))
             .unwrap();
 
         let request_content = serde_json::builder::ObjectBuilder::new()
@@ -74,7 +76,8 @@ mod tests {
             .insert("field_2", "hello")
             .build();
 
-        let expected = transport.put(vec!["foo", "bar"])
+        let expected = transport
+            .put(vec!["foo", "bar"])
             .with_accept_json()
             .with_query_literal("rev", "1-1234567890abcdef1234567890abcdef")
             .with_json_content(&request_content)
@@ -92,7 +95,9 @@ mod tests {
     fn handle_response_created() {
 
         let response = JsonResponseBuilder::new(StatusCode::Created)
-            .with_json_content_raw(r#"{"ok":true,"id":"bar","rev":"1-1234567890abcdef1234567890abcdef"}"#)
+            .with_json_content_raw(
+                r#"{"ok":true,"id":"bar","rev":"1-1234567890abcdef1234567890abcdef"}"#,
+            )
             .unwrap();
 
         let expected = Revision::parse("1-1234567890abcdef1234567890abcdef").unwrap();
@@ -104,13 +109,14 @@ mod tests {
     fn handle_response_conflict() {
 
         let response = JsonResponseBuilder::new(StatusCode::Conflict)
-            .with_json_content_raw(r#"{"error":"conflict","reason":"Document update conflict."}"#)
+            .with_json_content_raw(
+                r#"{"error":"conflict","reason":"Document update conflict."}"#,
+            )
             .unwrap();
 
         match super::handle_response(response) {
-            Err(Error::DocumentConflict(ref error_response)) if error_response.error() == "conflict" &&
-                                                                error_response.reason() ==
-                                                                "Document update conflict." => (),
+            Err(Error::DocumentConflict(ref error_response))
+                if error_response.error() == "conflict" && error_response.reason() == "Document update conflict." => (),
             x @ _ => unexpected_result!(x),
         }
     }
@@ -123,8 +129,8 @@ mod tests {
             .unwrap();
 
         match super::handle_response(response) {
-            Err(Error::NotFound(ref error_response)) if error_response.error() == "not_found" &&
-                                                        error_response.reason() == "no_db_file" => (),
+            Err(Error::NotFound(ref error_response))
+                if error_response.error() == "not_found" && error_response.reason() == "no_db_file" => (),
             x @ _ => unexpected_result!(x),
         }
     }
@@ -133,12 +139,15 @@ mod tests {
     fn handle_response_unauthorized() {
 
         let response = JsonResponseBuilder::new(StatusCode::Unauthorized)
-            .with_json_content_raw(r#"{"error":"unauthorized","reason":"Authentication required."}"#)
+            .with_json_content_raw(
+                r#"{"error":"unauthorized","reason":"Authentication required."}"#,
+            )
             .unwrap();
 
         match super::handle_response(response) {
-            Err(Error::Unauthorized(ref error_response)) if error_response.error() == "unauthorized" &&
-                                                            error_response.reason() == "Authentication required." => (),
+            Err(Error::Unauthorized(ref error_response))
+                if error_response.error() == "unauthorized" && error_response.reason() == "Authentication required." =>
+                (),
             x @ _ => unexpected_result!(x),
         }
     }

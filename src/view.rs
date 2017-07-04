@@ -13,7 +13,8 @@ impl ViewResponse {
     #[doc(hidden)]
     pub fn new_from_decoded(db_name: DatabaseName, decoded: ViewResponseJsonable) -> Self {
 
-        let rows = decoded.rows
+        let rows = decoded
+            .rows
             .into_iter()
             .map(|x| ViewRow::new_from_decoded(db_name.clone(), x))
             .collect();
@@ -81,8 +82,12 @@ pub struct ViewRow {
 impl ViewRow {
     fn new_from_decoded(db_name: DatabaseName, decoded: ViewRowJsonable) -> Self {
 
-        let doc = decoded.doc.map(|decodable_doc| Document::new_from_decoded(db_name.clone(), decodable_doc));
-        let doc_path = decoded.id.map(|doc_id| DocumentPath::from((db_name, doc_id)));
+        let doc = decoded.doc.map(|decodable_doc| {
+            Document::new_from_decoded(db_name.clone(), decodable_doc)
+        });
+        let doc_path = decoded.id.map(
+            |doc_id| DocumentPath::from((db_name, doc_id)),
+        );
 
         ViewRow {
             key: decoded.key,
@@ -103,7 +108,9 @@ impl ViewRow {
             None => None,
             Some(ref key) => {
                 // TODO: Optimize this to eliminate cloning and re-decoding.
-                try!(serde_json::from_value(key.clone()).map_err(|e| Error::JsonDecode { cause: e }))
+                try!(serde_json::from_value(key.clone()).map_err(|e| {
+                    Error::JsonDecode { cause: e }
+                }))
             }
         };
 
@@ -148,7 +155,8 @@ impl serde::Deserialize for ViewResponseJsonable {
 
         impl serde::Deserialize for Field {
             fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
-                where D: serde::Deserializer
+            where
+                D: serde::Deserializer,
             {
                 struct Visitor;
 
@@ -156,7 +164,8 @@ impl serde::Deserialize for ViewResponseJsonable {
                     type Value = Field;
 
                     fn visit_str<E>(&mut self, value: &str) -> Result<Self::Value, E>
-                        where E: serde::de::Error
+                    where
+                        E: serde::de::Error,
                     {
                         match value {
                             "offset" => Ok(Field::Offset),
@@ -178,7 +187,8 @@ impl serde::Deserialize for ViewResponseJsonable {
             type Value = ViewResponseJsonable;
 
             fn visit_map<Vis>(&mut self, mut visitor: Vis) -> Result<Self::Value, Vis::Error>
-                where Vis: serde::de::MapVisitor
+            where
+                Vis: serde::de::MapVisitor,
             {
                 let mut offset = None;
                 let mut rows = None;
@@ -245,7 +255,8 @@ impl serde::Deserialize for ViewRowJsonable {
 
         impl serde::Deserialize for Field {
             fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
-                where D: serde::Deserializer
+            where
+                D: serde::Deserializer,
             {
                 struct Visitor;
 
@@ -253,7 +264,8 @@ impl serde::Deserialize for ViewRowJsonable {
                     type Value = Field;
 
                     fn visit_str<E>(&mut self, value: &str) -> Result<Self::Value, E>
-                        where E: serde::de::Error
+                    where
+                        E: serde::de::Error,
                     {
                         match value {
                             "doc" => Ok(Field::Doc),
@@ -275,7 +287,8 @@ impl serde::Deserialize for ViewRowJsonable {
             type Value = ViewRowJsonable;
 
             fn visit_map<Vis>(&mut self, mut visitor: Vis) -> Result<Self::Value, Vis::Error>
-                where Vis: serde::de::MapVisitor
+            where
+                Vis: serde::de::MapVisitor,
             {
                 let mut doc = None;
                 let mut id = None;
@@ -340,12 +353,14 @@ impl ViewResponseBuilder<IsReduced> {
             phantom: std::marker::PhantomData,
             db_name: None,
             target: ViewResponse {
-                rows: vec![ViewRow {
-                               key: None,
-                               value: serde_json::to_value(&value),
-                               doc_path: None,
-                               doc: None,
-                           }],
+                rows: vec![
+                    ViewRow {
+                        key: None,
+                        value: serde_json::to_value(&value),
+                        doc_path: None,
+                        doc: None,
+                    },
+                ],
                 ..ViewResponse::default()
             },
         }
@@ -365,13 +380,17 @@ impl ViewResponseBuilder<IsGrouped> {
         ViewResponseBuilder {
             phantom: std::marker::PhantomData,
             db_name: None,
-            target: ViewResponse { rows: Vec::new(), ..ViewResponse::default() },
+            target: ViewResponse {
+                rows: Vec::new(),
+                ..ViewResponse::default()
+            },
         }
     }
 
     pub fn with_row<K, V>(mut self, key: K, value: V) -> Self
-        where K: serde::Serialize,
-              V: serde::Serialize
+    where
+        K: serde::Serialize,
+        V: serde::Serialize,
     {
 
         self.target.rows.push(ViewRow {
@@ -387,7 +406,8 @@ impl ViewResponseBuilder<IsGrouped> {
 
 impl ViewResponseBuilder<IsUnreduced> {
     pub fn new_unreduced<D>(db_name: D, total_rows: u64, offset: u64) -> Self
-        where D: Into<DatabaseName>
+    where
+        D: Into<DatabaseName>,
     {
         ViewResponseBuilder {
             phantom: std::marker::PhantomData,
@@ -402,14 +422,17 @@ impl ViewResponseBuilder<IsUnreduced> {
     }
 
     pub fn with_row<D, K, V>(mut self, doc_id: D, key: K, value: V) -> Self
-        where D: Into<DocumentId>,
-              K: serde::Serialize,
-              V: serde::Serialize
+    where
+        D: Into<DocumentId>,
+        K: serde::Serialize,
+        V: serde::Serialize,
     {
         self.target.rows.push(ViewRow {
             key: Some(serde_json::to_value(&key)),
             value: serde_json::to_value(&value),
-            doc_path: Some(DocumentPath::from((self.db_name.as_ref().unwrap().clone(), doc_id.into()))),
+            doc_path: Some(DocumentPath::from(
+                (self.db_name.as_ref().unwrap().clone(), doc_id.into()),
+            )),
             doc: None,
         });
 
@@ -417,14 +440,17 @@ impl ViewResponseBuilder<IsUnreduced> {
     }
 
     pub fn with_row_with_document<D, K, V>(mut self, doc_id: D, key: K, value: V, doc: Document) -> Self
-        where D: Into<DocumentId>,
-              K: serde::Serialize,
-              V: serde::Serialize
+    where
+        D: Into<DocumentId>,
+        K: serde::Serialize,
+        V: serde::Serialize,
     {
         self.target.rows.push(ViewRow {
             key: Some(serde_json::to_value(&key)),
             value: serde_json::to_value(&value),
-            doc_path: Some(DocumentPath::from((self.db_name.as_ref().unwrap().clone(), doc_id.into()))),
+            doc_path: Some(DocumentPath::from(
+                (self.db_name.as_ref().unwrap().clone(), doc_id.into()),
+            )),
             doc: Some(doc),
         });
 
@@ -605,12 +631,14 @@ mod tests {
             total_rows: None,
             offset: None,
             update_seq: None,
-            rows: vec![ViewRowJsonable {
-                           id: None,
-                           key: None,
-                           value: serde_json::Value::U64(42),
-                           doc: None,
-                       }],
+            rows: vec![
+                ViewRowJsonable {
+                    id: None,
+                    key: None,
+                    value: serde_json::Value::U64(42),
+                    doc: None,
+                },
+            ],
         };
 
         let json_text = r#"{"rows": [
@@ -628,12 +656,14 @@ mod tests {
             total_rows: None,
             offset: None,
             update_seq: Some(17),
-            rows: vec![ViewRowJsonable {
-                           id: None,
-                           key: None,
-                           value: serde_json::Value::U64(42),
-                           doc: None,
-                       }],
+            rows: vec![
+                ViewRowJsonable {
+                    id: None,
+                    key: None,
+                    value: serde_json::Value::U64(42),
+                    doc: None,
+                },
+            ],
         };
 
         let json_text = r#"{"update_seq": 17, "rows": [
@@ -651,33 +681,41 @@ mod tests {
             total_rows: None,
             offset: None,
             update_seq: None,
-            rows: vec![ViewRowJsonable {
-                           id: None,
-                           key: Some(serde_json::builder::ArrayBuilder::new()
-                               .push(1)
-                               .push(2)
-                               .build()),
-                           value: serde_json::Value::U64(42),
-                           doc: None,
-                       },
-                       ViewRowJsonable {
-                           id: None,
-                           key: Some(serde_json::builder::ArrayBuilder::new()
-                               .push(1)
-                               .push(3)
-                               .build()),
-                           value: serde_json::Value::U64(43),
-                           doc: None,
-                       },
-                       ViewRowJsonable {
-                           id: None,
-                           key: Some(serde_json::builder::ArrayBuilder::new()
-                               .push(2)
-                               .push(3)
-                               .build()),
-                           value: serde_json::Value::U64(44),
-                           doc: None,
-                       }],
+            rows: vec![
+                ViewRowJsonable {
+                    id: None,
+                    key: Some(
+                        serde_json::builder::ArrayBuilder::new()
+                            .push(1)
+                            .push(2)
+                            .build()
+                    ),
+                    value: serde_json::Value::U64(42),
+                    doc: None,
+                },
+                ViewRowJsonable {
+                    id: None,
+                    key: Some(
+                        serde_json::builder::ArrayBuilder::new()
+                            .push(1)
+                            .push(3)
+                            .build()
+                    ),
+                    value: serde_json::Value::U64(43),
+                    doc: None,
+                },
+                ViewRowJsonable {
+                    id: None,
+                    key: Some(
+                        serde_json::builder::ArrayBuilder::new()
+                            .push(2)
+                            .push(3)
+                            .build()
+                    ),
+                    value: serde_json::Value::U64(44),
+                    doc: None,
+                },
+            ],
         };
 
         let json_text = r#"{"rows":[
@@ -697,18 +735,19 @@ mod tests {
             total_rows: Some(10),
             offset: Some(5),
             update_seq: None,
-            rows: vec![ViewRowJsonable {
-                           id: Some(DocumentId::from("foo")),
-                           key: Some(serde_json::Value::String(String::from("bar"))),
-                           value: serde_json::Value::U64(42),
-            doc: None,
-                       },
-                       ViewRowJsonable {
-                           id: Some(DocumentId::from("qux")),
-                           key: Some(serde_json::Value::String(String::from("baz"))),
-                           value: serde_json::Value::U64(17),
-            doc: None,
-                       },
+            rows: vec![
+                ViewRowJsonable {
+                    id: Some(DocumentId::from("foo")),
+                    key: Some(serde_json::Value::String(String::from("bar"))),
+                    value: serde_json::Value::U64(42),
+                    doc: None,
+                },
+                ViewRowJsonable {
+                    id: Some(DocumentId::from("qux")),
+                    key: Some(serde_json::Value::String(String::from("baz"))),
+                    value: serde_json::Value::U64(17),
+                    doc: None,
+                },
             ],
         };
 
@@ -728,12 +767,14 @@ mod tests {
             total_rows: Some(10),
             offset: Some(5),
             update_seq: Some(17),
-            rows: vec![ViewRowJsonable {
-                           id: Some(DocumentId::from("foo")),
-                           key: Some(serde_json::Value::String(String::from("bar"))),
-                           value: serde_json::Value::U64(42),
-                           doc: None,
-                       }],
+            rows: vec![
+                ViewRowJsonable {
+                    id: Some(DocumentId::from("foo")),
+                    key: Some(serde_json::Value::String(String::from("bar"))),
+                    value: serde_json::Value::U64(42),
+                    doc: None,
+                },
+            ],
         };
 
         let json_text = r#"{"total_rows": 10, "offset": 5, "update_seq": 17, "rows": [
@@ -751,15 +792,19 @@ mod tests {
             total_rows: None,
             offset: None,
             update_seq: Some(99),
-            rows: vec![ViewRow {
-                           key: None,
-                           value: serde_json::Value::U64(42),
-                           doc_path: None,
-                           doc: None,
-                       }],
+            rows: vec![
+                ViewRow {
+                    key: None,
+                    value: serde_json::Value::U64(42),
+                    doc_path: None,
+                    doc: None,
+                },
+            ],
         };
 
-        let got = ViewResponseBuilder::new_reduced(42).with_update_sequence_number(99).unwrap();
+        let got = ViewResponseBuilder::new_reduced(42)
+            .with_update_sequence_number(99)
+            .unwrap();
         assert_eq!(expected, got);
     }
 
@@ -773,7 +818,9 @@ mod tests {
             rows: Vec::new(),
         };
 
-        let got = ViewResponseBuilder::new_reduced_empty().with_update_sequence_number(99).unwrap();
+        let got = ViewResponseBuilder::new_reduced_empty()
+            .with_update_sequence_number(99)
+            .unwrap();
         assert_eq!(expected, got);
     }
 
@@ -784,18 +831,20 @@ mod tests {
             total_rows: None,
             offset: None,
             update_seq: Some(99),
-            rows: vec![ViewRow {
-                           key: Some(serde_json::Value::Array(vec![serde_json::Value::U64(1)])),
-                           value: serde_json::Value::String(String::from("alpha")),
-                           doc_path: None,
-                           doc: None,
-                       },
-                       ViewRow {
-                           key: Some(serde_json::Value::Array(vec![serde_json::Value::U64(2)])),
-                           value: serde_json::Value::String(String::from("bravo")),
-                           doc_path: None,
-                           doc: None,
-                       }],
+            rows: vec![
+                ViewRow {
+                    key: Some(serde_json::Value::Array(vec![serde_json::Value::U64(1)])),
+                    value: serde_json::Value::String(String::from("alpha")),
+                    doc_path: None,
+                    doc: None,
+                },
+                ViewRow {
+                    key: Some(serde_json::Value::Array(vec![serde_json::Value::U64(2)])),
+                    value: serde_json::Value::String(String::from("bravo")),
+                    doc_path: None,
+                    doc: None,
+                },
+            ],
         };
 
         let got = ViewResponseBuilder::new_grouped()
@@ -814,18 +863,20 @@ mod tests {
             total_rows: Some(42),
             offset: Some(17),
             update_seq: Some(99),
-            rows: vec![ViewRow {
-                           key: Some(serde_json::Value::U64(1)),
-                           value: serde_json::Value::String(String::from("bravo")),
-                           doc_path: Some("/db/alpha".into_document_path().unwrap()),
-                           doc: None,
-                       },
-                       ViewRow {
-                           key: Some(serde_json::Value::U64(2)),
-                           value: serde_json::Value::String(String::from("delta")),
-                           doc_path: Some("/db/charlie".into_document_path().unwrap()),
-                           doc: None,
-                       }],
+            rows: vec![
+                ViewRow {
+                    key: Some(serde_json::Value::U64(1)),
+                    value: serde_json::Value::String(String::from("bravo")),
+                    doc_path: Some("/db/alpha".into_document_path().unwrap()),
+                    doc: None,
+                },
+                ViewRow {
+                    key: Some(serde_json::Value::U64(2)),
+                    value: serde_json::Value::String(String::from("delta")),
+                    doc_path: Some("/db/charlie".into_document_path().unwrap()),
+                    doc: None,
+                },
+            ],
         };
 
         let got = ViewResponseBuilder::new_unreduced("db", 42, 17)

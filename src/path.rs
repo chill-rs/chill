@@ -263,9 +263,11 @@ mod path_extractor_tests {
         nok!("/", "alpha", PathParseErrorKind::TooFewSegments);
         nok!("//", "alpha", PathParseErrorKind::BadSegment("alpha"));
         nok!("//alpha", "alpha", PathParseErrorKind::BadSegment("alpha"));
-        nok!("/alpha/bravo",
-             "bravo",
-             PathParseErrorKind::BadSegment("bravo"));
+        nok!(
+            "/alpha/bravo",
+            "bravo",
+            PathParseErrorKind::BadSegment("bravo")
+        );
     }
 }
 
@@ -459,7 +461,8 @@ impl From<LocalDocumentName> for DocumentId {
 #[doc(hidden)]
 impl serde::Serialize for DocumentId {
     fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
-        where S: serde::Serializer
+    where
+        S: serde::Serializer,
     {
         self.to_string().serialize(serializer)
     }
@@ -468,7 +471,8 @@ impl serde::Serialize for DocumentId {
 #[doc(hidden)]
 impl serde::Deserialize for DocumentId {
     fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
-        where D: serde::Deserializer
+    where
+        D: serde::Deserializer,
     {
         struct Visitor;
 
@@ -476,13 +480,15 @@ impl serde::Deserialize for DocumentId {
             type Value = DocumentId;
 
             fn visit_str<E>(&mut self, encoded: &str) -> Result<Self::Value, E>
-                where E: serde::de::Error
+            where
+                E: serde::de::Error,
             {
                 Ok(DocumentId::from(encoded))
             }
 
             fn visit_string<E>(&mut self, encoded: String) -> Result<Self::Value, E>
-                where E: serde::de::Error
+            where
+                E: serde::de::Error,
             {
                 Ok(DocumentId::from(encoded))
             }
@@ -495,8 +501,8 @@ impl serde::Deserialize for DocumentId {
 #[cfg(test)]
 mod document_id_tests {
 
-    use serde_json;
     use super::*;
+    use serde_json;
 
     #[test]
     fn from_normal() {
@@ -645,7 +651,8 @@ impl std::fmt::Display for DatabasePath {
 }
 
 impl<'a, T> From<T> for DatabasePath
-    where T: Into<DatabaseName>
+where
+    T: Into<DatabaseName>,
 {
     fn from(db_name: T) -> Self {
         DatabasePath { db_name: db_name.into() }
@@ -691,7 +698,10 @@ mod database_path_tests {
     #[test]
     fn display() {
         let expected = "/alpha%2F%25%20bravo";
-        let got = format!("{}", DatabasePath::from(DatabaseName::from("alpha/% bravo")));
+        let got = format!(
+            "{}",
+            DatabasePath::from(DatabaseName::from("alpha/% bravo"))
+        );
         assert_eq!(expected, got);
     }
 }
@@ -780,16 +790,19 @@ impl DocumentPath {
 
 impl std::fmt::Display for DocumentPath {
     fn fmt(&self, formatter: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-        write!(formatter,
-               "/{}/{}",
-               percent_encode(self.db_name.as_ref()),
-               self.doc_id.percent_encoded())
+        write!(
+            formatter,
+            "/{}/{}",
+            percent_encode(self.db_name.as_ref()),
+            self.doc_id.percent_encoded()
+        )
     }
 }
 
 impl<'a, T, U> From<(T, U)> for DocumentPath
-    where T: Into<DatabasePath>,
-          U: Into<DocumentId>
+where
+    T: Into<DatabasePath>,
+    U: Into<DocumentId>,
 {
     fn from(parts: (T, U)) -> Self {
         DocumentPath {
@@ -815,10 +828,16 @@ impl<'a> Iterator for DocumentPathIter<'a> {
         loop {
             let (next, item) = match self {
                 &mut DocumentPathIter::DatabaseName(doc_path) => {
-                    (DocumentPathIter::DocumentPrefix(doc_path), Some(doc_path.db_name.as_ref()))
+                    (
+                        DocumentPathIter::DocumentPrefix(doc_path),
+                        Some(doc_path.db_name.as_ref()),
+                    )
                 }
                 &mut DocumentPathIter::DocumentPrefix(doc_path) => {
-                    (DocumentPathIter::DocumentName(doc_path), doc_path.doc_id.prefix())
+                    (
+                        DocumentPathIter::DocumentName(doc_path),
+                        doc_path.doc_id.prefix(),
+                    )
                 }
                 &mut DocumentPathIter::DocumentName(doc_path) => {
                     (DocumentPathIter::Done, Some(doc_path.doc_id.name_as_str()))
@@ -884,8 +903,10 @@ mod document_path_tests {
     #[test]
     fn display() {
         let expected = "/alpha%2F%25%20bravo/_design/charlie%2F%25%20delta";
-        let doc_path = DocumentPath::from((DatabaseName::from("alpha/% bravo"),
-                                           DocumentId::from("_design/charlie/% delta")));
+        let doc_path = DocumentPath::from((
+            DatabaseName::from("alpha/% bravo"),
+            DocumentId::from("_design/charlie/% delta"),
+        ));
         let got = format!("{}", doc_path);
         assert_eq!(expected, got);
     }
@@ -930,8 +951,9 @@ impl IntoDocumentPath for DocumentPath {
 }
 
 impl<'a, T, U> IntoDocumentPath for (T, U)
-    where T: IntoDatabasePath,
-          U: Into<DocumentId>
+where
+    T: IntoDatabasePath,
+    U: Into<DocumentId>,
 {
     fn into_document_path(self) -> Result<DocumentPath, Error> {
         Ok(DocumentPath {
@@ -1026,17 +1048,20 @@ impl DesignDocumentPath {
 
 impl std::fmt::Display for DesignDocumentPath {
     fn fmt(&self, formatter: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-        write!(formatter,
-               "/{}/{}/{}",
-               percent_encode(self.db_name.as_ref()),
-               DESIGN_PREFIX,
-               percent_encode(self.ddoc_name.as_ref()))
+        write!(
+            formatter,
+            "/{}/{}/{}",
+            percent_encode(self.db_name.as_ref()),
+            DESIGN_PREFIX,
+            percent_encode(self.ddoc_name.as_ref())
+        )
     }
 }
 
 impl<'a, T, U> From<(T, U)> for DesignDocumentPath
-    where T: Into<DatabasePath>,
-          U: Into<DesignDocumentName>
+where
+    T: Into<DatabasePath>,
+    U: Into<DesignDocumentName>,
 {
     fn from(parts: (T, U)) -> Self {
         DesignDocumentPath {
@@ -1061,10 +1086,16 @@ impl<'a> Iterator for DesignDocumentPathIter<'a> {
 
         let (next, item) = match self {
             &mut DesignDocumentPathIter::DatabaseName(doc_path) => {
-                (DesignDocumentPathIter::DocumentPrefix(doc_path), doc_path.db_name.as_ref())
+                (
+                    DesignDocumentPathIter::DocumentPrefix(doc_path),
+                    doc_path.db_name.as_ref(),
+                )
             }
             &mut DesignDocumentPathIter::DocumentPrefix(doc_path) => {
-                (DesignDocumentPathIter::DocumentName(doc_path), DESIGN_PREFIX)
+                (
+                    DesignDocumentPathIter::DocumentName(doc_path),
+                    DESIGN_PREFIX,
+                )
             }
             &mut DesignDocumentPathIter::DocumentName(doc_path) => {
                 (DesignDocumentPathIter::Done, doc_path.ddoc_name.as_ref())
@@ -1101,8 +1132,10 @@ mod design_document_path_tests {
     #[test]
     fn display() {
         let expected = "/alpha%2F%25%20bravo/_design/charlie%2F%25%20delta";
-        let ddoc_path = DesignDocumentPath::from((DatabaseName::from("alpha/% bravo"),
-                                                  DesignDocumentName::from("charlie/% delta")));
+        let ddoc_path = DesignDocumentPath::from((
+            DatabaseName::from("alpha/% bravo"),
+            DesignDocumentName::from("charlie/% delta"),
+        ));
         let got = format!("{}", ddoc_path);
         assert_eq!(expected, got);
     }
@@ -1135,8 +1168,9 @@ impl IntoDesignDocumentPath for DesignDocumentPath {
 }
 
 impl<'a, T, U> IntoDesignDocumentPath for (T, U)
-    where T: IntoDatabasePath,
-          U: Into<DesignDocumentName>
+where
+    T: IntoDatabasePath,
+    U: Into<DesignDocumentName>,
 {
     fn into_design_document_path(self) -> Result<DesignDocumentPath, Error> {
         Ok(DesignDocumentPath {
@@ -1180,18 +1214,24 @@ mod into_design_document_path_tests {
         nok!("", PathParseErrorKind::NoLeadingSlash);
         nok!("alpha/_design/bravo", PathParseErrorKind::NoLeadingSlash);
         nok!("//alpha/_design/bravo", PathParseErrorKind::EmptySegment);
-        nok!("/alpha//_design/bravo",
-             PathParseErrorKind::BadSegment(DESIGN_PREFIX));
+        nok!(
+            "/alpha//_design/bravo",
+            PathParseErrorKind::BadSegment(DESIGN_PREFIX)
+        );
         nok!("/alpha/_design//bravo", PathParseErrorKind::EmptySegment);
         nok!("/alpha/_design/bravo/", PathParseErrorKind::TrailingSlash);
         nok!("/", PathParseErrorKind::TooFewSegments);
         nok!("/alpha", PathParseErrorKind::TooFewSegments);
-        nok!("/alpha/_local",
-             PathParseErrorKind::BadSegment(DESIGN_PREFIX));
+        nok!(
+            "/alpha/_local",
+            PathParseErrorKind::BadSegment(DESIGN_PREFIX)
+        );
         nok!("/alpha/_design", PathParseErrorKind::TooFewSegments);
         nok!("/alpha/_design/", PathParseErrorKind::TooFewSegments);
-        nok!("/alpha/_design/bravo/charlie",
-             PathParseErrorKind::TooManySegments);
+        nok!(
+            "/alpha/_design/bravo/charlie",
+            PathParseErrorKind::TooManySegments
+        );
     }
 }
 
@@ -1223,17 +1263,20 @@ impl AttachmentPath {
 
 impl std::fmt::Display for AttachmentPath {
     fn fmt(&self, formatter: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-        write!(formatter,
-               "/{}/{}/{}",
-               percent_encode(self.db_name.as_ref()),
-               self.doc_id.percent_encoded(),
-               percent_encode(self.att_name.as_ref()))
+        write!(
+            formatter,
+            "/{}/{}/{}",
+            percent_encode(self.db_name.as_ref()),
+            self.doc_id.percent_encoded(),
+            percent_encode(self.att_name.as_ref())
+        )
     }
 }
 
 impl<'a, T, U> From<(T, U)> for AttachmentPath
-    where T: Into<DocumentPath>,
-          U: Into<AttachmentName>
+where
+    T: Into<DocumentPath>,
+    U: Into<AttachmentName>,
 {
     fn from(parts: (T, U)) -> Self {
         let doc_path = parts.0.into();
@@ -1246,9 +1289,10 @@ impl<'a, T, U> From<(T, U)> for AttachmentPath
 }
 
 impl<'a, T, U, V> From<(T, U, V)> for AttachmentPath
-    where T: Into<DatabasePath>,
-          U: Into<DocumentId>,
-          V: Into<AttachmentName>
+where
+    T: Into<DatabasePath>,
+    U: Into<DocumentId>,
+    V: Into<AttachmentName>,
 {
     fn from(parts: (T, U, V)) -> Self {
         AttachmentPath {
@@ -1276,13 +1320,22 @@ impl<'a> Iterator for AttachmentPathIter<'a> {
         loop {
             let (next, item) = match self {
                 &mut AttachmentPathIter::DatabaseName(att_path) => {
-                    (AttachmentPathIter::DocumentPrefix(att_path), Some(att_path.db_name.as_ref()))
+                    (
+                        AttachmentPathIter::DocumentPrefix(att_path),
+                        Some(att_path.db_name.as_ref()),
+                    )
                 }
                 &mut AttachmentPathIter::DocumentPrefix(att_path) => {
-                    (AttachmentPathIter::DocumentName(att_path), att_path.doc_id.prefix())
+                    (
+                        AttachmentPathIter::DocumentName(att_path),
+                        att_path.doc_id.prefix(),
+                    )
                 }
                 &mut AttachmentPathIter::DocumentName(att_path) => {
-                    (AttachmentPathIter::AttachmentName(att_path), Some(att_path.doc_id.name_as_str()))
+                    (
+                        AttachmentPathIter::AttachmentName(att_path),
+                        Some(att_path.doc_id.name_as_str()),
+                    )
                 }
                 &mut AttachmentPathIter::AttachmentName(att_path) => {
                     (AttachmentPathIter::Done, Some(att_path.att_name.as_ref()))
@@ -1351,9 +1404,11 @@ mod attachment_path_tests {
     #[test]
     fn display() {
         let expected = "/alpha%2F%25%20bravo/_design/charlie%2F%25%20delta/echo%2F%25%20foxtrot";
-        let att_path = AttachmentPath::from((DatabaseName::from("alpha/% bravo"),
-                                             DocumentId::from("_design/charlie/% delta"),
-                                             AttachmentName::from("echo/% foxtrot")));
+        let att_path = AttachmentPath::from((
+            DatabaseName::from("alpha/% bravo"),
+            DocumentId::from("_design/charlie/% delta"),
+            AttachmentName::from("echo/% foxtrot"),
+        ));
         let got = format!("{}", att_path);
         assert_eq!(expected, got);
     }
@@ -1400,8 +1455,9 @@ impl IntoAttachmentPath for AttachmentPath {
 }
 
 impl<'a, T, U> IntoAttachmentPath for (T, U)
-    where T: IntoDocumentPath,
-          U: Into<AttachmentName>
+where
+    T: IntoDocumentPath,
+    U: Into<AttachmentName>,
 {
     fn into_attachment_path(self) -> Result<AttachmentPath, Error> {
         let doc_path = try!(self.0.into_document_path());
@@ -1414,9 +1470,10 @@ impl<'a, T, U> IntoAttachmentPath for (T, U)
 }
 
 impl<'a, T, U, V> IntoAttachmentPath for (T, U, V)
-    where T: IntoDatabasePath,
-          U: Into<DocumentId>,
-          V: Into<AttachmentName>
+where
+    T: IntoDatabasePath,
+    U: Into<DocumentId>,
+    V: Into<AttachmentName>,
 {
     fn into_attachment_path(self) -> Result<AttachmentPath, Error> {
         Ok(AttachmentPath {
@@ -1450,7 +1507,9 @@ mod into_attachment_path_tests {
             doc_id: DocumentId::Design(DesignDocumentName::from("bravo")),
             att_name: AttachmentName::from("charlie"),
         };
-        let got = "/alpha/_design/bravo/charlie".into_attachment_path().unwrap();
+        let got = "/alpha/_design/bravo/charlie"
+            .into_attachment_path()
+            .unwrap();
         assert_eq!(expected, got);
     }
 
@@ -1461,7 +1520,9 @@ mod into_attachment_path_tests {
             doc_id: DocumentId::Local(LocalDocumentName::from("bravo")),
             att_name: AttachmentName::from("charlie"),
         };
-        let got = "/alpha/_local/bravo/charlie".into_attachment_path().unwrap();
+        let got = "/alpha/_local/bravo/charlie"
+            .into_attachment_path()
+            .unwrap();
         assert_eq!(expected, got);
     }
 
@@ -1485,8 +1546,10 @@ mod into_attachment_path_tests {
         nok!("/alpha/", PathParseErrorKind::TooFewSegments);
         nok!("/alpha/bravo/", PathParseErrorKind::TooFewSegments);
         nok!("/alpha/bravo/charlie/", PathParseErrorKind::TrailingSlash);
-        nok!("/alpha/bravo/charlie/delta",
-             PathParseErrorKind::TooManySegments);
+        nok!(
+            "/alpha/bravo/charlie/delta",
+            PathParseErrorKind::TooManySegments
+        );
         nok!("/alpha/_design", PathParseErrorKind::TooFewSegments);
         nok!("/alpha/_design/", PathParseErrorKind::TooFewSegments);
         nok!("/alpha/_design/bravo", PathParseErrorKind::TooFewSegments);
@@ -1524,18 +1587,21 @@ impl ViewPath {
 
 impl std::fmt::Display for ViewPath {
     fn fmt(&self, formatter: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-        write!(formatter,
-               "/{}/{}/{}/{}",
-               percent_encode(self.db_name.as_ref()),
-               DESIGN_PREFIX,
-               percent_encode(self.ddoc_name.as_ref()),
-               percent_encode(self.view_name.as_ref()))
+        write!(
+            formatter,
+            "/{}/{}/{}/{}",
+            percent_encode(self.db_name.as_ref()),
+            DESIGN_PREFIX,
+            percent_encode(self.ddoc_name.as_ref()),
+            percent_encode(self.view_name.as_ref())
+        )
     }
 }
 
 impl<'a, T, U> From<(T, U)> for ViewPath
-    where T: Into<DesignDocumentPath>,
-          U: Into<ViewName>
+where
+    T: Into<DesignDocumentPath>,
+    U: Into<ViewName>,
 {
     fn from(parts: (T, U)) -> Self {
         let ddoc_path = parts.0.into();
@@ -1548,9 +1614,10 @@ impl<'a, T, U> From<(T, U)> for ViewPath
 }
 
 impl<'a, T, U, V> From<(T, U, V)> for ViewPath
-    where T: Into<DatabasePath>,
-          U: Into<DesignDocumentName>,
-          V: Into<ViewName>
+where
+    T: Into<DatabasePath>,
+    U: Into<DesignDocumentName>,
+    V: Into<ViewName>,
 {
     fn from(parts: (T, U, V)) -> Self {
         ViewPath {
@@ -1578,11 +1645,17 @@ impl<'a> Iterator for ViewPathIter<'a> {
 
         let (next, item) = match self {
             &mut ViewPathIter::DatabaseName(view_path) => {
-                (ViewPathIter::DocumentPrefix(view_path), view_path.db_name.as_ref())
+                (
+                    ViewPathIter::DocumentPrefix(view_path),
+                    view_path.db_name.as_ref(),
+                )
             }
             &mut ViewPathIter::DocumentPrefix(view_path) => (ViewPathIter::DocumentName(view_path), DESIGN_PREFIX),
             &mut ViewPathIter::DocumentName(view_path) => {
-                (ViewPathIter::ViewPrefix(view_path), view_path.ddoc_name.as_ref())
+                (
+                    ViewPathIter::ViewPrefix(view_path),
+                    view_path.ddoc_name.as_ref(),
+                )
             }
             &mut ViewPathIter::ViewPrefix(view_path) => (ViewPathIter::ViewName(view_path), VIEW_PREFIX),
             &mut ViewPathIter::ViewName(view_path) => (ViewPathIter::Done, view_path.view_name.as_ref()),
@@ -1619,9 +1692,11 @@ mod view_path_tests {
     #[test]
     fn display() {
         let expected = "/alpha%2F%25%20bravo/_design/charlie%2F%25%20delta/echo%2F%25%20foxtrot";
-        let view_path = ViewPath::from((DatabaseName::from("alpha/% bravo"),
-                                        DesignDocumentName::from("charlie/% delta"),
-                                        ViewName::from("echo/% foxtrot")));
+        let view_path = ViewPath::from((
+            DatabaseName::from("alpha/% bravo"),
+            DesignDocumentName::from("charlie/% delta"),
+            ViewName::from("echo/% foxtrot"),
+        ));
         let got = format!("{}", view_path);
         assert_eq!(expected, got);
     }
@@ -1657,8 +1732,9 @@ impl IntoViewPath for ViewPath {
 }
 
 impl<'a, T, U> IntoViewPath for (T, U)
-    where T: IntoDesignDocumentPath,
-          U: Into<ViewName>
+where
+    T: IntoDesignDocumentPath,
+    U: Into<ViewName>,
 {
     fn into_view_path(self) -> Result<ViewPath, Error> {
         let ddoc_path = try!(self.0.into_design_document_path());
@@ -1671,9 +1747,10 @@ impl<'a, T, U> IntoViewPath for (T, U)
 }
 
 impl<'a, T, U, V> IntoViewPath for (T, U, V)
-    where T: IntoDatabasePath,
-          U: Into<DesignDocumentName>,
-          V: Into<ViewName>
+where
+    T: IntoDatabasePath,
+    U: Into<DesignDocumentName>,
+    V: Into<ViewName>,
 {
     fn into_view_path(self) -> Result<ViewPath, Error> {
         Ok(ViewPath {
@@ -1696,7 +1773,9 @@ mod into_view_path_tests {
             ddoc_name: DesignDocumentName::from("bravo"),
             view_name: ViewName::from("charlie"),
         };
-        let got = "/alpha/_design/bravo/_view/charlie".into_view_path().unwrap();
+        let got = "/alpha/_design/bravo/_view/charlie"
+            .into_view_path()
+            .unwrap();
         assert_eq!(expected, got);
     }
 
@@ -1724,21 +1803,37 @@ mod into_view_path_tests {
         nok!("/alpha/_design/", PathParseErrorKind::TooFewSegments);
         nok!("/alpha/_design/bravo", PathParseErrorKind::TooFewSegments);
         nok!("/alpha/_design/bravo/", PathParseErrorKind::TooFewSegments);
-        nok!("/alpha/_design/bravo/_view",
-             PathParseErrorKind::TooFewSegments);
-        nok!("/alpha/_design/bravo/_view/",
-             PathParseErrorKind::TooFewSegments);
-        nok!("/alpha/_design/bravo/_view/charlie/",
-             PathParseErrorKind::TrailingSlash);
-        nok!("/alpha/_design/bravo/_view/charlie/delta",
-             PathParseErrorKind::TooManySegments);
-        nok!("/alpha/_local/bravo/_view/charlie/",
-             PathParseErrorKind::BadSegment(DESIGN_PREFIX));
-        nok!("/alpha/bravo/_view/charlie/",
-             PathParseErrorKind::BadSegment(DESIGN_PREFIX));
-        nok!("/alpha/_design/bravo/invalid/charlie",
-             PathParseErrorKind::BadSegment(VIEW_PREFIX));
-        nok!("/alpha/_design/bravo/charlie",
-             PathParseErrorKind::BadSegment(VIEW_PREFIX));
+        nok!(
+            "/alpha/_design/bravo/_view",
+            PathParseErrorKind::TooFewSegments
+        );
+        nok!(
+            "/alpha/_design/bravo/_view/",
+            PathParseErrorKind::TooFewSegments
+        );
+        nok!(
+            "/alpha/_design/bravo/_view/charlie/",
+            PathParseErrorKind::TrailingSlash
+        );
+        nok!(
+            "/alpha/_design/bravo/_view/charlie/delta",
+            PathParseErrorKind::TooManySegments
+        );
+        nok!(
+            "/alpha/_local/bravo/_view/charlie/",
+            PathParseErrorKind::BadSegment(DESIGN_PREFIX)
+        );
+        nok!(
+            "/alpha/bravo/_view/charlie/",
+            PathParseErrorKind::BadSegment(DESIGN_PREFIX)
+        );
+        nok!(
+            "/alpha/_design/bravo/invalid/charlie",
+            PathParseErrorKind::BadSegment(VIEW_PREFIX)
+        );
+        nok!(
+            "/alpha/_design/bravo/charlie",
+            PathParseErrorKind::BadSegment(VIEW_PREFIX)
+        );
     }
 }

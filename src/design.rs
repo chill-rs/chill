@@ -62,7 +62,8 @@ impl ViewFunction {
 
 impl serde::Deserialize for ViewFunction {
     fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
-        where D: serde::Deserializer
+    where
+        D: serde::Deserializer,
     {
         enum Field {
             Map,
@@ -71,7 +72,8 @@ impl serde::Deserialize for ViewFunction {
 
         impl serde::Deserialize for Field {
             fn deserialize<D>(deserializer: &mut D) -> Result<Field, D::Error>
-                where D: serde::Deserializer
+            where
+                D: serde::Deserializer,
             {
                 struct Visitor;
 
@@ -79,7 +81,8 @@ impl serde::Deserialize for ViewFunction {
                     type Value = Field;
 
                     fn visit_str<E>(&mut self, value: &str) -> Result<Field, E>
-                        where E: serde::de::Error
+                    where
+                        E: serde::de::Error,
                     {
                         match value {
                             "map" => Ok(Field::Map),
@@ -99,7 +102,8 @@ impl serde::Deserialize for ViewFunction {
             type Value = ViewFunction;
 
             fn visit_map<V>(&mut self, mut visitor: V) -> Result<Self::Value, V::Error>
-                where V: serde::de::MapVisitor
+            where
+                V: serde::de::MapVisitor,
             {
                 let mut map = None;
                 let mut reduce = None;
@@ -140,13 +144,22 @@ impl serde::Deserialize for ViewFunction {
 
 impl serde::Serialize for ViewFunction {
     fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
-        where S: serde::Serializer
+    where
+        S: serde::Serializer,
     {
         let len = if self.reduce.is_some() { 2 } else { 1 };
         let mut state = try!(serializer.serialize_struct("ViewFunction", len));
-        try!(serializer.serialize_struct_elt(&mut state, "map", &self.map));
+        try!(serializer.serialize_struct_elt(
+            &mut state,
+            "map",
+            &self.map,
+        ));
         if let Some(ref reduce) = self.reduce {
-            try!(serializer.serialize_struct_elt(&mut state, "reduce", reduce));
+            try!(serializer.serialize_struct_elt(
+                &mut state,
+                "reduce",
+                reduce,
+            ));
         }
         serializer.serialize_struct_end(state)
     }
@@ -173,7 +186,8 @@ pub struct Design {
 
 impl serde::Deserialize for Design {
     fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
-        where D: serde::Deserializer
+    where
+        D: serde::Deserializer,
     {
         enum Field {
             Views,
@@ -181,7 +195,8 @@ impl serde::Deserialize for Design {
 
         impl serde::Deserialize for Field {
             fn deserialize<D>(deserializer: &mut D) -> Result<Field, D::Error>
-                where D: serde::Deserializer
+            where
+                D: serde::Deserializer,
             {
                 struct Visitor;
 
@@ -189,7 +204,8 @@ impl serde::Deserialize for Design {
                     type Value = Field;
 
                     fn visit_str<E>(&mut self, value: &str) -> Result<Field, E>
-                        where E: serde::de::Error
+                    where
+                        E: serde::de::Error,
                     {
                         match value {
                             "views" => Ok(Field::Views),
@@ -208,7 +224,8 @@ impl serde::Deserialize for Design {
             type Value = Design;
 
             fn visit_map<V>(&mut self, mut visitor: V) -> Result<Self::Value, V::Error>
-                where V: serde::de::MapVisitor
+            where
+                V: serde::de::MapVisitor,
             {
                 let mut views = None;
 
@@ -244,10 +261,15 @@ impl serde::Deserialize for Design {
 
 impl serde::Serialize for Design {
     fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
-        where S: serde::Serializer
+    where
+        S: serde::Serializer,
     {
         let mut state = try!(serializer.serialize_struct("Design", 1));
-        try!(serializer.serialize_struct_elt(&mut state, "views", &self.views));
+        try!(serializer.serialize_struct_elt(
+            &mut state,
+            "views",
+            &self.views,
+        ));
         serializer.serialize_struct_end(state)
     }
 }
@@ -281,7 +303,8 @@ impl DesignBuilder {
 
     /// Inserts a view into the design document content.
     pub fn insert_view<V>(mut self, view_name: V, view_function: ViewFunction) -> Self
-        where V: Into<ViewName>
+    where
+        V: Into<ViewName>,
     {
         self.inner.views.insert(view_name.into(), view_function);
         self
@@ -345,8 +368,10 @@ mod tests {
     #[test]
     fn view_function_serialize_with_reduce() {
 
-        let view_function = ViewFunction::new_with_reduce("function(doc) { emit(doc.key_thing, doc.value_thing); }",
-                                                          "_sum");
+        let view_function = ViewFunction::new_with_reduce(
+            "function(doc) { emit(doc.key_thing, doc.value_thing); }",
+            "_sum",
+        );
 
         let encoded = serde_json::to_string(&view_function).unwrap();
 
@@ -365,8 +390,10 @@ mod tests {
         let expected = ViewFunction::new("function(doc) { emit(doc.key_thing, doc.value_thing); }");
 
         let source = serde_json::builder::ObjectBuilder::new()
-            .insert("map",
-                    "function(doc) { emit(doc.key_thing, doc.value_thing); }")
+            .insert(
+                "map",
+                "function(doc) { emit(doc.key_thing, doc.value_thing); }",
+            )
             .build();
 
         let source = serde_json::to_string(&source).unwrap();
@@ -377,12 +404,16 @@ mod tests {
     #[test]
     fn view_function_deserialize_ok_with_reduce() {
 
-        let expected = ViewFunction::new_with_reduce("function(doc) { emit(doc.key_thing, doc.value_thing); }",
-                                                     "_sum");
+        let expected = ViewFunction::new_with_reduce(
+            "function(doc) { emit(doc.key_thing, doc.value_thing); }",
+            "_sum",
+        );
 
         let source = serde_json::builder::ObjectBuilder::new()
-            .insert("map",
-                    "function(doc) { emit(doc.key_thing, doc.value_thing); }")
+            .insert(
+                "map",
+                "function(doc) { emit(doc.key_thing, doc.value_thing); }",
+            )
             .insert("reduce", "_sum")
             .build();
 
@@ -407,11 +438,17 @@ mod tests {
     fn design_serialize() {
 
         let design = DesignBuilder::new()
-            .insert_view("alpha",
-                         ViewFunction::new("function(doc) { emit(doc.key_thing, doc.value_thing); }"))
-            .insert_view("bravo",
-                         ViewFunction::new_with_reduce("function(doc) { emit(doc.key_thing_2, doc.value_thing_2); }",
-                                                       "_sum"))
+            .insert_view(
+                "alpha",
+                ViewFunction::new("function(doc) { emit(doc.key_thing, doc.value_thing); }"),
+            )
+            .insert_view(
+                "bravo",
+                ViewFunction::new_with_reduce(
+                    "function(doc) { emit(doc.key_thing_2, doc.value_thing_2); }",
+                    "_sum",
+                ),
+            )
             .unwrap();
 
         let encoded = serde_json::to_string(&design).unwrap();
@@ -419,13 +456,15 @@ mod tests {
         let expected = serde_json::builder::ObjectBuilder::new()
             .insert_object("views", |x| {
                 x.insert_object("alpha", |x| {
-                        x.insert("map",
-                                 "function(doc) { emit(doc.key_thing, doc.value_thing); }")
-                    })
-                    .insert_object("bravo", |x| {
-                        x.insert("map",
-                                    "function(doc) { emit(doc.key_thing_2, doc.value_thing_2); }")
-                            .insert("reduce", "_sum")
+                    x.insert(
+                        "map",
+                        "function(doc) { emit(doc.key_thing, doc.value_thing); }",
+                    )
+                }).insert_object("bravo", |x| {
+                        x.insert(
+                            "map",
+                            "function(doc) { emit(doc.key_thing_2, doc.value_thing_2); }",
+                        ).insert("reduce", "_sum")
                     })
             })
             .build();
@@ -447,23 +486,31 @@ mod tests {
     fn design_deserialize_ok_with_views() {
 
         let expected = DesignBuilder::new()
-            .insert_view("alpha",
-                         ViewFunction::new("function(doc) { emit(doc.key_thing, doc.value_thing); }"))
-            .insert_view("bravo",
-                         ViewFunction::new_with_reduce("function(doc) { emit(doc.key_thing_2, doc.value_thing_2); }",
-                                                       "_sum"))
+            .insert_view(
+                "alpha",
+                ViewFunction::new("function(doc) { emit(doc.key_thing, doc.value_thing); }"),
+            )
+            .insert_view(
+                "bravo",
+                ViewFunction::new_with_reduce(
+                    "function(doc) { emit(doc.key_thing_2, doc.value_thing_2); }",
+                    "_sum",
+                ),
+            )
             .unwrap();
 
         let source = serde_json::builder::ObjectBuilder::new()
             .insert_object("views", |x| {
                 x.insert_object("alpha", |x| {
-                        x.insert("map",
-                                 "function(doc) { emit(doc.key_thing, doc.value_thing); }")
-                    })
-                    .insert_object("bravo", |x| {
-                        x.insert("map",
-                                    "function(doc) { emit(doc.key_thing_2, doc.value_thing_2); }")
-                            .insert("reduce", "_sum")
+                    x.insert(
+                        "map",
+                        "function(doc) { emit(doc.key_thing, doc.value_thing); }",
+                    )
+                }).insert_object("bravo", |x| {
+                        x.insert(
+                            "map",
+                            "function(doc) { emit(doc.key_thing_2, doc.value_thing_2); }",
+                        ).insert("reduce", "_sum")
                     })
             })
             .build();
