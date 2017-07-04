@@ -9,8 +9,8 @@ documentation = "https://chill-rs.github.io/chill/doc/v0.3.0/chill/"
 keywords = ["couchdb", "database", "nosql"]
 
 [dependencies]
-base64 = "0.2"
-regex = "0.1"
+base64 = "0.6.0"
+regex = "0.2.2"
 serde = "0.8"
 serde_json = "0.8"
 tempdir = "0.3"
@@ -25,5 +25,5 @@ version = "0.9"
 features = ["serde-serialization"]
 
 [dependencies.uuid]
-version = "0.3"
+version = "0.5.1"
 features = ["serde"]

@@ -103,7 +103,7 @@ impl FakeServer {
                 match re.captures(line) {
                     None => (),
                     Some(caps) => {
-                        tx.send(caps.at(1).unwrap().to_string()).unwrap();
+                        tx.send(caps.get(1).unwrap().as_str().to_owned()).unwrap();
                         break;
                     }
                 }
