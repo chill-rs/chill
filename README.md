@@ -21,8 +21,12 @@ Chill's most recent release is **v0.3.0**, available as of **2016-10-01**.
 * [v0.3.0 issues][v0_3_0_issues]
 * [v0.3.0 crates.io page][v0_3_0_crates_io]
 
-Active development is on hold and there are no definite plans for a
-future release, but pull requests will be accepted.
+The next release will be **v0.4.0** and will entail:
+
+* A much-needed refresh of dependencies, Serde v1.x perhaps being the
+  most important, and,
+* Possibly an overhaul of the API to support asynchronous I/O via the
+  Tokio model.
 
 ## License
 
