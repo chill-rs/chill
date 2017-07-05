@@ -9,21 +9,25 @@ documentation = "https://chill-rs.github.io/chill/doc/v0.3.0/chill/"
 keywords = ["couchdb", "database", "nosql"]
 
 [dependencies]
-base64 = "0.6.0"
+futures = "0.1.14"
 regex = "0.2.2"
-serde = "0.8"
-serde_json = "0.8"
-tempdir = "0.3"
-url = "1"
+reqwest = "0.6.2"
+serde = "1.0.9"
+serde_derive = "1.0.9"
+serde_json = "1.0.2"
+tempdir = "0.3.5"
+url = "1.5"
 
-[dependencies.mime]
-version = "0.2"
-features = ["serde"]
-
-[dependencies.hyper]
-version = "0.9"
-features = ["serde-serialization"]
-
-[dependencies.uuid]
-version = "0.5.1"
-features = ["serde"]
+#base64 = "0.6.0"
+#
+#[dependencies.mime]
+#version = "0.2"
+#features = ["serde"]
+#
+#[dependencies.hyper]
+#version = "0.9"
+#features = ["serde-serialization"]
+#
+#[dependencies.uuid]
+#version = "0.5.1"
+#features = ["serde"]
