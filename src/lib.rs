@@ -18,5 +18,5 @@ pub mod testing;
 mod transport;
 
 pub use client::{Client, IntoUrl};
-pub use error::{ActionError, Error};
+pub use error::Error;
 pub use nok_response::NokResponse;

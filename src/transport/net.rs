@@ -1,4 +1,4 @@
-use {ActionError, Error, futures, reqwest, std, transport, url};
+use {Error, futures, reqwest, std, transport, url};
 use futures::Future;
 use reqwest::{Method, StatusCode};
 use std::sync::Mutex;
@@ -88,10 +88,10 @@ impl transport::Request for Request {
     type Future = futures::future::AndThen<
         futures::future::MapErr<
             futures::sync::oneshot::Receiver<WorkerResult>,
-            fn(futures::sync::oneshot::Canceled) -> ActionError,
+            fn(futures::sync::oneshot::Canceled) -> Error,
         >,
-        Result<Response, ActionError>,
-        fn(WorkerResult) -> Result<Response, ActionError>,
+        Result<Response, Error>,
+        fn(WorkerResult) -> Result<Response, Error>,
     >;
 
     fn send(self) -> Self::Future {
@@ -105,16 +105,16 @@ impl transport::Request for Request {
 
         self.request_tx.send(task).unwrap();
 
-        fn f1(_: futures::sync::oneshot::Canceled) -> ActionError {
-            ActionError::Other(format!(
-                    "Worker thread canceled and did not complete the HTTP request",
-                    ))
+        fn f1(_: futures::sync::oneshot::Canceled) -> Error {
+            Error::from(
+                "Worker thread canceled and did not complete the HTTP request",
+            )
         }
 
-        fn f2(worker_result: WorkerResult) -> Result<Response, ActionError> {
+        fn f2(worker_result: WorkerResult) -> Result<Response, Error> {
             match worker_result {
                 Ok(response) => Ok(Response { status_code: *response.status() }),
-                Err(e) => Err(ActionError::Other(format!("HTTP request failed: {}", e))),
+                Err(e) => Err(Error::from(("HTTP request failed", e))),
             }
         }
 

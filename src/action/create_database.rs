@@ -1,10 +1,10 @@
-use {ActionError, futures};
+use {Error, futures};
 use futures::Future;
 use transport::{Method, Request, Response, StatusCode, Transport};
 
 /// `CreateDatabase` creates a database.
 ///
-/// The return type implements `Future<Item = (), Error = ActionError>`.
+/// The return type implements `Future<Item = (), Error = Error>`.
 ///
 #[derive(Debug)]
 pub struct CreateDatabase<'a, T: Transport + 'a> {
@@ -15,13 +15,13 @@ pub struct CreateDatabase<'a, T: Transport + 'a> {
 /// `CreateDatabaseFuture` is a future for a `CreateDatabase` action.
 ///
 /// The `CreateDatabaseFuture` type implements `Future<Item = (), Error =
-/// ActionError>`.
+/// Error>`.
 ///
 pub type CreateDatabaseFuture<T> =
     futures::future::AndThen<
         <<T as Transport>::Request as Request>::Future,
-        Result<(), ActionError>,
-        fn(<<T as Transport>::Request as Request>::Response) -> Result<(), ActionError>,
+        Result<(), Error>,
+        fn(<<T as Transport>::Request as Request>::Response) -> Result<(), Error>,
     >;
 
 impl<'a, T: Transport> CreateDatabase<'a, T> {
@@ -35,13 +35,11 @@ impl<'a, T: Transport> CreateDatabase<'a, T> {
 
     pub fn send(self) -> CreateDatabaseFuture<T> {
 
-        fn f1<T: Transport>(response: <<T as Transport>::Request as Request>::Response) -> Result<(), ActionError> {
+        fn f1<T: Transport>(response: <<T as Transport>::Request as Request>::Response) -> Result<(), Error> {
             match response.status_code() {
                 StatusCode::Created => Ok(()),
-                StatusCode::PreconditionFailed => Err(ActionError::DatabaseExists),
-                x => Err(ActionError::Other(
-                    format!("CouchDB server responded with {}", x),
-                )),
+                StatusCode::PreconditionFailed => Err(Error::DatabaseExists),
+                _ => Err(response.into_error()),
             }
         }
 
