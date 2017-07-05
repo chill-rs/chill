@@ -10,7 +10,7 @@ extern crate serde_json;
 extern crate tempdir;
 extern crate url;
 
-mod action;
+pub mod action;
 mod client;
 mod error;
 mod nok_response;
@@ -18,5 +18,5 @@ pub mod testing;
 mod transport;
 
 pub use client::{Client, IntoUrl};
-pub use error::Error;
+pub use error::{ActionError, Error};
 pub use nok_response::NokResponse;

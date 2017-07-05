@@ -2,6 +2,22 @@ use {NokResponse, std};
 use std::borrow::Cow;
 use transport::StatusCode;
 
+#[derive(Debug)]
+pub enum ActionError {
+    DatabaseExists,
+    #[doc(hidden)]
+    Other(String),
+}
+
+impl std::fmt::Display for ActionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        match self {
+            &ActionError::DatabaseExists => write!(f, "The database already exists"),
+            &ActionError::Other(ref s) => s.fmt(f),
+        }
+    }
+}
+
 /// `Error` contains information about an error either originating from or
 /// propagated by Chill.
 #[derive(Debug)]

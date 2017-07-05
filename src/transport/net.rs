@@ -1,4 +1,4 @@
-use {Error, futures, reqwest, std, transport, url};
+use {ActionError, Error, futures, reqwest, std, transport, url};
 use futures::Future;
 use reqwest::{Method, StatusCode};
 use std::sync::Mutex;
@@ -34,10 +34,9 @@ impl NetTransport {
         // HTTP with TLS. I.e., reqwest is the best HTTP client crate to use,
         // but it doesn't support asynchronous I/O.
 
-        let (request_tx, request_rx) = std::sync::mpsc::channel();
+        let (request_tx, request_rx) = std::sync::mpsc::channel::<WorkerTask>();
 
-        let worker_thread = std::thread::spawn(move || loop {
-            let task: WorkerTask = request_rx.recv().unwrap();
+        let worker_thread = std::thread::spawn(move || while let Ok(task) = request_rx.recv() {
             task.response_tx
                 .send(task.request_builder.send())
                 .unwrap_or(());
@@ -85,7 +84,17 @@ pub struct Request {
 
 impl transport::Request for Request {
     type Response = Response;
-    fn send(self) -> Box<Future<Item = Self::Response, Error = Error>> {
+
+    type Future = futures::future::AndThen<
+        futures::future::MapErr<
+            futures::sync::oneshot::Receiver<WorkerResult>,
+            fn(futures::sync::oneshot::Canceled) -> ActionError,
+        >,
+        Result<Response, ActionError>,
+        fn(WorkerResult) -> Result<Response, ActionError>,
+    >;
+
+    fn send(self) -> Self::Future {
 
         let (response_tx, response_rx) = futures::sync::oneshot::channel();
 
@@ -96,18 +105,20 @@ impl transport::Request for Request {
 
         self.request_tx.send(task).unwrap();
 
-        Box::new(
-            response_rx
-                .map_err(|_canceled| {
-                    Error::from(
-                        "Worker thread canceled and did not complete the HTTP request",
-                    )
-                })
-                .and_then(|response_result| match response_result {
-                    Ok(response) => Ok(Response { status_code: *response.status() }),
-                    Err(e) => Err(Error::from(("HTTP request failed", e))),
-                }),
-        )
+        fn f1(_: futures::sync::oneshot::Canceled) -> ActionError {
+            ActionError::Other(format!(
+                    "Worker thread canceled and did not complete the HTTP request",
+                    ))
+        }
+
+        fn f2(worker_result: WorkerResult) -> Result<Response, ActionError> {
+            match worker_result {
+                Ok(response) => Ok(Response { status_code: *response.status() }),
+                Err(e) => Err(ActionError::Other(format!("HTTP request failed: {}", e))),
+            }
+        }
+
+        response_rx.map_err(f1 as _).and_then(f2 as _)
     }
 }
 

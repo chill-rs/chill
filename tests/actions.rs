@@ -1,4 +1,7 @@
 extern crate chill;
+extern crate futures;
+
+use futures::Future;
 
 fn make_server_and_client() -> (chill::testing::FakeServer, chill::Client) {
     let server = chill::testing::FakeServer::new().unwrap();
