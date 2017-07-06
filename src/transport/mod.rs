@@ -4,6 +4,7 @@ pub use self::net::NetTransport;
 use Error;
 use futures::Future;
 pub use reqwest::{Method, StatusCode};
+use std::marker::PhantomData;
 
 pub trait Transport {
     type Request: Request;
@@ -24,6 +25,7 @@ pub trait Response {
         Error::NokResponse {
             status_code: self.status_code(),
             body: None, // FIXME: Decode JSON body.
+            _non_exhaustive: PhantomData,
         }
     }
 }

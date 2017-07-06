@@ -1,22 +1,33 @@
 use {NokResponse, std};
+use path::PathParseError;
+use revision::RevisionParseError;
 use std::borrow::Cow;
+use std::marker::PhantomData;
 use transport::StatusCode;
 
-/// `Error` contains information about an error either originating from or
-/// propagated by Chill.
+/// `Error` contains information about an error originating from or propagated
+/// by Chill.
 #[derive(Debug)]
 pub enum Error {
     /// The database already exists.
     DatabaseExists,
 
-    #[doc(hidden)]
+    /// The CouchDB server responded with an error or an unknown status.
     NokResponse {
         status_code: StatusCode,
         body: Option<NokResponse>,
+        #[doc(hidden)]
+        _non_exhaustive: PhantomData<()>,
     },
 
     #[doc(hidden)]
-    Recursive {
+    PathParse { inner: PathParseError },
+
+    #[doc(hidden)]
+    RevisionParse { inner: RevisionParseError },
+
+    #[doc(hidden)]
+    Unspecified {
         reason: Cow<'static, str>,
         cause: Option<Box<std::error::Error>>,
     },
@@ -24,26 +35,29 @@ pub enum Error {
 
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-        let d = std::error::Error::description(self);
+        let description = std::error::Error::description(self);
         match self {
-            &Error::DatabaseExists => write!(f, "{}", d),
+            &Error::DatabaseExists => write!(f, "{}", description),
             &Error::NokResponse {
                 status_code,
                 body: Some(ref body),
+                ..
             } => write!(
                 f,
                 "{} (status: {}, error: {}, reason: {:?})",
-                d,
+                description,
                 status_code,
                 body.error(),
                 body.reason()
             ),
-            &Error::NokResponse { status_code, .. } => write!(f, "{} (status: {})", d, status_code),
-            &Error::Recursive {
+            &Error::NokResponse { status_code, .. } => write!(f, "{} (status: {})", description, status_code),
+            &Error::PathParse { ref inner } => write!(f, "{}: {}", description, inner),
+            &Error::RevisionParse { ref inner } => write!(f, "{}: {}", description, inner),
+            &Error::Unspecified {
                 cause: Some(ref e),
                 ref reason,
             } => write!(f, "{}: {}", reason, e),
-            &Error::Recursive { ref reason, .. } => write!(f, "{}", reason),
+            &Error::Unspecified { ref reason, .. } => write!(f, "{}", reason),
         }
     }
 }
@@ -52,14 +66,16 @@ impl std::error::Error for Error {
     fn description(&self) -> &str {
         match self {
             &Error::DatabaseExists => "The database already exists",
-            &Error::NokResponse { .. } => "The CouchDB server responded with error",
-            &Error::Recursive { ref reason, .. } => reason.as_ref(),
+            &Error::NokResponse { .. } => "The CouchDB server responded with an error or an unknown status",
+            &Error::PathParse { .. } => "The CouchDB resource path is badly formed",
+            &Error::RevisionParse { .. } => "The CouchDB document revision is badly formed",
+            &Error::Unspecified { ref reason, .. } => reason.as_ref(),
         }
     }
 
     fn cause(&self) -> Option<&std::error::Error> {
         match self {
-            &Error::Recursive { cause: Some(ref e), .. } => Some(e.as_ref()),
+            &Error::Unspecified { cause: Some(ref e), .. } => Some(e.as_ref()),
             _ => None,
         }
     }
@@ -70,7 +86,7 @@ impl std::error::Error for Error {
 
 impl From<&'static str> for Error {
     fn from(reason: &'static str) -> Error {
-        Error::Recursive {
+        Error::Unspecified {
             reason: Cow::Borrowed(reason),
             cause: None,
         }
@@ -79,7 +95,7 @@ impl From<&'static str> for Error {
 
 impl From<String> for Error {
     fn from(reason: String) -> Error {
-        Error::Recursive {
+        Error::Unspecified {
             reason: Cow::Owned(reason),
             cause: None,
         }
@@ -92,7 +108,7 @@ where
     R: Into<Cow<'static, str>>,
 {
     fn from((reason, cause): (R, E)) -> Error {
-        Error::Recursive {
+        Error::Unspecified {
             reason: reason.into(),
             cause: Some(cause.into()),
         }
@@ -103,9 +119,21 @@ where
 // Tokio.
 impl From<std::io::Error> for Error {
     fn from(e: std::io::Error) -> Self {
-        Error::Recursive {
+        Error::Unspecified {
             reason: Cow::Borrowed("An I/O error occurred"),
             cause: Some(Box::new(e)),
         }
+    }
+}
+
+impl From<PathParseError> for Error {
+    fn from(e: PathParseError) -> Self {
+        Error::PathParse { inner: e }
+    }
+}
+
+impl From<RevisionParseError> for Error {
+    fn from(e: RevisionParseError) -> Self {
+        Error::RevisionParse { inner: e }
     }
 }

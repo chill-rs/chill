@@ -1,6 +1,6 @@
 # Chill-rs Change Log
 
-## v0.3.1 (unreleased)
+## v0.4.0 (unreleased)
 
 No changes yet!
 
