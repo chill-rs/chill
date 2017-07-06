@@ -1,6 +1,8 @@
 //! Chill is a CouchDB client-side library.
 
 extern crate futures;
+#[cfg(test)]
+extern crate hyper;
 extern crate regex;
 extern crate reqwest;
 extern crate serde;
