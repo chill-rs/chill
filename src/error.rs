@@ -1,4 +1,4 @@
-use std;
+use {std, url};
 
 /// Contains information for an error originating from or propagated by Chill.
 #[derive(Debug)]
@@ -66,10 +66,9 @@ pub enum Error {
 
     #[doc(hidden)]
     UrlNotSchemeRelative,
-
+    */
     #[doc(hidden)]
     UrlParse { cause: url::ParseError },
-    */
 }
 
 impl Error {
@@ -147,8 +146,8 @@ impl std::error::Error for Error {
             &Unauthorized(..) => "The CouchDB client has insufficient privilege",
             &UnexpectedResponse(..) => "The CouchDB server responded unexpectedly",
             &UrlNotSchemeRelative => "The URL is not scheme relative",
-            &UrlParse { .. } => "The URL is badly formatted",
             */
+            &UrlParse { .. } => "The URL is badly formatted",
         }
     }
 
@@ -175,8 +174,8 @@ impl std::error::Error for Error {
             &Unauthorized(..) => None,
             &UnexpectedResponse(..) => None,
             &UrlNotSchemeRelative => None,
-            &UrlParse { ref cause } => Some(cause),
             */
+            &UrlParse { ref cause } => Some(cause),
         }
     }
 }
@@ -184,7 +183,7 @@ impl std::error::Error for Error {
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
         use Error::*;
-        let _description = std::error::Error::description(self);
+        let description = std::error::Error::description(self);
         match self {
             /*
             &ChannelReceive {
@@ -226,8 +225,8 @@ impl std::fmt::Display for Error {
             &Unauthorized(ref error_response) => write!(f, "{}: {}", description, error_response),
             &UnexpectedResponse(sub_description) => write!(f, "{}: {}", description, sub_description),
             &UrlNotSchemeRelative => write!(f, "{}", description),
-            &UrlParse { ref cause } => write!(f, "{}: {}", description, cause),
             */
+            &UrlParse { ref cause } => write!(f, "{}: {}", description, cause),
         }
     }
 }

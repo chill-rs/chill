@@ -20,7 +20,9 @@ extern crate hyper;
 mod test_macro; // FIXME: Delete this source module.
 
 mod attachment;
+*/
 mod client;
+/*
 mod design;
 mod document;
 */
@@ -35,7 +37,10 @@ pub mod path;
 pub mod testing;
 
 pub use attachment::{Attachment, SavedAttachment, UnsavedAttachment};
-pub use client::{Client, IntoUrl};
+*/
+
+pub use client::IntoUrl;
+/*
 pub use design::{Design, DesignBuilder, ViewFunction};
 pub use document::Document;
 */

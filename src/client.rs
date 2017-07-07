@@ -1,5 +1,8 @@
+use {Error, url};
+/*
 use {Document, Error, IntoDatabasePath, IntoDocumentPath, IntoViewPath, Revision, action, serde, url};
 use transport::HyperTransport;
+*/
 
 /// Describes a type that may be converted into a URL.
 ///
@@ -28,6 +31,7 @@ impl<'a> IntoUrl for &'a String {
     }
 }
 
+/*
 /// Manages all communication with a CouchDB server.
 ///
 /// A `Client` communicates with the CouchDB server via **actions**. Each action
@@ -104,3 +108,4 @@ impl Client {
         action::ExecuteView::new(&self.transport, view_path)
     }
 }
+*/
