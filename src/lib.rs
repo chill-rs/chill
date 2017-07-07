@@ -29,7 +29,9 @@ mod transport;
 mod view;
 
 pub mod action;
+*/
 pub mod path;
+/*
 pub mod testing;
 
 pub use attachment::{Attachment, SavedAttachment, UnsavedAttachment};
@@ -42,11 +44,9 @@ pub use document::Document;
 */
 
 pub use error::{Error, ErrorResponse};
-/*
 pub use path::{AttachmentName, AttachmentPath, DatabaseName, DatabasePath, DesignDocumentName, DesignDocumentPath,
                DocumentId, DocumentPath, IntoAttachmentPath, IntoDatabasePath, IntoDesignDocumentPath,
                IntoDocumentPath, IntoViewPath, LocalDocumentName, NormalDocumentName, ViewName, ViewPath};
-*/
 pub use revision::Revision;
 /*
 pub use view::{ViewResponse, ViewRow};

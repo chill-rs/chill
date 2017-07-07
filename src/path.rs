@@ -1,7 +1,5 @@
-use Error;
+use {Error, serde, std};
 use error::PathParseErrorKind;
-use serde;
-use std;
 
 const DESIGN_PREFIX: &'static str = "_design";
 const LOCAL_PREFIX: &'static str = "_local";
@@ -124,7 +122,7 @@ mod path_extractor_tests {
             ($input:expr) => {
                 match PathExtractor::begin($input) {
                     Err(Error::PathParse(PathParseErrorKind::NoLeadingSlash)) => (),
-                    x @ _ => unexpected_result!(x),
+                    x => panic!("Got unexpected result {:?}", x),
                 }
             }
         }
@@ -153,7 +151,7 @@ mod path_extractor_tests {
 
                 match path_extractor.end() {
                     Err(Error::PathParse($expected_error_kind)) => (),
-                    x @ _ => unexpected_result!(x),
+                    x => panic!("Got unexpected result {:?}", x),
                 }
             }}
         }
@@ -195,7 +193,7 @@ mod path_extractor_tests {
 
                 match path_extractor.extract_nonempty() {
                     Err(Error::PathParse($expected_error_kind)) => (),
-                    x @ _ => unexpected_result!(x),
+                    x => panic!("Got unexpected result {:?}", x),
                 }
 
                 if $input != path_extractor.path {
@@ -244,7 +242,7 @@ mod path_extractor_tests {
 
                 match path_extractor.extract_literal($literal) {
                     Err(Error::PathParse($expected_error_kind)) => (),
-                    x @ _ => unexpected_result!(x),
+                    x => panic!("Got unexpected result {:?}", x),
                 }
 
                 if $input != path_extractor.path {
@@ -272,7 +270,7 @@ mod path_extractor_tests {
 }
 
 macro_rules! define_name_type {
-    ($type_name:ident, $arg_name:ident, #[$description:meta]) => {
+    ($type_name:ident, $arg_name:ident, $text_description:expr, #[$description:meta]) => {
 
         /// Contains
         #[$description]
@@ -318,7 +316,7 @@ macro_rules! define_name_type {
 
         #[doc(hidden)]
         impl serde::Serialize for $type_name {
-            fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
                 where S: serde::Serializer
             {
                 let s = self.to_string();
@@ -327,40 +325,44 @@ macro_rules! define_name_type {
         }
 
         #[doc(hidden)]
-        impl serde::Deserialize for $type_name {
-            fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
-                where D: serde::Deserializer
+        impl<'de> serde::Deserialize<'de> for $type_name {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+                where D: serde::Deserializer<'de>
             {
                 struct Visitor;
 
-                impl serde::de::Visitor for Visitor {
+                impl<'de> serde::de::Visitor<'de> for Visitor {
                     type Value = $type_name;
 
-                    fn visit_str<E>(&mut self, v: &str) -> Result<Self::Value, E>
+                    fn expecting(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+                        write!(f, "a string specifying {}", $text_description)
+                    }
+
+                    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
                         where E: serde::de::Error
                     {
                         Ok($type_name::from(v))
                     }
 
-                    fn visit_string<E>(&mut self, v: String) -> Result<Self::Value, E>
+                    fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
                         where E: serde::de::Error
                     {
                         Ok($type_name::from(v))
                     }
                 }
 
-                deserializer.deserialize(Visitor)
+                deserializer.deserialize_string(Visitor)
             }
         }
     }
 }
 
-define_name_type!(AttachmentName, att_name, /** an attachment */);
-define_name_type!(DatabaseName, db_name, /** a database */);
-define_name_type!(DesignDocumentName, ddoc_name, /** a design document */);
-define_name_type!(LocalDocumentName, ldoc_name, /** a local document */);
-define_name_type!(NormalDocumentName, ndoc_name, /** a normal document */);
-define_name_type!(ViewName, view_name, /** a view */);
+define_name_type!(AttachmentName, att_name, "an CouchDB attachment name", /** an attachment */);
+define_name_type!(DatabaseName, db_name, "a CouchDB database name", /** a database */);
+define_name_type!(DesignDocumentName, ddoc_name, "a CouchDB design document name", /** a design document */);
+define_name_type!(LocalDocumentName, ldoc_name, "a CouchDB local document name", /** a local document */);
+define_name_type!(NormalDocumentName, ndoc_name, "a CouchDB document name", /** a normal document */);
+define_name_type!(ViewName, view_name, "a CouchDB view name", /** a view */);
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum DocumentId {
@@ -460,7 +462,7 @@ impl From<LocalDocumentName> for DocumentId {
 
 #[doc(hidden)]
 impl serde::Serialize for DocumentId {
-    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
@@ -469,24 +471,28 @@ impl serde::Serialize for DocumentId {
 }
 
 #[doc(hidden)]
-impl serde::Deserialize for DocumentId {
-    fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
+impl<'de> serde::Deserialize<'de> for DocumentId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: serde::Deserializer,
+        D: serde::Deserializer<'de>,
     {
         struct Visitor;
 
-        impl serde::de::Visitor for Visitor {
+        impl<'de> serde::de::Visitor<'de> for Visitor {
             type Value = DocumentId;
 
-            fn visit_str<E>(&mut self, encoded: &str) -> Result<Self::Value, E>
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+                write!(f, "a string specifying a CouchDB document id")
+            }
+
+            fn visit_str<E>(self, encoded: &str) -> Result<Self::Value, E>
             where
                 E: serde::de::Error,
             {
                 Ok(DocumentId::from(encoded))
             }
 
-            fn visit_string<E>(&mut self, encoded: String) -> Result<Self::Value, E>
+            fn visit_string<E>(self, encoded: String) -> Result<Self::Value, E>
             where
                 E: serde::de::Error,
             {
@@ -494,7 +500,7 @@ impl serde::Deserialize for DocumentId {
             }
         }
 
-        deserializer.deserialize(Visitor)
+        deserializer.deserialize_string(Visitor)
     }
 }
 
@@ -564,21 +570,21 @@ mod document_id_tests {
     #[test]
     fn serialize_normal() {
         let expected = serde_json::Value::String("alpha".into());
-        let got = serde_json::to_value(&DocumentId::from("alpha"));
+        let got = serde_json::to_value(&DocumentId::from("alpha")).unwrap();
         assert_eq!(expected, got);
     }
 
     #[test]
     fn serialize_design() {
         let expected = serde_json::Value::String("_design/alpha".into());
-        let got = serde_json::to_value(&DocumentId::from("_design/alpha"));
+        let got = serde_json::to_value(&DocumentId::from("_design/alpha")).unwrap();
         assert_eq!(expected, got);
     }
 
     #[test]
     fn serialize_local() {
         let expected = serde_json::Value::String("_local/alpha".into());
-        let got = serde_json::to_value(&DocumentId::from("_local/alpha"));
+        let got = serde_json::to_value(&DocumentId::from("_local/alpha")).unwrap();
         assert_eq!(expected, got);
     }
 
@@ -755,7 +761,7 @@ mod into_database_path_tests {
             ($input:expr, $expected_error_kind:pat) => {
                 match $input.into_database_path() {
                     Err(Error::PathParse($expected_error_kind)) => (),
-                    x @ _ => unexpected_result!(x),
+                    x => panic!("Got unexpected result {:?}", x),
                 }
             }
         }
@@ -1008,7 +1014,7 @@ mod into_document_path_tests {
             ($input:expr, $expected_error_kind:pat) => {
                 match $input.into_document_path() {
                     Err(Error::PathParse($expected_error_kind)) => (),
-                    x @ _ => unexpected_result!(x),
+                    x => panic!("Got unexpected result {:?}", x),
                 }
             }
         }
@@ -1206,7 +1212,7 @@ mod into_design_document_path_tests {
             ($input:expr, $expected_error_kind:pat) => {
                 match $input.into_design_document_path() {
                     Err(Error::PathParse($expected_error_kind)) => (),
-                    x @ _ => unexpected_result!(x),
+                    x => panic!("Got unexpected result {:?}", x),
                 }
             }
         }
@@ -1536,7 +1542,7 @@ mod into_attachment_path_tests {
             ($input:expr, $expected_error_kind:pat) => {
                 match $input.into_attachment_path() {
                     Err(Error::PathParse($expected_error_kind)) => (),
-                    x @ _ => unexpected_result!(x),
+                    x => panic!("Got unexpected result {:?}", x),
                 }
             }
         }
@@ -1790,7 +1796,7 @@ mod into_view_path_tests {
             ($input:expr, $expected_error_kind:pat) => {
                 match $input.into_view_path() {
                     Err(Error::PathParse($expected_error_kind)) => (),
-                    x @ _ => unexpected_result!(x),
+                    x => panic!("Got unexpected result {:?}", x),
                 }
             }
         }

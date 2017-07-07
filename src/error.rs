@@ -39,10 +39,11 @@ pub enum Error {
     /// The target resource—e.g., database, document, etc.—does not exist or is
     /// deleted.
     NotFound(ErrorResponse),
-
+    */
     #[doc(hidden)]
     PathParse(PathParseErrorKind),
 
+    /*
     #[doc(hidden)]
     ResponseNotJson(Option<mime::Mime>),
     */
@@ -132,7 +133,9 @@ impl std::error::Error for Error {
             &JsonEncode { .. } => "An error occurred while encoding JSON",
             &Mock { .. } => "A error occurred while test-mocking",
             &NotFound(..) => "The resource cannot be found",
+            */
             &PathParse(..) => "The path is badly formatted",
+            /*
             &ResponseNotJson(Some(..)) => "The response has non-JSON content",
             &ResponseNotJson(None) => "The response content has no type",
             */
@@ -169,7 +172,9 @@ impl std::error::Error for Error {
             &JsonEncode { ref cause } => Some(cause),
             &Mock { .. } => None,
             &NotFound(..) => None,
+            */
             &PathParse(ref kind) => kind.cause(),
+            /*
             &ResponseNotJson(..) => None,
             */
             &RevisionParse { .. } => None,
@@ -208,7 +213,9 @@ impl std::fmt::Display for Error {
             &JsonEncode { ref cause } => write!(f, "{}: {}", description, cause),
             &Mock { ref extra_description } => write!(f, "{}: {}", description, extra_description),
             &NotFound(ref error_response) => write!(f, "{}: {}", description, error_response),
+            */
             &PathParse(ref kind) => write!(f, "{}: {}", description, kind),
+            /*
             &ResponseNotJson(Some(ref content_type)) => write!(f, "{}: Content type is {}", description, content_type),
             &ResponseNotJson(None) => write!(f, "{}", description),
             */
@@ -238,7 +245,6 @@ impl std::fmt::Display for Error {
     }
 }
 
-/*
 #[derive(Debug)]
 pub enum PathParseErrorKind {
     BadSegment(&'static str),
@@ -268,7 +274,6 @@ impl std::fmt::Display for PathParseErrorKind {
         }
     }
 }
-*/
 
 #[derive(Debug)]
 pub enum RevisionParseErrorKind {
