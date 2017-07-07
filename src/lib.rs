@@ -15,10 +15,6 @@ extern crate base64;
 extern crate hyper;
 #[macro_use(mime, __mime__ident_or_ext)]
 
-#[cfg(test)]
-#[macro_use]
-mod test_macro; // FIXME: Delete this source module.
-
 mod attachment;
 */
 mod client;
