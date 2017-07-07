@@ -1,7 +1,8 @@
-use base64;
-use mime;
-use serde;
-use std;
+// FIXME: These types as too smart for Serde. Actual serialization and
+// deserialization should use derived traits, and any higher-level types we use
+// for the Chill's API should convert to and from those type.
+
+use {base64, mime, serde, std};
 
 #[derive(Clone, Debug, PartialEq)]
 struct AttachmentEncodingInfo {
@@ -68,7 +69,7 @@ impl Attachment {
 
 #[doc(hidden)]
 impl serde::Serialize for Attachment {
-    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
@@ -80,10 +81,10 @@ impl serde::Serialize for Attachment {
 }
 
 #[doc(hidden)]
-impl serde::Deserialize for Attachment {
-    fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
+impl<'de> serde::Deserialize<'de> for Attachment {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: serde::Deserializer,
+        D: serde::Deserializer<'de>,
     {
         Ok(Attachment::Saved(
             try!(SavedAttachment::deserialize(deserializer)),
@@ -131,20 +132,24 @@ impl SavedAttachment {
     }
 }
 
+// FIXME: Derive this?
 impl serde::Serialize for SavedAttachment {
-    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        let mut state = try!(serializer.serialize_struct("SavedAttachment", 1));
-        try!(serializer.serialize_struct_elt(&mut state, "stub", true));
-        serializer.serialize_struct_end(state)
+        use serde::ser::SerializeStruct;
+        let mut state = serializer.serialize_struct("SavedAttachment", 1)?;
+        state.serialize_field("stub", &true)?;
+        state.end()
     }
 }
-impl serde::Deserialize for SavedAttachment {
-    fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
+
+// FIXME: Derive this?
+impl<'de> serde::Deserialize<'de> for SavedAttachment {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: serde::Deserializer,
+        D: serde::Deserializer<'de>,
     {
         enum Field {
             ContentType,
@@ -157,17 +162,21 @@ impl serde::Deserialize for SavedAttachment {
             Stub,
         }
 
-        impl serde::Deserialize for Field {
-            fn deserialize<D>(deserializer: &mut D) -> Result<Field, D::Error>
+        impl<'de> serde::Deserialize<'de> for Field {
+            fn deserialize<D>(deserializer: D) -> Result<Field, D::Error>
             where
-                D: serde::Deserializer,
+                D: serde::Deserializer<'de>,
             {
                 struct Visitor;
 
-                impl serde::de::Visitor for Visitor {
+                impl<'de> serde::de::Visitor<'de> for Visitor {
                     type Value = Field;
 
-                    fn visit_str<E>(&mut self, value: &str) -> Result<Field, E>
+                    fn expecting(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+                        write!(f, "a CouchDB attachment object field name")
+                    }
+
+                    fn visit_str<E>(self, value: &str) -> Result<Field, E>
                     where
                         E: serde::de::Error,
                     {
@@ -180,23 +189,27 @@ impl serde::Deserialize for SavedAttachment {
                             "length" => Ok(Field::Length),
                             "revpos" => Ok(Field::Revpos),
                             "stub" => Ok(Field::Stub),
-                            _ => Err(E::unknown_field(value)),
+                            _ => Err(E::unknown_field(value, FIELDS)),
                         }
                     }
                 }
 
-                deserializer.deserialize(Visitor)
+                deserializer.deserialize_identifier(Visitor)
             }
         }
 
         struct Visitor;
 
-        impl serde::de::Visitor for Visitor {
+        impl<'de> serde::de::Visitor<'de> for Visitor {
             type Value = SavedAttachment;
 
-            fn visit_map<V>(&mut self, mut visitor: V) -> Result<Self::Value, V::Error>
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+                write!(f, "a CouchDB attachment object")
+            }
+
+            fn visit_map<V>(self, mut visitor: V) -> Result<Self::Value, V::Error>
             where
-                V: serde::de::MapVisitor,
+                V: serde::de::MapAccess<'de>,
             {
                 let mut content_type = None;
                 let mut data = None;
@@ -206,40 +219,56 @@ impl serde::Deserialize for SavedAttachment {
                 let mut length = None;
                 let mut revpos = None;
 
-                loop {
-                    match try!(visitor.visit_key()) {
-                        Some(Field::ContentType) => {
-                            content_type = Some(try!(visitor.visit_value()));
+                while let Some(key) = visitor.next_key()? {
+                    match key {
+                        Field::ContentType => {
+                            if content_type.is_some() {
+                                return Err(serde::de::Error::duplicate_field("content-type"));
+                            }
+                            content_type = Some(visitor.next_value()?);
                         }
-                        Some(Field::Data) => {
-                            data = Some(try!(visitor.visit_value()));
+                        Field::Data => {
+                            if data.is_some() {
+                                return Err(serde::de::Error::duplicate_field("data"));
+                            }
+                            data = Some(visitor.next_value()?);
                         }
-                        Some(Field::Digest) => {
-                            digest = Some(try!(visitor.visit_value()));
+                        Field::Digest => {
+                            if digest.is_some() {
+                                return Err(serde::de::Error::duplicate_field("digest"));
+                            }
+                            digest = Some(visitor.next_value()?);
                         }
-                        Some(Field::EncodedLength) => {
-                            encoded_length = Some(try!(visitor.visit_value()));
+                        Field::EncodedLength => {
+                            if encoded_length.is_some() {
+                                return Err(serde::de::Error::duplicate_field("encoded_length"));
+                            }
+                            encoded_length = Some(visitor.next_value()?);
                         }
-                        Some(Field::Encoding) => {
-                            encoding = Some(try!(visitor.visit_value()));
+                        Field::Encoding => {
+                            if encoding.is_some() {
+                                return Err(serde::de::Error::duplicate_field("encoding"));
+                            }
+                            encoding = Some(visitor.next_value()?);
                         }
-                        Some(Field::Length) => {
-                            length = Some(try!(visitor.visit_value()));
+                        Field::Length => {
+                            if length.is_some() {
+                                return Err(serde::de::Error::duplicate_field("length"));
+                            }
+                            length = Some(visitor.next_value()?);
                         }
-                        Some(Field::Revpos) => {
-                            revpos = Some(try!(visitor.visit_value()));
+                        Field::Revpos => {
+                            if revpos.is_some() {
+                                return Err(serde::de::Error::duplicate_field("revpos"));
+                            }
+                            revpos = Some(visitor.next_value()?);
                         }
-                        Some(Field::Stub) => {
+                        Field::Stub => {
                             // Ignore this field.
-                            try!(visitor.visit_value::<bool>());
-                        }
-                        None => {
-                            break;
+                            visitor.next_value::<bool>()?;
                         }
                     }
                 }
-
-                try!(visitor.end());
 
                 let content = match (data, length) {
                     (Some(Base64JsonDecodable(data)), None) => SavedAttachmentContent::Bytes(data),
@@ -250,18 +279,18 @@ impl serde::Deserialize for SavedAttachment {
                     }
                     (Some(_), Some(_)) => {
                         use serde::de::Error;
-                        return Err(V::Error::unknown_field("data"));
+                        return Err(V::Error::unknown_field("data", FIELDS));
                     }
                 };
 
                 let ContentTypeJsonDecodable(content_type) = match content_type {
                     Some(x) => x,
-                    None => try!(visitor.missing_field("content_type")),
+                    None => return Err(serde::de::Error::missing_field("content_type")),
                 };
 
                 let digest = match digest {
                     Some(x) => x,
-                    None => try!(visitor.missing_field("digest")),
+                    None => return Err(serde::de::Error::missing_field("digest")),
                 };
 
                 let encoding_info = match (encoded_length, encoding) {
@@ -284,7 +313,7 @@ impl serde::Deserialize for SavedAttachment {
 
                 let sequence_number = match revpos {
                     Some(x) => x,
-                    None => try!(visitor.missing_field("revpos")),
+                    None => return Err(serde::de::Error::missing_field("revpos")),
                 };
 
                 Ok(SavedAttachment {
@@ -319,52 +348,57 @@ pub struct UnsavedAttachment {
 }
 
 impl serde::Serialize for UnsavedAttachment {
-    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
+        use serde::ser::SerializeStruct;
         let content_type = self.content_type.clone();
-        let mut state = try!(serializer.serialize_struct("UnsavedAttachment", 2));
-        try!(serializer.serialize_struct_elt(
-            &mut state,
+        let mut state = serializer.serialize_struct("UnsavedAttachment", 2)?;
+        state.serialize_field(
             "content_type",
-            &content_type,
-        ));
-        try!(serializer.serialize_struct_elt(
-            &mut state,
+            &content_type.to_string(),
+        )?;
+        state.serialize_field(
             "data",
             &Base64JsonEncodable(&self.content),
-        ));
-        serializer.serialize_struct_end(state)
+        )?;
+        state.end()
     }
 }
 
 #[derive(Debug, PartialEq)]
 struct Base64JsonDecodable(Vec<u8>);
 
-impl serde::Deserialize for Base64JsonDecodable {
-    fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
+impl<'de> serde::Deserialize<'de> for Base64JsonDecodable {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: serde::Deserializer,
+        D: serde::Deserializer<'de>,
     {
         struct Visitor;
 
-        impl serde::de::Visitor for Visitor {
+        impl<'de> serde::de::Visitor<'de> for Visitor {
             type Value = Base64JsonDecodable;
 
-            fn visit_str<E>(&mut self, value: &str) -> Result<Self::Value, E>
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+                write!(
+                    f,
+                    "a base64-encoded string containing CouchDB attachment data"
+                )
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
             where
                 E: serde::de::Error,
             {
-                use std::error::Error;
-                let blob = try!(base64::decode(value).map_err(
-                    |e| E::invalid_value(e.description()),
-                ));
+                let blob = try!(base64::decode(value).map_err(|_| {
+                    E::invalid_value(serde::de::Unexpected::Str(value), &self)
+                }));
                 Ok(Base64JsonDecodable(blob))
             }
         }
 
-        deserializer.deserialize(Visitor)
+        deserializer.deserialize_str(Visitor)
     }
 }
 
@@ -372,7 +406,7 @@ impl serde::Deserialize for Base64JsonDecodable {
 struct Base64JsonEncodable<'a>(&'a Vec<u8>);
 
 impl<'a> serde::Serialize for Base64JsonEncodable<'a> {
-    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
@@ -384,26 +418,32 @@ impl<'a> serde::Serialize for Base64JsonEncodable<'a> {
 #[derive(Debug, PartialEq)]
 struct ContentTypeJsonDecodable(pub mime::Mime);
 
-impl serde::Deserialize for ContentTypeJsonDecodable {
-    fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
+impl<'de> serde::Deserialize<'de> for ContentTypeJsonDecodable {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: serde::Deserializer,
+        D: serde::Deserializer<'de>,
     {
         struct Visitor;
 
-        impl serde::de::Visitor for Visitor {
+        impl<'de> serde::de::Visitor<'de> for Visitor {
             type Value = ContentTypeJsonDecodable;
 
-            fn visit_str<E>(&mut self, v: &str) -> Result<Self::Value, E>
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+                write!(f, "a string specifying a CouchDB attachment content-type")
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
             where
                 E: serde::de::Error,
             {
-                let m = try!(v.parse().map_err(|_| E::invalid_value("Bad MIME string")));
+                let m = try!(v.parse().map_err(|_| {
+                    E::invalid_value(serde::de::Unexpected::Str(v), &self)
+                }));
                 Ok(ContentTypeJsonDecodable(m))
             }
         }
 
-        deserializer.deserialize(Visitor)
+        deserializer.deserialize_str(Visitor)
     }
 }
 
@@ -498,27 +538,24 @@ mod tests {
     use super::*;
     use super::{AttachmentEncodingInfo, Base64JsonDecodable, Base64JsonEncodable, ContentTypeJsonDecodable,
                 SavedAttachmentContent};
-    use base64;
-    use serde_json;
+    use {base64, serde_json};
 
     #[test]
     fn attachment_serialize_saved() {
 
         let attachment = Attachment::Saved(SavedAttachment {
-            content_type: mime!(Text / Plain),
+            content_type: mime::TEXT_PLAIN,
             digest: "md5-iMaiC8wqiFlD2NjLTemvCQ==".to_string(),
             sequence_number: 17,
             content: SavedAttachmentContent::Bytes("This is the attachment.".to_string().into_bytes()),
             encoding_info: None,
         });
 
-        let encoded = serde_json::to_string(&attachment).unwrap();
+        let got = serde_json::to_string(&attachment).unwrap();
+        let expected = r#"{"stub":true}"#;
 
-        let expected = serde_json::builder::ObjectBuilder::new()
-            .insert("stub", true)
-            .build();
-        let got = serde_json::from_str(&encoded).unwrap();
-
+        let got: serde_json::Value = serde_json::from_str(&got).unwrap();
+        let expected: serde_json::Value = serde_json::from_str(expected).unwrap();
         assert_eq!(expected, got);
     }
 
@@ -528,18 +565,21 @@ mod tests {
         let content = "This is the attachment.";
 
         let attachment = Attachment::Unsaved(UnsavedAttachment {
-            content_type: mime!(Text / Plain),
+            content_type: mime::TEXT_PLAIN,
             content: content.to_string().into_bytes(),
         });
 
-        let encoded = serde_json::to_string(&attachment).unwrap();
+        let got = serde_json::to_string(&attachment).unwrap();
 
-        let expected = serde_json::builder::ObjectBuilder::new()
-            .insert("content_type", "text/plain")
-            .insert("data", base64::encode(content.as_bytes()))
-            .build();
+        let expected = format!(
+            "{}{}{}",
+            r#"{"content_type":"text/plain","data":""#,
+            base64::encode(content.as_bytes()),
+            r#""}"#
+        );
 
-        let got = serde_json::from_str(&encoded).unwrap();
+        let got: serde_json::Value = serde_json::from_str(&got).unwrap();
+        let expected: serde_json::Value = serde_json::from_str(&expected).unwrap();
 
         assert_eq!(expected, got);
     }
@@ -555,15 +595,12 @@ mod tests {
             encoding_info: None,
         });
 
-        let source = serde_json::builder::ObjectBuilder::new()
-            .insert("content_type", "text/plain")
-            .insert("digest", "md5-iMaiC8wqiFlD2NjLTemvCQ==")
-            .insert("length", 5)
-            .insert("revpos", 11)
-            .insert("stub", true)
-            .build();
+        let source = r#"{"content_type":"text/plain",
+                         "digest":"md5-iMaiC8wqiFlD2NjLTemvCQ==",
+                         "length":5,
+                         "revpos":11,
+                         "stub":true}"#;
 
-        let source = serde_json::to_string(&source).unwrap();
         let got = serde_json::from_str(&source).unwrap();
         assert_eq!(expected, got);
     }
@@ -572,19 +609,18 @@ mod tests {
     fn saved_attachment_serialize() {
 
         let attachment = SavedAttachment {
-            content_type: mime!(Text / Plain),
+            content_type: mime::TEXT_PLAIN,
             digest: "md5-iMaiC8wqiFlD2NjLTemvCQ==".to_string(),
             sequence_number: 17,
             content: SavedAttachmentContent::Bytes("This is the attachment.".to_string().into_bytes()),
             encoding_info: None,
         };
 
-        let encoded = serde_json::to_string(&attachment).unwrap();
+        let got = serde_json::to_string(&attachment).unwrap();
+        let expected = r#"{"stub":true}"#;
 
-        let expected = serde_json::builder::ObjectBuilder::new()
-            .insert("stub", true)
-            .build();
-        let got = serde_json::from_str(&encoded).unwrap();
+        let got: serde_json::Value = serde_json::from_str(&got).unwrap();
+        let expected: serde_json::Value = serde_json::from_str(expected).unwrap();
 
         assert_eq!(expected, got);
     }
@@ -600,15 +636,12 @@ mod tests {
             encoding_info: None,
         };
 
-        let source = serde_json::builder::ObjectBuilder::new()
-            .insert("content_type", "text/plain")
-            .insert("digest", "md5-iMaiC8wqiFlD2NjLTemvCQ==")
-            .insert("length", 5)
-            .insert("revpos", 11)
-            .insert("stub", true)
-            .build();
+        let source = r#"{"content_type":"text/plain",
+                         "digest":"md5-iMaiC8wqiFlD2NjLTemvCQ==",
+                         "length":5,
+                         "revpos":11,
+                         "stub":true}"#;
 
-        let source = serde_json::to_string(&source).unwrap();
         let got = serde_json::from_str(&source).unwrap();
         assert_eq!(expected, got);
     }
@@ -627,17 +660,14 @@ mod tests {
             }),
         };
 
-        let source = serde_json::builder::ObjectBuilder::new()
-            .insert("content_type", "text/plain")
-            .insert("digest", "md5-iMaiC8wqiFlD2NjLTemvCQ==")
-            .insert("encoded_length", 25)
-            .insert("encoding", "gzip")
-            .insert("length", 5)
-            .insert("revpos", 11)
-            .insert("stub", true)
-            .build();
+        let source = r#"{"content_type":"text/plain",
+                         "digest":"md5-iMaiC8wqiFlD2NjLTemvCQ==",
+                         "encoded_length":25,
+                         "encoding":"gzip",
+                         "length":5,
+                         "revpos":11,
+                         "stub":true}"#;
 
-        let source = serde_json::to_string(&source).unwrap();
         let got = serde_json::from_str(&source).unwrap();
         assert_eq!(expected, got);
     }
@@ -653,15 +683,11 @@ mod tests {
             encoding_info: None,
         };
 
-        let source = serde_json::builder::ObjectBuilder::new()
-            .insert("content_type", "text/plain")
-            .insert("data", "aGVsbG8=")
-            .insert("digest", "md5-iMaiC8wqiFlD2NjLTemvCQ==")
-            .insert("revpos", 11)
-            .build();
+        let source = r#"{"content_type":"text/plain",
+                         "data":"aGVsbG8=",
+                         "digest":"md5-iMaiC8wqiFlD2NjLTemvCQ==",
+                         "revpos":11}"#;
 
-        let source = serde_json::to_string(&source).unwrap();
-        println!("JSON: {}", source);
         let got = serde_json::from_str(&source).unwrap();
         assert_eq!(expected, got);
     }
@@ -669,47 +695,43 @@ mod tests {
     #[test]
     fn saved_attachment_deserialize_nok_missing_content_type() {
 
-        let source = serde_json::builder::ObjectBuilder::new()
-            .insert("digest", "md5-iMaiC8wqiFlD2NjLTemvCQ==")
-            .insert("length", 5)
-            .insert("revpos", 11)
-            .insert("stub", true)
-            .build();
+        let source = r#"{"digest":"md5-iMaiC8wqiFlD2NjLTemvCQ==",
+                         "length":5,
+                         "revpos":11,
+                         "stub":true}"#;
 
-        let source = serde_json::to_string(&source).unwrap();
-        let got = serde_json::from_str::<SavedAttachment>(&source);
-        expect_json_error_missing_field!(got, "content_type");
+        match serde_json::from_str::<SavedAttachment>(&source) {
+            Err(ref e) if e.is_data() => {}
+            x => panic!("Got unexpected result {:?}", x),
+        }
     }
-
 
     #[test]
     fn saved_attachment_deserialize_nok_missing_digest() {
 
-        let source = serde_json::builder::ObjectBuilder::new()
-            .insert("content_type", "text/plain")
-            .insert("length", 5)
-            .insert("revpos", 11)
-            .insert("stub", true)
-            .build();
+        let source = r#"{"content_type":"text/plain",
+                         "length":5,
+                         "revpos":11,
+                         "stub":true}"#;
 
-        let source = serde_json::to_string(&source).unwrap();
-        let got = serde_json::from_str::<SavedAttachment>(&source);
-        expect_json_error_missing_field!(got, "digest");
+        match serde_json::from_str::<SavedAttachment>(&source) {
+            Err(ref e) if e.is_data() => {}
+            x => panic!("Got unexpected result {:?}", x),
+        }
     }
 
     #[test]
     fn saved_attachment_deserialize_nok_missing_revpos() {
 
-        let source = serde_json::builder::ObjectBuilder::new()
-            .insert("content_type", "text/plain")
-            .insert("digest", "md5-iMaiC8wqiFlD2NjLTemvCQ==")
-            .insert("length", 5)
-            .insert("stub", true)
-            .build();
+        let source = r#"{"content_type":"text/plain",
+                         "digest":"md5-iMaiC8wqiFlD2NjLTemvCQ==",
+                         "length":5,
+                         "stub":true}"#;
 
-        let source = serde_json::to_string(&source).unwrap();
-        let got = serde_json::from_str::<SavedAttachment>(&source);
-        expect_json_error_missing_field!(got, "revpos");
+        match serde_json::from_str::<SavedAttachment>(&source) {
+            Err(ref e) if e.is_data() => {}
+            x => panic!("Got unexpected result {:?}", x),
+        }
     }
 
     #[test]
@@ -718,19 +740,21 @@ mod tests {
         let content = "This is the attachment.";
 
         let attachment = UnsavedAttachment {
-            content_type: mime!(Text / Plain),
+            content_type: mime::TEXT_PLAIN,
             content: content.to_string().into_bytes(),
         };
 
-        let encoded = serde_json::to_string(&attachment).unwrap();
+        let got = serde_json::to_string(&attachment).unwrap();
 
-        let expected = serde_json::builder::ObjectBuilder::new()
-            .insert("content_type", "text/plain")
-            .insert("data", base64::encode(content.as_bytes()))
-            .build();
+        let expected = format!(
+            "{}{}{}",
+            r#"{"content_type":"text/plain","data":""#,
+            base64::encode(content.as_bytes()),
+            r#""}"#
+        );
 
-        let got = serde_json::from_str(&encoded).unwrap();
-
+        let got: serde_json::Value = serde_json::from_str(&got).unwrap();
+        let expected: serde_json::Value = serde_json::from_str(&expected).unwrap();
         assert_eq!(expected, got);
     }
 
@@ -754,13 +778,15 @@ mod tests {
     fn base64_json_encodable_deserialize_nok_bad_base64() {
         let source = serde_json::Value::String("% percent signs are invalid in base64 %".to_string());
         let source = serde_json::to_string(&source).unwrap();
-        let got = serde_json::from_str::<Base64JsonDecodable>(&source);
-        expect_json_error_invalid_value!(got);
+        match serde_json::from_str::<Base64JsonDecodable>(&source) {
+            Err(ref e) if e.is_data() => {}
+            x => panic!("Got unexpected result {:?}", x),
+        }
     }
 
     #[test]
     fn content_type_json_decodable_deserialize_ok() {
-        let expected = ContentTypeJsonDecodable(mime!(Application / Json));
+        let expected = ContentTypeJsonDecodable(mime::APPLICATION_JSON);
         let source = serde_json::Value::String("application/json".to_string());
         let source = serde_json::to_string(&source).unwrap();
         let got = serde_json::from_str(&source).unwrap();
@@ -771,7 +797,9 @@ mod tests {
     fn content_type_json_decodable_deserialize_nok_bad_mime() {
         let source = serde_json::Value::String("bad mime".to_string());
         let source = serde_json::to_string(&source).unwrap();
-        let got = serde_json::from_str::<ContentTypeJsonDecodable>(&source);
-        expect_json_error_invalid_value!(got);
+        match serde_json::from_str::<ContentTypeJsonDecodable>(&source) {
+            Err(ref e) if e.is_data() => {}
+            x => panic!("Got unexpected result {:?}", x),
+        }
     }
 }

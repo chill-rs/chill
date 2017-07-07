@@ -1,3 +1,4 @@
+extern crate base64;
 extern crate futures;
 extern crate mime;
 extern crate regex;
@@ -14,9 +15,9 @@ extern crate uuid;
 extern crate base64;
 extern crate hyper;
 #[macro_use(mime, __mime__ident_or_ext)]
+*/
 
 mod attachment;
-*/
 mod client;
 /*
 mod design;
@@ -33,10 +34,9 @@ pub mod action;
 pub mod path;
 /*
 pub mod testing;
-
-pub use attachment::{Attachment, SavedAttachment, UnsavedAttachment};
 */
 
+pub use attachment::{Attachment, SavedAttachment, UnsavedAttachment};
 pub use client::IntoUrl;
 /*
 pub use design::{Design, DesignBuilder, ViewFunction};
