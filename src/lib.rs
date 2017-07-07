@@ -17,13 +17,15 @@ extern crate hyper;
 
 #[cfg(test)]
 #[macro_use]
-mod test_macro;
+mod test_macro; // FIXME: Delete this source module.
 
 mod attachment;
 mod client;
 mod design;
 mod document;
+*/
 mod error;
+/*
 mod revision;
 mod transport;
 mod view;
@@ -36,7 +38,10 @@ pub use attachment::{Attachment, SavedAttachment, UnsavedAttachment};
 pub use client::{Client, IntoUrl};
 pub use design::{Design, DesignBuilder, ViewFunction};
 pub use document::Document;
+*/
+
 pub use error::{Error, ErrorResponse};
+/*
 pub use path::{AttachmentName, AttachmentPath, DatabaseName, DatabasePath, DesignDocumentName, DesignDocumentPath,
                DocumentId, DocumentPath, IntoAttachmentPath, IntoDatabasePath, IntoDesignDocumentPath,
                IntoDocumentPath, IntoViewPath, LocalDocumentName, NormalDocumentName, ViewName, ViewPath};
