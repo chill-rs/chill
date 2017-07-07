@@ -1,4 +1,4 @@
-use {std, url};
+use {std, url, uuid};
 
 /// Contains information for an error originating from or propagated by Chill.
 #[derive(Debug)]
@@ -45,10 +45,11 @@ pub enum Error {
 
     #[doc(hidden)]
     ResponseNotJson(Option<mime::Mime>),
-
+    */
     #[doc(hidden)]
     RevisionParse { kind: RevisionParseErrorKind },
 
+    /*
     #[doc(hidden)]
     ServerResponse {
         status_code: StatusCode,
@@ -134,7 +135,9 @@ impl std::error::Error for Error {
             &PathParse(..) => "The path is badly formatted",
             &ResponseNotJson(Some(..)) => "The response has non-JSON content",
             &ResponseNotJson(None) => "The response content has no type",
+            */
             &RevisionParse { .. } => "The revision is badly formatted",
+            /*
             &ServerResponse { ref status_code, .. } => {
                 match status_code.class() {
                     hyper::status::StatusClass::ClientError |
@@ -168,7 +171,9 @@ impl std::error::Error for Error {
             &NotFound(..) => None,
             &PathParse(ref kind) => kind.cause(),
             &ResponseNotJson(..) => None,
-            &RevisionParse { ref kind } => kind.cause(),
+            */
+            &RevisionParse { .. } => None,
+            /*
             &ServerResponse { .. } => None,
             &Transport { ref kind } => kind.cause(),
             &Unauthorized(..) => None,
@@ -206,7 +211,9 @@ impl std::fmt::Display for Error {
             &PathParse(ref kind) => write!(f, "{}: {}", description, kind),
             &ResponseNotJson(Some(ref content_type)) => write!(f, "{}: Content type is {}", description, content_type),
             &ResponseNotJson(None) => write!(f, "{}", description),
+            */
             &RevisionParse { ref kind } => write!(f, "{}: {}", description, kind),
+            /*
             &ServerResponse {
                 ref status_code,
                 ref error_response,
@@ -261,6 +268,7 @@ impl std::fmt::Display for PathParseErrorKind {
         }
     }
 }
+*/
 
 #[derive(Debug)]
 pub enum RevisionParseErrorKind {
@@ -269,19 +277,6 @@ pub enum RevisionParseErrorKind {
     NumberParse(std::num::ParseIntError),
     TooFewParts,
     ZeroSequenceNumber,
-}
-
-impl RevisionParseErrorKind {
-    fn cause(&self) -> Option<&std::error::Error> {
-        use self::RevisionParseErrorKind::*;
-        match self {
-            &DigestNotAllHex => None,
-            &DigestParse(ref cause) => Some(cause),
-            &NumberParse(ref cause) => Some(cause),
-            &TooFewParts => None,
-            &ZeroSequenceNumber => None,
-        }
-    }
 }
 
 impl std::fmt::Display for RevisionParseErrorKind {
@@ -302,6 +297,7 @@ impl std::fmt::Display for RevisionParseErrorKind {
     }
 }
 
+/*
 #[derive(Debug)]
 pub enum TransportErrorKind {
     Hyper(hyper::Error),

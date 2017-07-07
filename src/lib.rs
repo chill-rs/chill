@@ -27,8 +27,8 @@ mod design;
 mod document;
 */
 mod error;
-/*
 mod revision;
+/*
 mod transport;
 mod view;
 
@@ -50,6 +50,8 @@ pub use error::{Error, ErrorResponse};
 pub use path::{AttachmentName, AttachmentPath, DatabaseName, DatabasePath, DesignDocumentName, DesignDocumentPath,
                DocumentId, DocumentPath, IntoAttachmentPath, IntoDatabasePath, IntoDesignDocumentPath,
                IntoDocumentPath, IntoViewPath, LocalDocumentName, NormalDocumentName, ViewName, ViewPath};
+*/
 pub use revision::Revision;
+/*
 pub use view::{ViewResponse, ViewRow};
 */

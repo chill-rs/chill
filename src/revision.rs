@@ -1,7 +1,4 @@
-use Error;
-use serde;
-use std;
-use uuid;
+use {Error, serde, std, uuid};
 
 /// A document revision, which uniquely identifies a version of a document.
 ///
@@ -96,7 +93,7 @@ impl From<Revision> for String {
 }
 
 impl serde::Serialize for Revision {
-    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
@@ -105,26 +102,29 @@ impl serde::Serialize for Revision {
     }
 }
 
-impl serde::Deserialize for Revision {
-    fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
+impl<'de> serde::Deserialize<'de> for Revision {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: serde::Deserializer,
+        D: serde::Deserializer<'de>,
     {
         struct Visitor;
 
-        impl serde::de::Visitor for Visitor {
+        impl<'de> serde::de::Visitor<'de> for Visitor {
             type Value = Revision;
 
-            fn visit_str<E>(&mut self, v: &str) -> Result<Self::Value, E>
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+                write!(f, "a string specifying a CouchDB document revision")
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
             where
                 E: serde::de::Error,
             {
-                use std::error::Error;
-                Revision::parse(v).map_err(|e| E::invalid_value(e.description()))
+                Revision::parse(v).map_err(|_e| E::invalid_value(serde::de::Unexpected::Str(v), &self))
             }
         }
 
-        deserializer.deserialize(Visitor)
+        deserializer.deserialize_str(Visitor)
     }
 }
 
@@ -184,7 +184,7 @@ mod tests {
             ($input: expr) => {
                 match Revision::from_str($input) {
                     Err(Error::RevisionParse{..}) => (),
-                    x @ _ => unexpected_result!(x),
+                    x => panic!("Got unexpected result {:?}", x),
                 }
             }
         }
@@ -250,7 +250,7 @@ mod tests {
             digest: "1234567890abcdeffedcba0987654321".parse().unwrap(),
         };
         let s = serde_json::to_string(&source).unwrap();
-        let got = serde_json::from_str(&s).unwrap();
+        let got: serde_json::Value = serde_json::from_str(&s).unwrap();
         assert_eq!(expected, got);
     }
 
@@ -270,7 +270,9 @@ mod tests {
     fn deserialization_nok() {
         let source = serde_json::Value::String("bad_revision".to_string());
         let s = serde_json::to_string(&source).unwrap();
-        let got = serde_json::from_str::<Revision>(&s);
-        expect_json_error_invalid_value!(got);
+        match serde_json::from_str::<Revision>(&s) {
+            Err(ref e) if e.is_data() => {}
+            x => panic!("Got unexpected result {:?}", x),
+        }
     }
 }
