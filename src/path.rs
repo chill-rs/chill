@@ -1,30 +1,7 @@
-use {Error, serde, std};
-
-#[doc(hidden)]
-#[derive(Debug)]
-pub enum PathParseError {
-    BadSegment(&'static str),
-    EmptySegment,
-    NoLeadingSlash,
-    TooFewSegments,
-    TooManySegments,
-    TrailingSlash,
-}
-
-impl std::fmt::Display for PathParseError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-        use self::PathParseError::*;
-        match self {
-            &BadSegment(expected) => write!(formatter, "Segment is bad, expected {:?}", expected),
-            &EmptySegment => write!(formatter, "Path segment is empty"),
-            &NoLeadingSlash => write!(formatter, "Path does not begin with a slash"),
-            &TooFewSegments => write!(formatter, "Too few path segments"),
-            &TooManySegments => write!(formatter, "Too many path segments"),
-            &TrailingSlash => write!(formatter, "Path ends with a slash"),
-        }
-    }
-}
-
+use Error;
+use error::PathParseErrorKind;
+use serde;
+use std;
 
 const DESIGN_PREFIX: &'static str = "_design";
 const LOCAL_PREFIX: &'static str = "_local";
@@ -62,7 +39,7 @@ impl<'a> PathExtractor<'a> {
     fn begin(path: &'a str) -> Result<Self, Error> {
 
         if !path.starts_with('/') {
-            return Err(PathParseError::NoLeadingSlash)?;
+            return Err(Error::PathParse(PathParseErrorKind::NoLeadingSlash));
         }
 
         Ok(PathExtractor { path: path })
@@ -71,27 +48,27 @@ impl<'a> PathExtractor<'a> {
     fn end(self) -> Result<(), Error> {
         match self.path {
             "" => Ok(()),
-            "/" => Err(PathParseError::TrailingSlash)?,
-            _ => Err(PathParseError::TooManySegments)?,
+            "/" => Err(Error::PathParse(PathParseErrorKind::TrailingSlash)),
+            _ => Err(Error::PathParse(PathParseErrorKind::TooManySegments)),
         }
     }
 
     fn extract_nonempty(&mut self) -> Result<&'a str, Error> {
 
         if self.path.is_empty() {
-            return Err(PathParseError::TooFewSegments)?;
+            return Err(Error::PathParse(PathParseErrorKind::TooFewSegments));
         }
 
         assert!(self.path.starts_with('/'));
         let current = &self.path['/'.len_utf8()..];
 
         if current.is_empty() {
-            return Err(PathParseError::TooFewSegments)?;
+            return Err(Error::PathParse(PathParseErrorKind::TooFewSegments));
         }
 
         Ok(match current.find('/') {
             Some(0) => {
-                return Err(PathParseError::EmptySegment)?;
+                return Err(Error::PathParse(PathParseErrorKind::EmptySegment));
             }
             Some(slash_index) => {
                 let segment = &current[..slash_index];
@@ -109,21 +86,21 @@ impl<'a> PathExtractor<'a> {
     fn extract_literal(&mut self, literal: &'static str) -> Result<(), Error> {
 
         if self.path.is_empty() {
-            return Err(PathParseError::TooFewSegments)?;
+            return Err(Error::PathParse(PathParseErrorKind::TooFewSegments));
         }
 
         assert!(self.path.starts_with('/'));
         let current = &self.path['/'.len_utf8()..];
 
         if current.is_empty() {
-            return Err(PathParseError::TooFewSegments)?;
+            return Err(Error::PathParse(PathParseErrorKind::TooFewSegments));
         }
 
         match current.find('/') {
             Some(slash_index) if &current[..slash_index] == literal => (),
             None if current == literal => (),
             _ => {
-                return Err(PathParseError::BadSegment(literal))?;
+                return Err(Error::PathParse(PathParseErrorKind::BadSegment(literal)));
             }
         }
 
@@ -136,17 +113,18 @@ impl<'a> PathExtractor<'a> {
 #[cfg(test)]
 mod path_extractor_tests {
 
-    use super::{PathExtractor, PathParseError};
-    use Error;
-
     #[test]
     fn begin() {
+
+        use Error;
+        use error::PathParseErrorKind;
+        use super::PathExtractor;
 
         macro_rules! nok {
             ($input:expr) => {
                 match PathExtractor::begin($input) {
-                    Err(Error::PathParse{ inner: PathParseError::NoLeadingSlash }) => (),
-                    x => panic!("Got unexpected result {:?}", x),
+                    Err(Error::PathParse(PathParseErrorKind::NoLeadingSlash)) => (),
+                    x @ _ => unexpected_result!(x),
                 }
             }
         }
@@ -162,6 +140,10 @@ mod path_extractor_tests {
     #[test]
     fn end() {
 
+        use Error;
+        use error::PathParseErrorKind;
+        use super::PathExtractor;
+
         macro_rules! nok {
             ($input:expr, $expected_error_kind:pat) => {{
 
@@ -170,19 +152,23 @@ mod path_extractor_tests {
                 };
 
                 match path_extractor.end() {
-                    Err(Error::PathParse{ inner: $expected_error_kind }) => (),
-                    x => panic!("Got unexpected result {:?}", x),
+                    Err(Error::PathParse($expected_error_kind)) => (),
+                    x @ _ => unexpected_result!(x),
                 }
             }}
         }
 
-        nok!("/", PathParseError::TrailingSlash);
-        nok!("//", PathParseError::TooManySegments);
-        nok!("/alpha", PathParseError::TooManySegments);
+        nok!("/", PathParseErrorKind::TrailingSlash);
+        nok!("//", PathParseErrorKind::TooManySegments);
+        nok!("/alpha", PathParseErrorKind::TooManySegments);
     }
 
     #[test]
     fn extract_nonempty() {
+
+        use Error;
+        use error::PathParseErrorKind;
+        use super::PathExtractor;
 
         macro_rules! ok {
             ($input:expr, $expected_return:expr, $expected_remaining:expr) => {{
@@ -208,8 +194,8 @@ mod path_extractor_tests {
                 let mut path_extractor = PathExtractor { path: $input };
 
                 match path_extractor.extract_nonempty() {
-                    Err(Error::PathParse{ inner: $expected_error_kind }) => (),
-                    x => panic!("Got unexpected result {:?}", x),
+                    Err(Error::PathParse($expected_error_kind)) => (),
+                    x @ _ => unexpected_result!(x),
                 }
 
                 if $input != path_extractor.path {
@@ -224,14 +210,18 @@ mod path_extractor_tests {
         ok!("/alpha/", "alpha", "/");
         ok!("/alpha/bravo", "alpha", "/bravo");
 
-        nok!("", PathParseError::TooFewSegments);
-        nok!("/", PathParseError::TooFewSegments);
-        nok!("//", PathParseError::EmptySegment);
-        nok!("//alpha", PathParseError::EmptySegment);
+        nok!("", PathParseErrorKind::TooFewSegments);
+        nok!("/", PathParseErrorKind::TooFewSegments);
+        nok!("//", PathParseErrorKind::EmptySegment);
+        nok!("//alpha", PathParseErrorKind::EmptySegment);
     }
 
     #[test]
     fn extract_literal() {
+
+        use Error;
+        use error::PathParseErrorKind;
+        use super::PathExtractor;
 
         macro_rules! ok {
             ($input:expr, $literal:expr, $expected_remaining:expr) => {{
@@ -253,8 +243,8 @@ mod path_extractor_tests {
                 let mut path_extractor = PathExtractor { path: $input };
 
                 match path_extractor.extract_literal($literal) {
-                    Err(Error::PathParse{ inner: $expected_error_kind }) => (),
-                    x => panic!("Got unexpected result {:?}", x),
+                    Err(Error::PathParse($expected_error_kind)) => (),
+                    x @ _ => unexpected_result!(x),
                 }
 
                 if $input != path_extractor.path {
@@ -269,11 +259,15 @@ mod path_extractor_tests {
         ok!("/alpha/", "alpha", "/");
         ok!("/alpha/bravo", "alpha", "/bravo");
 
-        nok!("", "alpha", PathParseError::TooFewSegments);
-        nok!("/", "alpha", PathParseError::TooFewSegments);
-        nok!("//", "alpha", PathParseError::BadSegment("alpha"));
-        nok!("//alpha", "alpha", PathParseError::BadSegment("alpha"));
-        nok!("/alpha/bravo", "bravo", PathParseError::BadSegment("bravo"));
+        nok!("", "alpha", PathParseErrorKind::TooFewSegments);
+        nok!("/", "alpha", PathParseErrorKind::TooFewSegments);
+        nok!("//", "alpha", PathParseErrorKind::BadSegment("alpha"));
+        nok!("//alpha", "alpha", PathParseErrorKind::BadSegment("alpha"));
+        nok!(
+            "/alpha/bravo",
+            "bravo",
+            PathParseErrorKind::BadSegment("bravo")
+        );
     }
 }
 
@@ -283,39 +277,79 @@ macro_rules! define_name_type {
         /// Contains
         #[$description]
         /// name.
-        #[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
-        // The name type *must* be a tuple struct containing exactly one field
-        // so that Serde derives Deserialize and Serialize as using a simple
-        // string ("") instead of an keyed object ({}).
-        pub struct $type_name(String);
+        #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+        pub struct $type_name {
+            inner: String,
+        }
 
         impl AsRef<str> for $type_name {
             fn as_ref(&self) -> &str {
-                self.0.as_ref()
+                self.inner.as_ref()
             }
         }
 
         impl std::fmt::Display for $type_name {
             fn fmt(&self, formatter: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-                self.0.fmt(formatter)
+                self.inner.fmt(formatter)
             }
         }
 
         impl<'a> From<&'a str> for $type_name {
             fn from(s: &'a str) -> Self {
-                $type_name (String::from(s))
+                $type_name {
+                    inner: String::from(s)
+                }
             }
         }
 
         impl From<String> for $type_name {
             fn from(s: String) -> Self {
-                $type_name(s)
+                $type_name {
+                    inner: s,
+                }
             }
         }
 
         impl From<$type_name> for String {
             fn from($arg_name: $type_name) -> Self {
-                $arg_name.0
+                $arg_name.inner
+            }
+        }
+
+        #[doc(hidden)]
+        impl serde::Serialize for $type_name {
+            fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
+                where S: serde::Serializer
+            {
+                let s = self.to_string();
+                serializer.serialize_str(&s)
+            }
+        }
+
+        #[doc(hidden)]
+        impl serde::Deserialize for $type_name {
+            fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
+                where D: serde::Deserializer
+            {
+                struct Visitor;
+
+                impl serde::de::Visitor for Visitor {
+                    type Value = $type_name;
+
+                    fn visit_str<E>(&mut self, v: &str) -> Result<Self::Value, E>
+                        where E: serde::de::Error
+                    {
+                        Ok($type_name::from(v))
+                    }
+
+                    fn visit_string<E>(&mut self, v: String) -> Result<Self::Value, E>
+                        where E: serde::de::Error
+                    {
+                        Ok($type_name::from(v))
+                    }
+                }
+
+                deserializer.deserialize(Visitor)
             }
         }
     }
@@ -327,21 +361,6 @@ define_name_type!(DesignDocumentName, ddoc_name, /** a design document */);
 define_name_type!(LocalDocumentName, ldoc_name, /** a local document */);
 define_name_type!(NormalDocumentName, ndoc_name, /** a normal document */);
 define_name_type!(ViewName, view_name, /** a view */);
-
-#[cfg(test)]
-mod name_tests {
-
-    use {serde_json, std};
-
-    define_name_type!(TestName, test_name, /** blah blah blah */);
-
-    #[test]
-    fn serialize_deserialize() {
-        let expected = serde_json::Value::from("alpha");
-        let got = serde_json::to_value(&TestName::from("alpha")).unwrap();
-        assert_eq!(expected, got);
-    }
-}
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum DocumentId {
@@ -384,9 +403,9 @@ impl DocumentId {
     #[doc(hidden)]
     pub fn name_as_str(&self) -> &str {
         match self {
-            &DocumentId::Normal(ref x) => x.0.as_ref(),
-            &DocumentId::Design(ref x) => x.0.as_ref(),
-            &DocumentId::Local(ref x) => x.0.as_ref(),
+            &DocumentId::Normal(ref x) => x.inner.as_ref(),
+            &DocumentId::Design(ref x) => x.inner.as_ref(),
+            &DocumentId::Local(ref x) => x.inner.as_ref(),
         }
     }
 
@@ -441,7 +460,7 @@ impl From<LocalDocumentName> for DocumentId {
 
 #[doc(hidden)]
 impl serde::Serialize for DocumentId {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
     where
         S: serde::Serializer,
     {
@@ -450,35 +469,24 @@ impl serde::Serialize for DocumentId {
 }
 
 #[doc(hidden)]
-impl<'de> serde::Deserialize<'de> for DocumentId {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+impl serde::Deserialize for DocumentId {
+    fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
     where
-        D: serde::Deserializer<'de>,
+        D: serde::Deserializer,
     {
         struct Visitor;
 
-        impl<'de> serde::de::Visitor<'de> for Visitor {
+        impl serde::de::Visitor for Visitor {
             type Value = DocumentId;
 
-            fn expecting(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-                write!(f, "a string specifying a document id")
-            }
-
-            fn visit_str<E>(self, encoded: &str) -> Result<Self::Value, E>
+            fn visit_str<E>(&mut self, encoded: &str) -> Result<Self::Value, E>
             where
                 E: serde::de::Error,
             {
                 Ok(DocumentId::from(encoded))
             }
 
-            fn visit_borrowed_str<E>(self, encoded: &'de str) -> Result<Self::Value, E>
-            where
-                E: std::error::Error,
-            {
-                Ok(DocumentId::from(encoded))
-            }
-
-            fn visit_string<E>(self, encoded: String) -> Result<Self::Value, E>
+            fn visit_string<E>(&mut self, encoded: String) -> Result<Self::Value, E>
             where
                 E: serde::de::Error,
             {
@@ -486,7 +494,7 @@ impl<'de> serde::Deserialize<'de> for DocumentId {
             }
         }
 
-        deserializer.deserialize_string(Visitor)
+        deserializer.deserialize(Visitor)
     }
 }
 
@@ -556,21 +564,21 @@ mod document_id_tests {
     #[test]
     fn serialize_normal() {
         let expected = serde_json::Value::String("alpha".into());
-        let got = serde_json::to_value(&DocumentId::from("alpha")).unwrap();
+        let got = serde_json::to_value(&DocumentId::from("alpha"));
         assert_eq!(expected, got);
     }
 
     #[test]
     fn serialize_design() {
         let expected = serde_json::Value::String("_design/alpha".into());
-        let got = serde_json::to_value(&DocumentId::from("_design/alpha")).unwrap();
+        let got = serde_json::to_value(&DocumentId::from("_design/alpha"));
         assert_eq!(expected, got);
     }
 
     #[test]
     fn serialize_local() {
         let expected = serde_json::Value::String("_local/alpha".into());
-        let got = serde_json::to_value(&DocumentId::from("_local/alpha")).unwrap();
+        let got = serde_json::to_value(&DocumentId::from("_local/alpha"));
         assert_eq!(expected, got);
     }
 
@@ -741,20 +749,21 @@ mod into_database_path_tests {
     fn static_str_ref_nok() {
 
         use Error;
+        use error::PathParseErrorKind;
 
         macro_rules! nok {
             ($input:expr, $expected_error_kind:pat) => {
                 match $input.into_database_path() {
-                    Err(Error::PathParse{ inner: $expected_error_kind }) => (),
-                    x => panic!("Got unexpected result {:?}", x),
+                    Err(Error::PathParse($expected_error_kind)) => (),
+                    x @ _ => unexpected_result!(x),
                 }
             }
         }
 
-        nok!("", PathParseError::NoLeadingSlash);
-        nok!("/", PathParseError::TooFewSegments);
-        nok!("/alpha/", PathParseError::TrailingSlash);
-        nok!("/alpha/bravo", PathParseError::TooManySegments);
+        nok!("", PathParseErrorKind::NoLeadingSlash);
+        nok!("/", PathParseErrorKind::TooFewSegments);
+        nok!("/alpha/", PathParseErrorKind::TrailingSlash);
+        nok!("/alpha/bravo", PathParseErrorKind::TooManySegments);
     }
 }
 
@@ -993,25 +1002,26 @@ mod into_document_path_tests {
     fn static_str_ref_nok() {
 
         use Error;
+        use error::PathParseErrorKind;
 
         macro_rules! nok {
             ($input:expr, $expected_error_kind:pat) => {
                 match $input.into_document_path() {
-                    Err(Error::PathParse{ inner: $expected_error_kind }) => (),
-                    x => panic!("Got unexpected result {:?}", x),
+                    Err(Error::PathParse($expected_error_kind)) => (),
+                    x @ _ => unexpected_result!(x),
                 }
             }
         }
 
-        nok!("", PathParseError::NoLeadingSlash);
-        nok!("/", PathParseError::TooFewSegments);
-        nok!("/alpha/", PathParseError::TooFewSegments);
-        nok!("/alpha/bravo/", PathParseError::TrailingSlash);
-        nok!("/alpha/bravo/charlie", PathParseError::TooManySegments);
-        nok!("/alpha/_design", PathParseError::TooFewSegments);
-        nok!("/alpha/_design/", PathParseError::TooFewSegments);
-        nok!("/alpha/_local", PathParseError::TooFewSegments);
-        nok!("/alpha/_local/", PathParseError::TooFewSegments);
+        nok!("", PathParseErrorKind::NoLeadingSlash);
+        nok!("/", PathParseErrorKind::TooFewSegments);
+        nok!("/alpha/", PathParseErrorKind::TooFewSegments);
+        nok!("/alpha/bravo/", PathParseErrorKind::TrailingSlash);
+        nok!("/alpha/bravo/charlie", PathParseErrorKind::TooManySegments);
+        nok!("/alpha/_design", PathParseErrorKind::TooFewSegments);
+        nok!("/alpha/_design/", PathParseErrorKind::TooFewSegments);
+        nok!("/alpha/_local", PathParseErrorKind::TooFewSegments);
+        nok!("/alpha/_local/", PathParseErrorKind::TooFewSegments);
     }
 }
 
@@ -1189,34 +1199,38 @@ mod into_design_document_path_tests {
     fn static_str_ref_nok() {
 
         use Error;
+        use error::PathParseErrorKind;
         use super::DESIGN_PREFIX;
 
         macro_rules! nok {
             ($input:expr, $expected_error_kind:pat) => {
                 match $input.into_design_document_path() {
-                    Err(Error::PathParse{ inner: $expected_error_kind }) => (),
-                    x => panic!("Got unexpected result {:?}", x),
+                    Err(Error::PathParse($expected_error_kind)) => (),
+                    x @ _ => unexpected_result!(x),
                 }
             }
         }
 
-        nok!("", PathParseError::NoLeadingSlash);
-        nok!("alpha/_design/bravo", PathParseError::NoLeadingSlash);
-        nok!("//alpha/_design/bravo", PathParseError::EmptySegment);
+        nok!("", PathParseErrorKind::NoLeadingSlash);
+        nok!("alpha/_design/bravo", PathParseErrorKind::NoLeadingSlash);
+        nok!("//alpha/_design/bravo", PathParseErrorKind::EmptySegment);
         nok!(
             "/alpha//_design/bravo",
-            PathParseError::BadSegment(DESIGN_PREFIX)
+            PathParseErrorKind::BadSegment(DESIGN_PREFIX)
         );
-        nok!("/alpha/_design//bravo", PathParseError::EmptySegment);
-        nok!("/alpha/_design/bravo/", PathParseError::TrailingSlash);
-        nok!("/", PathParseError::TooFewSegments);
-        nok!("/alpha", PathParseError::TooFewSegments);
-        nok!("/alpha/_local", PathParseError::BadSegment(DESIGN_PREFIX));
-        nok!("/alpha/_design", PathParseError::TooFewSegments);
-        nok!("/alpha/_design/", PathParseError::TooFewSegments);
+        nok!("/alpha/_design//bravo", PathParseErrorKind::EmptySegment);
+        nok!("/alpha/_design/bravo/", PathParseErrorKind::TrailingSlash);
+        nok!("/", PathParseErrorKind::TooFewSegments);
+        nok!("/alpha", PathParseErrorKind::TooFewSegments);
+        nok!(
+            "/alpha/_local",
+            PathParseErrorKind::BadSegment(DESIGN_PREFIX)
+        );
+        nok!("/alpha/_design", PathParseErrorKind::TooFewSegments);
+        nok!("/alpha/_design/", PathParseErrorKind::TooFewSegments);
         nok!(
             "/alpha/_design/bravo/charlie",
-            PathParseError::TooManySegments
+            PathParseErrorKind::TooManySegments
         );
     }
 }
@@ -1516,31 +1530,32 @@ mod into_attachment_path_tests {
     fn static_str_ref_nok() {
 
         use Error;
+        use error::PathParseErrorKind;
 
         macro_rules! nok {
             ($input:expr, $expected_error_kind:pat) => {
                 match $input.into_attachment_path() {
-                    Err(Error::PathParse{ inner: $expected_error_kind }) => (),
-                    x => panic!("Got unexpected result {:?}", x),
+                    Err(Error::PathParse($expected_error_kind)) => (),
+                    x @ _ => unexpected_result!(x),
                 }
             }
         }
 
-        nok!("", PathParseError::NoLeadingSlash);
-        nok!("/", PathParseError::TooFewSegments);
-        nok!("/alpha/", PathParseError::TooFewSegments);
-        nok!("/alpha/bravo/", PathParseError::TooFewSegments);
-        nok!("/alpha/bravo/charlie/", PathParseError::TrailingSlash);
+        nok!("", PathParseErrorKind::NoLeadingSlash);
+        nok!("/", PathParseErrorKind::TooFewSegments);
+        nok!("/alpha/", PathParseErrorKind::TooFewSegments);
+        nok!("/alpha/bravo/", PathParseErrorKind::TooFewSegments);
+        nok!("/alpha/bravo/charlie/", PathParseErrorKind::TrailingSlash);
         nok!(
             "/alpha/bravo/charlie/delta",
-            PathParseError::TooManySegments
+            PathParseErrorKind::TooManySegments
         );
-        nok!("/alpha/_design", PathParseError::TooFewSegments);
-        nok!("/alpha/_design/", PathParseError::TooFewSegments);
-        nok!("/alpha/_design/bravo", PathParseError::TooFewSegments);
-        nok!("/alpha/_local", PathParseError::TooFewSegments);
-        nok!("/alpha/_local/", PathParseError::TooFewSegments);
-        nok!("/alpha/_local/bravo", PathParseError::TooFewSegments);
+        nok!("/alpha/_design", PathParseErrorKind::TooFewSegments);
+        nok!("/alpha/_design/", PathParseErrorKind::TooFewSegments);
+        nok!("/alpha/_design/bravo", PathParseErrorKind::TooFewSegments);
+        nok!("/alpha/_local", PathParseErrorKind::TooFewSegments);
+        nok!("/alpha/_local/", PathParseErrorKind::TooFewSegments);
+        nok!("/alpha/_local/bravo", PathParseErrorKind::TooFewSegments);
     }
 }
 
@@ -1768,53 +1783,57 @@ mod into_view_path_tests {
     fn static_str_ref_nok() {
 
         use Error;
+        use error::PathParseErrorKind;
         use super::{DESIGN_PREFIX, VIEW_PREFIX};
 
         macro_rules! nok {
             ($input:expr, $expected_error_kind:pat) => {
                 match $input.into_view_path() {
-                    Err(Error::PathParse{ inner: $expected_error_kind }) => (),
-                    x => panic!("Got unexpected result {:?}", x),
+                    Err(Error::PathParse($expected_error_kind)) => (),
+                    x @ _ => unexpected_result!(x),
                 }
             }
         }
 
-        nok!("", PathParseError::NoLeadingSlash);
-        nok!("/", PathParseError::TooFewSegments);
-        nok!("/alpha", PathParseError::TooFewSegments);
-        nok!("/alpha/", PathParseError::TooFewSegments);
-        nok!("/alpha/_design", PathParseError::TooFewSegments);
-        nok!("/alpha/_design/", PathParseError::TooFewSegments);
-        nok!("/alpha/_design/bravo", PathParseError::TooFewSegments);
-        nok!("/alpha/_design/bravo/", PathParseError::TooFewSegments);
-        nok!("/alpha/_design/bravo/_view", PathParseError::TooFewSegments);
+        nok!("", PathParseErrorKind::NoLeadingSlash);
+        nok!("/", PathParseErrorKind::TooFewSegments);
+        nok!("/alpha", PathParseErrorKind::TooFewSegments);
+        nok!("/alpha/", PathParseErrorKind::TooFewSegments);
+        nok!("/alpha/_design", PathParseErrorKind::TooFewSegments);
+        nok!("/alpha/_design/", PathParseErrorKind::TooFewSegments);
+        nok!("/alpha/_design/bravo", PathParseErrorKind::TooFewSegments);
+        nok!("/alpha/_design/bravo/", PathParseErrorKind::TooFewSegments);
+        nok!(
+            "/alpha/_design/bravo/_view",
+            PathParseErrorKind::TooFewSegments
+        );
         nok!(
             "/alpha/_design/bravo/_view/",
-            PathParseError::TooFewSegments
+            PathParseErrorKind::TooFewSegments
         );
         nok!(
             "/alpha/_design/bravo/_view/charlie/",
-            PathParseError::TrailingSlash
+            PathParseErrorKind::TrailingSlash
         );
         nok!(
             "/alpha/_design/bravo/_view/charlie/delta",
-            PathParseError::TooManySegments
+            PathParseErrorKind::TooManySegments
         );
         nok!(
             "/alpha/_local/bravo/_view/charlie/",
-            PathParseError::BadSegment(DESIGN_PREFIX)
+            PathParseErrorKind::BadSegment(DESIGN_PREFIX)
         );
         nok!(
             "/alpha/bravo/_view/charlie/",
-            PathParseError::BadSegment(DESIGN_PREFIX)
+            PathParseErrorKind::BadSegment(DESIGN_PREFIX)
         );
         nok!(
             "/alpha/_design/bravo/invalid/charlie",
-            PathParseError::BadSegment(VIEW_PREFIX)
+            PathParseErrorKind::BadSegment(VIEW_PREFIX)
         );
         nok!(
             "/alpha/_design/bravo/charlie",
-            PathParseError::BadSegment(VIEW_PREFIX)
+            PathParseErrorKind::BadSegment(VIEW_PREFIX)
         );
     }
 }

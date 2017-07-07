@@ -1,4 +1,7 @@
-use {Error, regex, std, tempdir};
+use Error;
+use regex;
+use std;
+use tempdir;
 
 // RAII wrapper for a child process that kills the process when dropped.
 struct AutoKillProcess(std::process::Child);
@@ -34,14 +37,20 @@ impl FakeServer {
     pub fn new() -> Result<FakeServer, Error> {
 
         let tmp_root = try!(tempdir::TempDir::new("chill_test").map_err(|e| {
-            ("Failed to create temporary directory for CouchDB server", e)
+            Error::Io {
+                cause: e,
+                description: "Failed to create temporary directory for CouchDB server",
+            }
         }));
 
         {
             use std::io::Write;
             let path = tmp_root.path().join("couchdb.conf");
             let mut f = try!(std::fs::File::create(&path).map_err(|e| {
-                ("Failed to open CouchDB server configuration file", e)
+                Error::Io {
+                    cause: e,
+                    description: "Failed to open CouchDB server configuration file",
+                }
             }));
             try!(
                 f.write_all(
@@ -56,12 +65,20 @@ impl FakeServer {
                 [httpd]\n\
                 port = 0\n\
                 ",
-                ).map_err(|e| ("Failed to write CouchDB server configuration file", e))
+                ).map_err(|e| {
+                        Error::Io {
+                            cause: e,
+                            description: "Failed to write CouchDB server configuration file",
+                        }
+                    })
             );
         }
 
         let child = try!(new_test_server_command(&tmp_root).spawn().map_err(|e| {
-            ("Failed to spawn CouchDB server process", e)
+            Error::Io {
+                cause: e,
+                description: "Failed to spawn CouchDB server process",
+            }
         }));
         let mut process = AutoKillProcess(child);
 
@@ -106,7 +123,10 @@ impl FakeServer {
         // Wait for the CouchDB server to start its HTTP service.
         let uri = try!(rx.recv().map_err(|e| {
             t.join().unwrap_err();
-            ("Failed to extract URI from CouchDB server", e)
+            Error::ChannelReceive {
+                cause: e,
+                description: "Failed to extract URI from CouchDB server",
+            }
         }));
 
         Ok(FakeServer {

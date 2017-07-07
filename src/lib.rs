@@ -1,8 +1,5 @@
-//! Chill is a CouchDB client-side library.
-
 extern crate futures;
-#[cfg(test)]
-extern crate hyper;
+extern crate mime;
 extern crate regex;
 extern crate reqwest;
 extern crate serde;
@@ -13,19 +10,36 @@ extern crate tempdir;
 extern crate url;
 extern crate uuid;
 
-pub mod action;
-mod client;
-mod error;
-mod nok_response;
-pub mod path;
-mod revision;
-pub mod testing;
-mod transport;
+/*
+extern crate base64;
+extern crate hyper;
+#[macro_use(mime, __mime__ident_or_ext)]
 
+#[cfg(test)]
+#[macro_use]
+mod test_macro;
+
+mod attachment;
+mod client;
+mod design;
+mod document;
+mod error;
+mod revision;
+mod transport;
+mod view;
+
+pub mod action;
+pub mod path;
+pub mod testing;
+
+pub use attachment::{Attachment, SavedAttachment, UnsavedAttachment};
 pub use client::{Client, IntoUrl};
-pub use error::Error;
-pub use nok_response::NokResponse;
+pub use design::{Design, DesignBuilder, ViewFunction};
+pub use document::Document;
+pub use error::{Error, ErrorResponse};
 pub use path::{AttachmentName, AttachmentPath, DatabaseName, DatabasePath, DesignDocumentName, DesignDocumentPath,
                DocumentId, DocumentPath, IntoAttachmentPath, IntoDatabasePath, IntoDesignDocumentPath,
                IntoDocumentPath, IntoViewPath, LocalDocumentName, NormalDocumentName, ViewName, ViewPath};
 pub use revision::Revision;
+pub use view::{ViewResponse, ViewRow};
+*/

@@ -10,6 +10,7 @@ keywords = ["couchdb", "database", "nosql"]
 
 [dependencies]
 futures = "0.1.14"
+mime = "0.3.2"
 regex = "0.2.2"
 reqwest = "0.6.2"
 serde = "1.0.9"
@@ -20,4 +21,4 @@ url = "1.5"
 uuid = "0.5.1"
 
 [dev-dependencies]
-hyper = "0.11.1"
+# hyper = "0.11.1"
