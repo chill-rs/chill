@@ -2,7 +2,10 @@
 
 ## v0.4.0 (unreleased)
 
-No changes yet!
+### Breaking changes
+
+* The `testing::DocumentBuilder::build_content` method has been removed
+  because its interface is not supported in Serde v1.
 
 ## v0.3.0 (2016-10-01)
 

@@ -1,6 +1,5 @@
-use {Attachment, AttachmentName, AttachmentPath, DatabaseName, DocumentId, DocumentPath, Error, Revision};
-use {mime, serde, serde_json, std};
-use IntoDocumentPath;
+use {Attachment, AttachmentName, AttachmentPath, DatabaseName, DocumentId, DocumentPath, Error, IntoDocumentPath,
+     Revision, mime, serde, serde_json, std};
 use attachment::AttachmentBuilder;
 
 /// Contains a specific version of a document.
@@ -53,7 +52,10 @@ impl Document {
 
     /// Decodes and returns the document content, from a JSON object into a Rust
     /// type.
-    pub fn get_content<C: serde::Deserialize>(&self) -> Result<C, Error> {
+    pub fn get_content<C>(&self) -> Result<C, Error>
+    where
+        for<'de> C: serde::Deserialize<'de>,
+    {
         serde_json::from_value(self.content.clone()).map_err(|e| Error::JsonDecode { cause: e })
     }
 
@@ -65,7 +67,9 @@ impl Document {
     /// modified `Document`.
     ///
     pub fn set_content<C: serde::Serialize>(&mut self, new_content: &C) -> Result<(), Error> {
-        self.content = serde_json::to_value(new_content);
+        self.content = serde_json::to_value(new_content).map_err(|e| {
+            Error::JsonEncode { cause: e }
+        })?;
         Ok(())
     }
 
@@ -124,7 +128,7 @@ impl Document {
 
 #[doc(hidden)]
 impl serde::Serialize for Document {
-    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
@@ -137,9 +141,12 @@ impl serde::Serialize for Document {
 
         if let serde_json::Value::Object(ref mut fields) = value {
             if !self.attachments.is_empty() {
-                let mut attachments = std::collections::BTreeMap::new();
+                let mut attachments = serde_json::map::Map::new();
                 for (name, attachment) in self.attachments.iter() {
-                    attachments.insert(String::from(name.clone()), serde_json::to_value(attachment));
+                    attachments.insert(
+                        String::from(name.clone()),
+                        serde_json::to_value(attachment).unwrap(),
+                    );
                 }
                 fields.insert(
                     "_attachments".to_string(),
@@ -179,17 +186,15 @@ impl<'a> Iterator for AttachmentIter<'a> {
 mod document_tests {
 
     use super::*;
-    use {AttachmentName, Error, IntoDocumentPath, Revision};
-    use {base64, serde_json, std};
-    use attachment::AttachmentBuilder;
+    use {Error, IntoDocumentPath, base64};
 
     #[test]
     fn get_content_ok() {
 
-        let content = serde_json::builder::ObjectBuilder::new()
-            .insert("field_1", 42)
-            .insert("field_2", "foo")
-            .build();
+        let content = json!({
+            "field_1": 42,
+            "field_2": "foo",
+        });
 
         let doc = Document {
             doc_path: "/database/document_id".into_document_path().unwrap(),
@@ -200,25 +205,23 @@ mod document_tests {
         };
 
         let expected = content;
-        let got = doc.get_content().unwrap();
+        let got: serde_json::Value = doc.get_content().unwrap();
         assert_eq!(expected, got);
     }
 
     #[test]
     fn get_content_ok_document_is_deleted() {
 
-        let content = serde_json::builder::ObjectBuilder::new().build();
-
         let doc = Document {
             doc_path: "/database/document_id".into_document_path().unwrap(),
             revision: "1-1234567890abcdef1234567890abcdef".parse().unwrap(),
             deleted: true,
             attachments: std::collections::HashMap::new(),
-            content: content.clone(),
+            content: json!({}),
         };
 
-        let expected = content;
-        let got = doc.get_content().unwrap();
+        let expected = json!({});
+        let got: serde_json::Value = doc.get_content().unwrap();
         assert_eq!(expected, got);
     }
 
@@ -230,12 +233,12 @@ mod document_tests {
             revision: "1-1234567890abcdef1234567890abcdef".parse().unwrap(),
             deleted: false,
             attachments: std::collections::HashMap::new(),
-            content: serde_json::builder::ObjectBuilder::new().build(),
+            content: json!({}),
         };
 
         match doc.get_content::<i32>() {
             Err(Error::JsonDecode { .. }) => (),
-            x @ _ => unexpected_result!(x),
+            x => panic!("Got unexpected result {:?}", x),
         }
     }
 
@@ -247,12 +250,12 @@ mod document_tests {
             revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
             deleted: true, // This value should have no effect.
             attachments: std::collections::HashMap::new(),
-            content: serde_json::builder::ObjectBuilder::new().build(),
+            content: json!({}),
         };
 
         let encoded = serde_json::to_string(&document).unwrap();
-        let expected = serde_json::builder::ObjectBuilder::new().build();
-        let got = serde_json::from_str(&encoded).unwrap();
+        let expected = json!({});
+        let got: serde_json::Value = serde_json::from_str(&encoded).unwrap();
         assert_eq!(expected, got);
     }
 
@@ -268,7 +271,7 @@ mod document_tests {
                 m.insert(
                     AttachmentName::from("attachment_1"),
                     AttachmentBuilder::new_saved_with_content(
-                        mime!(Text / Plain),
+                        mime::TEXT_PLAIN,
                         "md5-XNdWXQ0FO9vPx7skS0GuYA==",
                         17,
                         "Blah blah blah",
@@ -277,38 +280,35 @@ mod document_tests {
                 m.insert(
                     AttachmentName::from("attachment_2"),
                     AttachmentBuilder::new_unsaved(
-                        mime!(Text / Html),
+                        mime::TEXT_HTML,
                         "<p>Yak yak yak</p>".to_string().into_bytes(),
                     ).unwrap(),
                 );
                 m
             },
-            content: serde_json::builder::ObjectBuilder::new()
-                .insert("field_1", 17)
-                .insert("field_2", "hello")
-                .build(),
+            content: json!({
+                "field_1": 17,
+                "field_2": "hello",
+            }),
         };
 
         let encoded = serde_json::to_string(&document).unwrap();
 
-        let expected = serde_json::builder::ObjectBuilder::new()
-            .insert("field_1", 17)
-            .insert("field_2", "hello")
-            .insert_object("_attachments", |x| {
-                x.insert_object("attachment_1", |x| x.insert("stub", true))
-                    .insert_object("attachment_2", |x| {
-                        x.insert("content_type", "text/html").insert(
-                            "data",
-                            base64::encode(
-                                "<p>Yak yak yak</p>"
-                                    .as_bytes(),
-                            ),
-                        )
-                    })
-            })
-            .build();
+        let expected = json!({
+            "field_1": 17,
+            "field_2": "hello",
+            "_attachments": {
+                "attachment_1": {
+                    "stub": true,
+                },
+                "attachment_2": {
+                    "content_type": "text/html",
+                    "data": base64::encode(b"<p>Yak yak yak</p>"),
+                },
+            },
+        });
 
-        let got = serde_json::from_str(&encoded).unwrap();
+        let got: serde_json::Value = serde_json::from_str(&encoded).unwrap();
         assert_eq!(expected, got);
     }
 
@@ -316,7 +316,7 @@ mod document_tests {
     fn get_attachment_exists() {
 
         let attachment_1 = AttachmentBuilder::new_saved_with_content(
-            mime!(Text / Plain),
+            mime::TEXT_PLAIN,
             "md5-XNdWXQ0FO9vPx7skS0GuYA=\
                                                                       =",
             17,
@@ -332,7 +332,7 @@ mod document_tests {
                 m.insert(AttachmentName::from("attachment_1"), attachment_1.clone());
                 m
             },
-            content: serde_json::builder::ObjectBuilder::new().build(),
+            content: json!({}),
         };
 
         let got = document.get_attachment("attachment_1");
@@ -347,7 +347,7 @@ mod document_tests {
             revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
             deleted: false,
             attachments: std::collections::HashMap::new(),
-            content: serde_json::builder::ObjectBuilder::new().build(),
+            content: json!({}),
         };
 
         let got = document.get_attachment("attachment_1");
@@ -362,13 +362,13 @@ mod document_tests {
             revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
             deleted: false,
             attachments: std::collections::HashMap::new(),
-            content: serde_json::builder::ObjectBuilder::new().build(),
+            content: json!({}),
         };
 
-        document.insert_attachment("foo", mime!(Text / Plain), "This is the content.".into());
+        document.insert_attachment("foo", mime::TEXT_PLAIN, "This is the content.".into());
         document.insert_attachment(
             "bar",
-            mime!(Text / Plain),
+            mime::TEXT_PLAIN,
             "This is the second attachment.".into(),
         );
 
@@ -380,15 +380,15 @@ mod document_tests {
                 let mut m = std::collections::HashMap::new();
                 m.insert(
                     AttachmentName::from("foo"),
-                    AttachmentBuilder::new_unsaved(mime!(Text / Plain), "This is the content.").unwrap(),
+                    AttachmentBuilder::new_unsaved(mime::TEXT_PLAIN, "This is the content.").unwrap(),
                 );
                 m.insert(
                     AttachmentName::from("bar"),
-                    AttachmentBuilder::new_unsaved(mime!(Text / Plain), "This is the second attachment.").unwrap(),
+                    AttachmentBuilder::new_unsaved(mime::TEXT_PLAIN, "This is the second attachment.").unwrap(),
                 );
                 m
             },
-            content: serde_json::builder::ObjectBuilder::new().build(),
+            content: json!({}),
         };
 
         assert_eq!(expected, document);
@@ -402,13 +402,13 @@ mod document_tests {
             revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
             deleted: false,
             attachments: std::collections::HashMap::new(),
-            content: serde_json::builder::ObjectBuilder::new().build(),
+            content: json!({}),
         };
 
-        document.insert_attachment("foo", mime!(Text / Plain), "This is the content.".into());
+        document.insert_attachment("foo", mime::TEXT_PLAIN, "This is the content.".into());
         document.insert_attachment(
             "foo",
-            mime!(Text / Plain),
+            mime::TEXT_PLAIN,
             "This is the second attachment.".into(),
         );
 
@@ -420,11 +420,11 @@ mod document_tests {
                 let mut m = std::collections::HashMap::new();
                 m.insert(
                     AttachmentName::from("foo"),
-                    AttachmentBuilder::new_unsaved(mime!(Text / Plain), "This is the second attachment.").unwrap(),
+                    AttachmentBuilder::new_unsaved(mime::TEXT_PLAIN, "This is the second attachment.").unwrap(),
                 );
                 m
             },
-            content: serde_json::builder::ObjectBuilder::new().build(),
+            content: json!({}),
         };
 
         assert_eq!(expected, document);
@@ -441,11 +441,11 @@ mod document_tests {
                 let mut m = std::collections::HashMap::new();
                 m.insert(
                     AttachmentName::from("foo"),
-                    AttachmentBuilder::new_unsaved(mime!(Text / Plain), "This is the content.").unwrap(),
+                    AttachmentBuilder::new_unsaved(mime::TEXT_PLAIN, "This is the content.").unwrap(),
                 );
                 m
             },
-            content: serde_json::builder::ObjectBuilder::new().build(),
+            content: json!({}),
         };
 
         document.remove_attachment("foo");
@@ -455,7 +455,7 @@ mod document_tests {
             revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
             deleted: false,
             attachments: std::collections::HashMap::new(),
-            content: serde_json::builder::ObjectBuilder::new().build(),
+            content: json!({}),
         };
 
         assert_eq!(expected, document);
@@ -472,11 +472,11 @@ mod document_tests {
                 let mut m = std::collections::HashMap::new();
                 m.insert(
                     AttachmentName::from("foo"),
-                    AttachmentBuilder::new_unsaved(mime!(Text / Plain), "This is the content.").unwrap(),
+                    AttachmentBuilder::new_unsaved(mime::TEXT_PLAIN, "This is the content.").unwrap(),
                 );
                 m
             },
-            content: serde_json::builder::ObjectBuilder::new().build(),
+            content: json!({}),
         };
 
         document.remove_attachment("bar");
@@ -489,11 +489,11 @@ mod document_tests {
                 let mut m = std::collections::HashMap::new();
                 m.insert(
                     AttachmentName::from("foo"),
-                    AttachmentBuilder::new_unsaved(mime!(Text / Plain), "This is the content.").unwrap(),
+                    AttachmentBuilder::new_unsaved(mime::TEXT_PLAIN, "This is the content.").unwrap(),
                 );
                 m
             },
-            content: serde_json::builder::ObjectBuilder::new().build(),
+            content: json!({}),
         };
 
         assert_eq!(expected, document);
@@ -506,11 +506,11 @@ mod document_tests {
             let mut m = std::collections::HashMap::new();
             m.insert(
                 AttachmentName::from("foo"),
-                AttachmentBuilder::new_unsaved(mime!(Text / Plain), "This is the content.").unwrap(),
+                AttachmentBuilder::new_unsaved(mime::TEXT_PLAIN, "This is the content.").unwrap(),
             );
             m.insert(
                 AttachmentName::from("bar"),
-                AttachmentBuilder::new_unsaved(mime!(Text / Plain), "This is the second attachment.").unwrap(),
+                AttachmentBuilder::new_unsaved(mime::TEXT_PLAIN, "This is the second attachment.").unwrap(),
             );
             m
         };
@@ -520,7 +520,7 @@ mod document_tests {
             revision: Revision::parse("42-1234567890abcdef1234567890abcdef").unwrap(),
             deleted: false,
             attachments: attachments.clone(),
-            content: serde_json::builder::ObjectBuilder::new().build(),
+            content: json!({}),
         };
 
         let got = document
@@ -545,10 +545,10 @@ pub struct JsonDecodableDocument {
     pub content: serde_json::Value,
 }
 
-impl serde::Deserialize for JsonDecodableDocument {
-    fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
+impl<'de> serde::Deserialize<'de> for JsonDecodableDocument {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: serde::Deserializer,
+        D: serde::Deserializer<'de>,
     {
         enum Field {
             Attachments,
@@ -558,17 +558,21 @@ impl serde::Deserialize for JsonDecodableDocument {
             Rev,
         }
 
-        impl serde::Deserialize for Field {
-            fn deserialize<D>(deserializer: &mut D) -> Result<Field, D::Error>
+        impl<'de> serde::Deserialize<'de> for Field {
+            fn deserialize<D>(deserializer: D) -> Result<Field, D::Error>
             where
-                D: serde::Deserializer,
+                D: serde::Deserializer<'de>,
             {
                 struct Visitor;
 
-                impl serde::de::Visitor for Visitor {
+                impl<'de> serde::de::Visitor<'de> for Visitor {
                     type Value = Field;
 
-                    fn visit_str<E>(&mut self, value: &str) -> Result<Field, E>
+                    fn expecting(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+                        write!(f, "a CouchDB document field")
+                    }
+
+                    fn visit_str<E>(self, value: &str) -> Result<Field, E>
                     where
                         E: serde::de::Error,
                     {
@@ -582,63 +586,74 @@ impl serde::Deserialize for JsonDecodableDocument {
                     }
                 }
 
-                deserializer.deserialize(Visitor)
+                deserializer.deserialize_identifier(Visitor)
             }
         }
 
         struct Visitor;
 
-        impl serde::de::Visitor for Visitor {
+        impl<'de> serde::de::Visitor<'de> for Visitor {
             type Value = JsonDecodableDocument;
 
-            fn visit_map<V>(&mut self, mut visitor: V) -> Result<Self::Value, V::Error>
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+                write!(f, "a CouchDb document object")
+            }
+
+            fn visit_map<V>(self, mut visitor: V) -> Result<Self::Value, V::Error>
             where
-                V: serde::de::MapVisitor,
+                V: serde::de::MapAccess<'de>,
             {
                 let mut attachments = None;
                 let mut deleted = None;
                 let mut id = None;
                 let mut revision = None;
-                let mut content_builder = serde_json::builder::ObjectBuilder::new();
+                let mut content_builder = serde_json::map::Map::new();
 
-                loop {
-                    match try!(visitor.visit_key()) {
-                        Some(Field::Attachments) => {
-                            attachments = Some(try!(visitor.visit_value()));
+                while let Some(key) = visitor.next_key()? {
+                    match key {
+                        Field::Attachments => {
+                            if attachments.is_some() {
+                                return Err(serde::de::Error::duplicate_field("_attachments"));
+                            }
+                            attachments = Some(visitor.next_value()?);
                         }
-                        Some(Field::Content(name)) => {
-                            let value = Some(try!(visitor.visit_value::<serde_json::Value>()));
-                            content_builder = content_builder.insert(name, value);
+                        Field::Content(name) => {
+                            let value = visitor.next_value::<serde_json::Value>()?;
+                            content_builder.insert(name, value);
                         }
-                        Some(Field::Deleted) => {
-                            deleted = Some(try!(visitor.visit_value()));
+                        Field::Deleted => {
+                            if deleted.is_some() {
+                                return Err(serde::de::Error::duplicate_field("_deleted"));
+                            }
+                            deleted = Some(visitor.next_value()?);
                         }
-                        Some(Field::Id) => {
-                            id = Some(try!(visitor.visit_value()));
+                        Field::Id => {
+                            if id.is_some() {
+                                return Err(serde::de::Error::duplicate_field("_id"));
+                            }
+                            id = Some(visitor.next_value()?);
                         }
-                        Some(Field::Rev) => {
-                            revision = Some(try!(visitor.visit_value()));
-                        }
-                        None => {
-                            break;
+                        Field::Rev => {
+                            if revision.is_some() {
+                                return Err(serde::de::Error::duplicate_field("_rev"));
+                            }
+                            revision = Some(visitor.next_value()?);
                         }
                     }
                 }
 
-                try!(visitor.end());
-
                 Ok(JsonDecodableDocument {
                     doc_id: match id {
                         Some(x) => x,
-                        None => try!(visitor.missing_field("_id")),
+                        None => return Err(serde::de::Error::missing_field("_id")),
                     },
                     revision: match revision {
                         Some(x) => x,
-                        None => try!(visitor.missing_field("_rev")),
+                        None => return Err(serde::de::Error::missing_field("_rev")),
                     },
                     deleted: deleted.unwrap_or(false),
                     attachments: attachments.unwrap_or(std::collections::HashMap::new()),
-                    content: content_builder.build(),
+                    content: serde_json::Value::Object(content_builder),
                 })
             }
         }
@@ -648,102 +663,11 @@ impl serde::Deserialize for JsonDecodableDocument {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Deserialize, PartialEq)]
 pub struct WriteDocumentResponse {
     pub ok: bool,
-    pub doc_id: DocumentId,
-    pub revision: Revision,
-}
-
-impl serde::Deserialize for WriteDocumentResponse {
-    fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer,
-    {
-        enum Field {
-            Id,
-            Ok,
-            Rev,
-        }
-
-        impl serde::Deserialize for Field {
-            fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
-            where
-                D: serde::Deserializer,
-            {
-                struct Visitor;
-
-                impl serde::de::Visitor for Visitor {
-                    type Value = Field;
-
-                    fn visit_str<E>(&mut self, value: &str) -> Result<Self::Value, E>
-                    where
-                        E: serde::de::Error,
-                    {
-                        match value {
-                            "id" => Ok(Field::Id),
-                            "ok" => Ok(Field::Ok),
-                            "rev" => Ok(Field::Rev),
-                            _ => Err(E::unknown_field(value)),
-                        }
-                    }
-                }
-
-                deserializer.deserialize(Visitor)
-            }
-        }
-
-        struct Visitor;
-
-        impl serde::de::Visitor for Visitor {
-            type Value = WriteDocumentResponse;
-
-            fn visit_map<V>(&mut self, mut visitor: V) -> Result<Self::Value, V::Error>
-            where
-                V: serde::de::MapVisitor,
-            {
-                let mut id = None;
-                let mut ok = None;
-                let mut rev = None;
-                loop {
-                    match try!(visitor.visit_key()) {
-                        Some(Field::Id) => {
-                            id = Some(try!(visitor.visit_value()));
-                        }
-                        Some(Field::Ok) => {
-                            ok = Some(try!(visitor.visit_value()));
-                        }
-                        Some(Field::Rev) => {
-                            rev = Some(try!(visitor.visit_value()));
-                        }
-                        None => {
-                            break;
-                        }
-                    }
-                }
-
-                try!(visitor.end());
-
-                Ok(WriteDocumentResponse {
-                    doc_id: match id {
-                        Some(x) => x,
-                        None => try!(visitor.missing_field("id")),
-                    },
-                    ok: match ok {
-                        Some(x) => x,
-                        None => try!(visitor.missing_field("ok")),
-                    },
-                    revision: match rev {
-                        Some(x) => x,
-                        None => try!(visitor.missing_field("rev")),
-                    },
-                })
-            }
-        }
-
-        static FIELDS: &'static [&'static str] = &["id", "ok", "rev"];
-        deserializer.deserialize_struct("WriteDocumentResponse", FIELDS, Visitor)
-    }
+    pub id: DocumentId,
+    pub rev: Revision,
 }
 
 #[derive(Debug)]
@@ -756,7 +680,7 @@ impl DocumentBuilder {
             revision: revision,
             deleted: false,
             attachments: std::collections::HashMap::new(),
-            content: serde_json::builder::ObjectBuilder::new().build(),
+            content: json!({}),
         })
     }
 
@@ -768,16 +692,9 @@ impl DocumentBuilder {
     pub fn with_content<C: serde::Serialize>(mut self, new_content: &C) -> Self {
         {
             let DocumentBuilder(ref mut doc) = self;
-            doc.content = serde_json::to_value(new_content);
+            doc.content = serde_json::to_value(new_content).unwrap();
         }
         self
-    }
-
-    pub fn build_content<F>(self, f: F) -> Self
-    where
-        F: FnOnce(serde_json::builder::ObjectBuilder) -> serde_json::builder::ObjectBuilder,
-    {
-        self.with_content(&f(serde_json::builder::ObjectBuilder::new()).build())
     }
 }
 
@@ -785,11 +702,7 @@ impl DocumentBuilder {
 mod tests {
 
     use super::*;
-    use AttachmentName;
-    use DocumentId;
-    use attachment::AttachmentBuilder;
     use serde_json;
-    use std;
 
     #[test]
     fn json_decodable_document_deserialize_ok_as_minimum() {
@@ -799,15 +712,12 @@ mod tests {
             revision: "42-1234567890abcdef1234567890abcdef".parse().unwrap(),
             deleted: false,
             attachments: std::collections::HashMap::new(),
-            content: serde_json::builder::ObjectBuilder::new().build(),
+            content: json!({}),
         };
 
-        let source = serde_json::builder::ObjectBuilder::new()
-            .insert("_id", "document_id")
-            .insert("_rev", "42-1234567890abcdef1234567890abcdef")
-            .build();
+        let source = r#"{"_id":"document_id",
+                         "_rev":"42-1234567890abcdef1234567890abcdef"}"#;
 
-        let source = serde_json::to_string(&source).unwrap();
         let got = serde_json::from_str(&source).unwrap();
         assert_eq!(expected, got);
     }
@@ -820,16 +730,13 @@ mod tests {
             revision: "42-1234567890abcdef1234567890abcdef".parse().unwrap(),
             deleted: true,
             attachments: std::collections::HashMap::new(),
-            content: serde_json::builder::ObjectBuilder::new().build(),
+            content: json!({}),
         };
 
-        let source = serde_json::builder::ObjectBuilder::new()
-            .insert("_id", "document_id")
-            .insert("_rev", "42-1234567890abcdef1234567890abcdef")
-            .insert("_deleted", true)
-            .build();
+        let source = r#"{"_id":"document_id",
+                         "_rev":"42-1234567890abcdef1234567890abcdef",
+                         "_deleted":true}"#;
 
-        let source = serde_json::to_string(&source).unwrap();
         let got = serde_json::from_str(&source).unwrap();
         assert_eq!(expected, got);
     }
@@ -842,20 +749,17 @@ mod tests {
             revision: "42-1234567890abcdef1234567890abcdef".parse().unwrap(),
             deleted: false,
             attachments: std::collections::HashMap::new(),
-            content: serde_json::builder::ObjectBuilder::new()
-                .insert("field_1", 42)
-                .insert("field_2", 17)
-                .build(),
+            content: json!({
+                "field_1": 42,
+                "field_2": 17,
+            }),
         };
 
-        let source = serde_json::builder::ObjectBuilder::new()
-            .insert("_id", "document_id")
-            .insert("_rev", "42-1234567890abcdef1234567890abcdef")
-            .insert("field_1", 42)
-            .insert("field_2", 17)
-            .build();
+        let source = r#"{"_id":"document_id",
+                         "_rev":"42-1234567890abcdef1234567890abcdef",
+                         "field_1": 42,
+                         "field_2": 17}"#;
 
-        let source = serde_json::to_string(&source).unwrap();
         let got = serde_json::from_str(&source).unwrap();
         assert_eq!(expected, got);
     }
@@ -872,7 +776,7 @@ mod tests {
                 map.insert(
                     AttachmentName::from("attachment_1"),
                     AttachmentBuilder::new_saved(
-                        mime!(Application / WwwFormUrlEncoded),
+                        mime::APPLICATION_WWW_FORM_URLENCODED,
                         "md5-XNdWXQ0FO9vPx7skS0GuYA==".to_string(),
                         23,
                         517,
@@ -880,99 +784,81 @@ mod tests {
                 );
                 map
             },
-            content: serde_json::builder::ObjectBuilder::new().build(),
+            content: json!({}),
         };
 
-        let source = serde_json::builder::ObjectBuilder::new()
-            .insert("_id", "document_id")
-            .insert("_rev", "42-1234567890abcdef1234567890abcdef")
-            .insert_object("_attachments", |x| {
-                x.insert_object("attachment_1", |x| {
-                    x.insert("content_type", "application/x-www-form-urlencoded")
-                        .insert("length", 517)
-                        .insert("stub", true)
-                        .insert("digest", "md5-XNdWXQ0FO9vPx7skS0GuYA==")
-                        .insert("revpos", 23)
-                })
-            })
-            .build();
+        let source = r#"{"_id":"document_id",
+                         "_rev":"42-1234567890abcdef1234567890abcdef",
+                         "_attachments": {
+                             "attachment_1": {
+                                 "content_type":"application/x-www-form-urlencoded",
+                                 "length":517,
+                                 "stub":true,
+                                 "digest":"md5-XNdWXQ0FO9vPx7skS0GuYA==",
+                                 "revpos":23
+                             }
+                         }}"#;
 
-        let source = serde_json::to_string(&source).unwrap();
         let got = serde_json::from_str(&source).unwrap();
         assert_eq!(expected, got);
     }
 
     #[test]
     fn json_decodable_document_deserialize_nok_missing_id() {
-
-        let source = serde_json::builder::ObjectBuilder::new()
-            .insert("_rev", "42-1234567890abcdef1234567890abcdef")
-            .build();
-
-        let source = serde_json::to_string(&source).unwrap();
-        let got = serde_json::from_str::<JsonDecodableDocument>(&source);
-        expect_json_error_missing_field!(got, "_id");
+        let source = r#"{"_rev":"42-1234567890abcdef1234567890abcdef"}"#;
+        match serde_json::from_str::<JsonDecodableDocument>(&source) {
+            Err(ref e) if e.is_data() => {}
+            x => panic!("Got unexpected result {:?}", x),
+        }
     }
 
     #[test]
     fn json_decodable_document_deserialize_nok_missing_rev() {
-
-        let source = serde_json::builder::ObjectBuilder::new()
-            .insert("_id", "document_id")
-            .build();
-
-        let source = serde_json::to_string(&source).unwrap();
-        let got = serde_json::from_str::<JsonDecodableDocument>(&source);
-        expect_json_error_missing_field!(got, "_rev");
+        let source = r#"{"_id":"document_id"}"#;
+        match serde_json::from_str::<JsonDecodableDocument>(&source) {
+            Err(ref e) if e.is_data() => {}
+            x => panic!("Got unexpected result {:?}", x),
+        }
     }
 
     #[test]
     fn write_document_response_deserialize_ok_with_all_fields() {
         let expected = WriteDocumentResponse {
-            doc_id: "foo".into(),
             ok: true,
-            revision: "1-12345678123456781234567812345678".parse().unwrap(),
+            id: "foo".into(),
+            rev: "1-12345678123456781234567812345678".parse().unwrap(),
         };
-        let source = serde_json::builder::ObjectBuilder::new()
-            .insert("id", "foo")
-            .insert("ok", true)
-            .insert("rev", "1-12345678123456781234567812345678")
-            .build();
-        let source = serde_json::to_string(&source).unwrap();
+        let source = r#"{"id":"foo",
+                         "ok":true,
+                         "rev":"1-12345678123456781234567812345678"}"#;
         let got = serde_json::from_str(&source).unwrap();
         assert_eq!(expected, got);
     }
 
     #[test]
     fn write_document_response_deserialize_nok_missing_id_field() {
-        let source = serde_json::builder::ObjectBuilder::new()
-            .insert("ok", true)
-            .insert("rev", "1-12345678123456781234567812345678")
-            .build();
-        let source = serde_json::to_string(&source).unwrap();
-        let got = serde_json::from_str::<WriteDocumentResponse>(&source);
-        expect_json_error_missing_field!(got, "id");
+        let source = r#"{"ok":true,"rev":"1-12345678123456781234567812345678"}"#;
+        match serde_json::from_str::<WriteDocumentResponse>(&source) {
+            Err(ref e) if e.is_data() => {}
+            x => panic!("Got unexpected result {:?}", x),
+        }
     }
 
     #[test]
     fn write_document_response_deserialize_nok_missing_ok_field() {
-        let source = serde_json::builder::ObjectBuilder::new()
-            .insert("id", "foo")
-            .insert("rev", "1-12345678123456781234567812345678")
-            .build();
-        let source = serde_json::to_string(&source).unwrap();
-        let got = serde_json::from_str::<WriteDocumentResponse>(&source);
-        expect_json_error_missing_field!(got, "ok");
+        let source = r#"{"id":"foo","rev":"1-12345678123456781234567812345678"}"#;
+        match serde_json::from_str::<WriteDocumentResponse>(&source) {
+            Err(ref e) if e.is_data() => {}
+            x => panic!("Got unexpected result {:?}", x),
+        }
     }
 
     #[test]
     fn write_document_response_deserialize_nok_missing_rev_field() {
-        let source = serde_json::builder::ObjectBuilder::new()
-            .insert("id", "foo")
-            .insert("ok", true)
-            .build();
-        let source = serde_json::to_string(&source).unwrap();
-        let got = serde_json::from_str::<WriteDocumentResponse>(&source);
-        expect_json_error_missing_field!(got, "rev");
+        let source = r#"{"id":"foo","ok":true}"#;
+        match serde_json::from_str::<WriteDocumentResponse>(&source) {
+            Err(ref e) if e.is_data() => {}
+            x => panic!("Got unexpected result {:?}", x),
+        }
     }
 }

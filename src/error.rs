@@ -1,15 +1,15 @@
-use {std, url, uuid};
+use {serde_json, std, url, uuid};
 
 /// Contains information for an error originating from or propagated by Chill.
 #[derive(Debug)]
 pub enum Error {
-    /*
     #[doc(hidden)]
     ChannelReceive {
         cause: std::sync::mpsc::RecvError,
         description: &'static str,
     },
 
+    /*
     /// The database already exists.
     DatabaseExists(ErrorResponse),
 
@@ -26,13 +26,13 @@ pub enum Error {
         description: &'static str,
     },
 
-    /*
     #[doc(hidden)]
     JsonDecode { cause: serde_json::Error },
 
     #[doc(hidden)]
     JsonEncode { cause: serde_json::Error },
 
+    /*
     #[doc(hidden)]
     Mock { extra_description: String },
 
@@ -121,16 +121,16 @@ impl std::error::Error for Error {
     fn description(&self) -> &str {
         use Error::*;
         match self {
-            /*
             &ChannelReceive { description, .. } => description,
+            /*
             &DatabaseExists(..) => "The database already exists",
             &DocumentConflict(..) => "A conflicting document with the same id exists",
             &DocumentIsDeleted => "The document is deleted",
             */
             &Io { description, .. } => description,
-            /*
             &JsonDecode { .. } => "An error occurred while decoding JSON",
             &JsonEncode { .. } => "An error occurred while encoding JSON",
+            /*
             &Mock { .. } => "A error occurred while test-mocking",
             &NotFound(..) => "The resource cannot be found",
             */
@@ -160,16 +160,16 @@ impl std::error::Error for Error {
     fn cause(&self) -> Option<&std::error::Error> {
         use Error::*;
         match self {
-            /*
             &ChannelReceive { ref cause, .. } => Some(cause),
+            /*
             &DatabaseExists(..) => None,
             &DocumentConflict(..) => None,
             &DocumentIsDeleted => None,
             */
             &Io { ref cause, .. } => Some(cause),
-            /*
             &JsonDecode { ref cause } => Some(cause),
             &JsonEncode { ref cause } => Some(cause),
+            /*
             &Mock { .. } => None,
             &NotFound(..) => None,
             */
@@ -195,11 +195,11 @@ impl std::fmt::Display for Error {
         use Error::*;
         let description = std::error::Error::description(self);
         match self {
-            /*
             &ChannelReceive {
                 ref cause,
                 description,
             } => write!(f, "{}: {}", description, cause),
+            /*
             &DatabaseExists(ref error_response) => write!(f, "{}: {}", description, error_response),
             &DocumentConflict(ref error_response) => write!(f, "{}: {}", description, error_response),
             &DocumentIsDeleted => write!(f, "{}", description),
@@ -208,9 +208,9 @@ impl std::fmt::Display for Error {
                 ref cause,
                 description,
             } => write!(f, "{}: {}", description, cause),
-            /*
             &JsonDecode { ref cause } => write!(f, "{}: {}", description, cause),
             &JsonEncode { ref cause } => write!(f, "{}: {}", description, cause),
+            /*
             &Mock { ref extra_description } => write!(f, "{}: {}", description, extra_description),
             &NotFound(ref error_response) => write!(f, "{}: {}", description, error_response),
             */
