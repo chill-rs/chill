@@ -19,7 +19,7 @@ use {ViewName, serde, std};
 ///            view_function.map);
 /// assert_eq!(Some(String::from("_sum")), view_function.reduce);
 /// ```
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct ViewFunction {
     /// The view's map function.
     ///
@@ -33,10 +33,13 @@ pub struct ViewFunction {
     /// For more information about _reduce functions_, please see the CouchDB
     /// documentation.
     ///
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub reduce: Option<String>,
 
     // This field exists to prevent applications from directly constructing this
     // struct.
+    #[serde(default)]
+    #[serde(skip_serializing)]
     _dummy: std::marker::PhantomData<()>,
 }
 
@@ -60,6 +63,7 @@ impl ViewFunction {
     }
 }
 
+/*
 impl serde::Deserialize for ViewFunction {
     fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
     where
@@ -98,12 +102,12 @@ impl serde::Deserialize for ViewFunction {
 
         struct Visitor;
 
-        impl serde::de::Visitor for Visitor {
+        impl<'de> serde::de::Visitor<'de> for Visitor {
             type Value = ViewFunction;
 
             fn visit_map<V>(&mut self, mut visitor: V) -> Result<Self::Value, V::Error>
             where
-                V: serde::de::MapVisitor,
+                V: serde::de::MapAccess<'de>,
             {
                 let mut map = None;
                 let mut reduce = None;
@@ -164,6 +168,7 @@ impl serde::Serialize for ViewFunction {
         serializer.serialize_struct_end(state)
     }
 }
+*/
 
 /// Container for the content of a design document.
 ///
@@ -184,63 +189,70 @@ pub struct Design {
     _dummy: std::marker::PhantomData<()>,
 }
 
-impl serde::Deserialize for Design {
-    fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
+impl<'de> serde::Deserialize<'de> for Design {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: serde::Deserializer,
+        D: serde::Deserializer<'de>,
     {
         enum Field {
             Views,
         }
 
-        impl serde::Deserialize for Field {
-            fn deserialize<D>(deserializer: &mut D) -> Result<Field, D::Error>
+        impl<'de> serde::Deserialize<'de> for Field {
+            fn deserialize<D>(deserializer: D) -> Result<Field, D::Error>
             where
-                D: serde::Deserializer,
+                D: serde::Deserializer<'de>,
             {
                 struct Visitor;
 
-                impl serde::de::Visitor for Visitor {
+                impl<'de> serde::de::Visitor<'de> for Visitor {
                     type Value = Field;
 
-                    fn visit_str<E>(&mut self, value: &str) -> Result<Field, E>
+                    fn expecting(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+                        write!(f, "a CouchDB design document field")
+                    }
+
+                    fn visit_str<E>(self, value: &str) -> Result<Field, E>
                     where
                         E: serde::de::Error,
                     {
                         match value {
                             "views" => Ok(Field::Views),
-                            _ => Err(E::unknown_field(value)),
+                            _ => Err(E::unknown_field(value, FIELDS)),
                         }
                     }
                 }
 
-                deserializer.deserialize(Visitor)
+                deserializer.deserialize_identifier(Visitor)
             }
         }
 
         struct Visitor;
 
-        impl serde::de::Visitor for Visitor {
+        impl<'de> serde::de::Visitor<'de> for Visitor {
             type Value = Design;
 
-            fn visit_map<V>(&mut self, mut visitor: V) -> Result<Self::Value, V::Error>
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+                write!(f, "a CouchDB design document object")
+            }
+
+
+            fn visit_map<V>(self, mut visitor: V) -> Result<Self::Value, V::Error>
             where
-                V: serde::de::MapVisitor,
+                V: serde::de::MapAccess<'de>,
             {
                 let mut views = None;
 
-                loop {
-                    match try!(visitor.visit_key()) {
-                        Some(Field::Views) => {
-                            views = Some(try!(visitor.visit_value()));
-                        }
-                        None => {
-                            break;
+                while let Some(key) = visitor.next_key()? {
+                    match key {
+                        Field::Views => {
+                            if views.is_some() {
+                                return Err(serde::de::Error::duplicate_field("views"));
+                            }
+                            views = Some(visitor.next_value()?);
                         }
                     }
                 }
-
-                try!(visitor.end());
 
                 let views = match views {
                     Some(x) => x,
@@ -260,17 +272,14 @@ impl serde::Deserialize for Design {
 }
 
 impl serde::Serialize for Design {
-    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        let mut state = try!(serializer.serialize_struct("Design", 1));
-        try!(serializer.serialize_struct_elt(
-            &mut state,
-            "views",
-            &self.views,
-        ));
-        serializer.serialize_struct_end(state)
+        use serde::ser::SerializeStruct;
+        let mut state = serializer.serialize_struct("Design", 1)?;
+        state.serialize_field("views", &self.views)?;
+        state.end()
     }
 }
 
@@ -357,11 +366,11 @@ mod tests {
 
         let encoded = serde_json::to_string(&view_function).unwrap();
 
-        let expected = serde_json::builder::ObjectBuilder::new()
-            .insert("map", &view_function.map)
-            .build();
+        let expected = json!({
+            "map": &view_function.map
+        });
 
-        let got = serde_json::from_str(&encoded).unwrap();
+        let got: serde_json::Value = serde_json::from_str(&encoded).unwrap();
         assert_eq!(expected, got);
     }
 
@@ -375,12 +384,12 @@ mod tests {
 
         let encoded = serde_json::to_string(&view_function).unwrap();
 
-        let expected = serde_json::builder::ObjectBuilder::new()
-            .insert("map", &view_function.map)
-            .insert("reduce", &view_function.reduce)
-            .build();
+        let expected = json!({
+            "map": &view_function.map,
+            "reduce": &view_function.reduce,
+        });
 
-        let got = serde_json::from_str(&encoded).unwrap();
+        let got: serde_json::Value = serde_json::from_str(&encoded).unwrap();
         assert_eq!(expected, got);
     }
 
@@ -389,14 +398,7 @@ mod tests {
 
         let expected = ViewFunction::new("function(doc) { emit(doc.key_thing, doc.value_thing); }");
 
-        let source = serde_json::builder::ObjectBuilder::new()
-            .insert(
-                "map",
-                "function(doc) { emit(doc.key_thing, doc.value_thing); }",
-            )
-            .build();
-
-        let source = serde_json::to_string(&source).unwrap();
+        let source = r#"{"map":"function(doc) { emit(doc.key_thing, doc.value_thing); }"}"#;
         let got = serde_json::from_str(&source).unwrap();
         assert_eq!(expected, got);
     }
@@ -409,29 +411,19 @@ mod tests {
             "_sum",
         );
 
-        let source = serde_json::builder::ObjectBuilder::new()
-            .insert(
-                "map",
-                "function(doc) { emit(doc.key_thing, doc.value_thing); }",
-            )
-            .insert("reduce", "_sum")
-            .build();
-
-        let source = serde_json::to_string(&source).unwrap();
+        let source = r#"{"map":"function(doc) { emit(doc.key_thing, doc.value_thing); }",
+                         "reduce":"_sum"}"#;
         let got = serde_json::from_str(&source).unwrap();
         assert_eq!(expected, got);
     }
 
     #[test]
     fn view_function_deserialize_nok_missing_map() {
-
-        let source = serde_json::builder::ObjectBuilder::new()
-            .insert("reduce", "_sum")
-            .build();
-
-        let source = serde_json::to_string(&source).unwrap();
-        let got = serde_json::from_str::<ViewFunction>(&source);
-        expect_json_error_missing_field!(got, "map");
+        let source = r#"{"reduce":"_sum"}"#;
+        match serde_json::from_str::<ViewFunction>(&source) {
+            Err(ref e) if e.is_data() => {}
+            x => panic!("Got unexpected result {:?}", x),
+        }
     }
 
     #[test]
@@ -453,31 +445,26 @@ mod tests {
 
         let encoded = serde_json::to_string(&design).unwrap();
 
-        let expected = serde_json::builder::ObjectBuilder::new()
-            .insert_object("views", |x| {
-                x.insert_object("alpha", |x| {
-                    x.insert(
-                        "map",
-                        "function(doc) { emit(doc.key_thing, doc.value_thing); }",
-                    )
-                }).insert_object("bravo", |x| {
-                        x.insert(
-                            "map",
-                            "function(doc) { emit(doc.key_thing_2, doc.value_thing_2); }",
-                        ).insert("reduce", "_sum")
-                    })
-            })
-            .build();
+        let expected = json!({
+            "views": {
+                "alpha": {
+                    "map": "function(doc) { emit(doc.key_thing, doc.value_thing); }",
+                },
+                "bravo": {
+                    "map": "function(doc) { emit(doc.key_thing_2, doc.value_thing_2); }",
+                    "reduce": "_sum",
+                },
+            },
+        });
 
-        let got = serde_json::from_str(&encoded).unwrap();
+        let got: serde_json::Value = serde_json::from_str(&encoded).unwrap();
         assert_eq!(expected, got);
     }
 
     #[test]
     fn design_deserialize_ok_empty() {
         let expected = DesignBuilder::new().unwrap();
-        let source = serde_json::builder::ObjectBuilder::new().build();
-        let source = serde_json::to_string(&source).unwrap();
+        let source = r#"{}"#;
         let got = serde_json::from_str(&source).unwrap();
         assert_eq!(expected, got);
     }
@@ -499,23 +486,16 @@ mod tests {
             )
             .unwrap();
 
-        let source = serde_json::builder::ObjectBuilder::new()
-            .insert_object("views", |x| {
-                x.insert_object("alpha", |x| {
-                    x.insert(
-                        "map",
-                        "function(doc) { emit(doc.key_thing, doc.value_thing); }",
-                    )
-                }).insert_object("bravo", |x| {
-                        x.insert(
-                            "map",
-                            "function(doc) { emit(doc.key_thing_2, doc.value_thing_2); }",
-                        ).insert("reduce", "_sum")
-                    })
-            })
-            .build();
+        let source = r#"{"views": {
+                            "alpha": {
+                                "map":"function(doc) { emit(doc.key_thing, doc.value_thing); }"
+                            },
+                            "bravo": {
+                                "map":"function(doc) { emit(doc.key_thing_2, doc.value_thing_2); }",
+                                "reduce":"_sum"
+                            }
+                        }}"#;
 
-        let source = serde_json::to_string(&source).unwrap();
         let got = serde_json::from_str(&source).unwrap();
         assert_eq!(expected, got);
     }
