@@ -26,8 +26,9 @@ mod error;
 mod revision;
 /*
 mod transport;
+*/
 mod view;
-
+/*
 pub mod action;
 */
 pub mod path;
@@ -43,6 +44,4 @@ pub use path::{AttachmentName, AttachmentPath, DatabaseName, DatabasePath, Desig
                DocumentId, DocumentPath, IntoAttachmentPath, IntoDatabasePath, IntoDesignDocumentPath,
                IntoDocumentPath, IntoViewPath, LocalDocumentName, NormalDocumentName, ViewName, ViewPath};
 pub use revision::Revision;
-/*
 pub use view::{ViewResponse, ViewRow};
-*/

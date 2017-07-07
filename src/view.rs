@@ -102,7 +102,10 @@ impl ViewRow {
     /// The key is available if and only if the view is unreduced or if the view
     /// is reduced but grouped.
     ///
-    pub fn key<K: serde::Deserialize>(&self) -> Result<Option<K>, Error> {
+    pub fn key<K>(&self) -> Result<Option<K>, Error>
+    where
+        for<'de> K: serde::Deserialize<'de>,
+    {
 
         let decoded = match self.key {
             None => None,
@@ -118,7 +121,10 @@ impl ViewRow {
     }
 
     /// Returns the row's value.
-    pub fn value<V: serde::Deserialize>(&self) -> Result<V, Error> {
+    pub fn value<V>(&self) -> Result<V, Error>
+    where
+        for<'de> V: serde::Deserialize<'de>,
+    {
         // TODO: Optimize this to eliminate cloning and re-decoding.
         serde_json::from_value(self.value.clone()).map_err(|e| Error::JsonDecode { cause: e })
     }
@@ -144,8 +150,11 @@ pub struct ViewResponseJsonable {
     rows: Vec<ViewRowJsonable>,
 }
 
-impl serde::Deserialize for ViewResponseJsonable {
-    fn deserialize<D: serde::Deserializer>(deserializer: &mut D) -> Result<Self, D::Error> {
+impl<'de> serde::Deserialize<'de> for ViewResponseJsonable {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
         enum Field {
             Offset,
             Rows,
@@ -153,17 +162,21 @@ impl serde::Deserialize for ViewResponseJsonable {
             UpdateSeq,
         }
 
-        impl serde::Deserialize for Field {
-            fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
+        impl<'de> serde::Deserialize<'de> for Field {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
             where
-                D: serde::Deserializer,
+                D: serde::Deserializer<'de>,
             {
                 struct Visitor;
 
-                impl serde::de::Visitor for Visitor {
+                impl<'de> serde::de::Visitor<'de> for Visitor {
                     type Value = Field;
 
-                    fn visit_str<E>(&mut self, value: &str) -> Result<Self::Value, E>
+                    fn expecting(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+                        write!(f, "a CouchDB view field")
+                    }
+
+                    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
                     where
                         E: serde::de::Error,
                     {
@@ -172,54 +185,65 @@ impl serde::Deserialize for ViewResponseJsonable {
                             "rows" => Ok(Field::Rows),
                             "total_rows" => Ok(Field::TotalRows),
                             "update_seq" => Ok(Field::UpdateSeq),
-                            _ => Err(E::unknown_field(value)),
+                            _ => Err(E::unknown_field(value, FIELDS)),
                         }
                     }
                 }
 
-                deserializer.deserialize(Visitor)
+                deserializer.deserialize_identifier(Visitor)
             }
         }
 
         struct Visitor;
 
-        impl serde::de::Visitor for Visitor {
+        impl<'de> serde::de::Visitor<'de> for Visitor {
             type Value = ViewResponseJsonable;
 
-            fn visit_map<Vis>(&mut self, mut visitor: Vis) -> Result<Self::Value, Vis::Error>
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+                write!(f, "a CouchDB view object")
+            }
+
+            fn visit_map<Vis>(self, mut visitor: Vis) -> Result<Self::Value, Vis::Error>
             where
-                Vis: serde::de::MapVisitor,
+                Vis: serde::de::MapAccess<'de>,
             {
                 let mut offset = None;
                 let mut rows = None;
                 let mut total_rows = None;
                 let mut update_seq = None;
 
-                loop {
-                    match try!(visitor.visit_key()) {
-                        Some(Field::Offset) => {
-                            offset = Some(try!(visitor.visit_value()));
+                while let Some(key) = visitor.next_key()? {
+                    match key {
+                        Field::Offset => {
+                            if offset.is_some() {
+                                return Err(serde::de::Error::duplicate_field("offset"));
+                            }
+                            offset = Some(visitor.next_value()?);
                         }
-                        Some(Field::Rows) => {
-                            rows = Some(try!(visitor.visit_value()));
+                        Field::Rows => {
+                            if rows.is_some() {
+                                return Err(serde::de::Error::duplicate_field("rows"));
+                            }
+                            rows = Some(visitor.next_value()?);
                         }
-                        Some(Field::TotalRows) => {
-                            total_rows = Some(try!(visitor.visit_value()));
+                        Field::TotalRows => {
+                            if total_rows.is_some() {
+                                return Err(serde::de::Error::duplicate_field("total_rows"));
+                            }
+                            total_rows = Some(visitor.next_value()?);
                         }
-                        Some(Field::UpdateSeq) => {
-                            update_seq = Some(try!(visitor.visit_value()));
-                        }
-                        None => {
-                            break;
+                        Field::UpdateSeq => {
+                            if update_seq.is_some() {
+                                return Err(serde::de::Error::duplicate_field("update_seq"));
+                            }
+                            update_seq = Some(visitor.next_value()?);
                         }
                     }
                 }
 
-                try!(visitor.end());
-
                 let rows = match rows {
                     Some(x) => x,
-                    None => try!(visitor.missing_field("rows")),
+                    None => return Err(serde::de::Error::missing_field("rows")),
                 };
 
                 Ok(ViewResponseJsonable {
@@ -244,8 +268,11 @@ struct ViewRowJsonable {
     doc: Option<JsonDecodableDocument>,
 }
 
-impl serde::Deserialize for ViewRowJsonable {
-    fn deserialize<D: serde::Deserializer>(deserializer: &mut D) -> Result<Self, D::Error> {
+impl<'de> serde::Deserialize<'de> for ViewRowJsonable {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
         enum Field {
             Doc,
             Id,
@@ -253,17 +280,21 @@ impl serde::Deserialize for ViewRowJsonable {
             Value,
         }
 
-        impl serde::Deserialize for Field {
-            fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
+        impl<'de> serde::Deserialize<'de> for Field {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
             where
-                D: serde::Deserializer,
+                D: serde::Deserializer<'de>,
             {
                 struct Visitor;
 
-                impl serde::de::Visitor for Visitor {
+                impl<'de> serde::de::Visitor<'de> for Visitor {
                     type Value = Field;
 
-                    fn visit_str<E>(&mut self, value: &str) -> Result<Self::Value, E>
+                    fn expecting(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+                        write!(f, "a CouchDB view row field")
+                    }
+
+                    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
                     where
                         E: serde::de::Error,
                     {
@@ -272,54 +303,65 @@ impl serde::Deserialize for ViewRowJsonable {
                             "id" => Ok(Field::Id),
                             "key" => Ok(Field::Key),
                             "value" => Ok(Field::Value),
-                            _ => Err(E::unknown_field(value)),
+                            _ => Err(E::unknown_field(value, FIELDS)),
                         }
                     }
                 }
 
-                deserializer.deserialize(Visitor)
+                deserializer.deserialize_identifier(Visitor)
             }
         }
 
         struct Visitor;
 
-        impl serde::de::Visitor for Visitor {
+        impl<'de> serde::de::Visitor<'de> for Visitor {
             type Value = ViewRowJsonable;
 
-            fn visit_map<Vis>(&mut self, mut visitor: Vis) -> Result<Self::Value, Vis::Error>
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+                write!(f, "a CouchDB view row")
+            }
+
+            fn visit_map<Vis>(self, mut visitor: Vis) -> Result<Self::Value, Vis::Error>
             where
-                Vis: serde::de::MapVisitor,
+                Vis: serde::de::MapAccess<'de>,
             {
                 let mut doc = None;
                 let mut id = None;
                 let mut key = None;
                 let mut value = None;
 
-                loop {
-                    match try!(visitor.visit_key()) {
-                        Some(Field::Doc) => {
-                            doc = Some(try!(visitor.visit_value()));
+                while let Some(field_key) = visitor.next_key()? {
+                    match field_key {
+                        Field::Doc => {
+                            if doc.is_some() {
+                                return Err(serde::de::Error::duplicate_field("doc"));
+                            }
+                            doc = Some(visitor.next_value()?);
                         }
-                        Some(Field::Id) => {
-                            id = Some(try!(visitor.visit_value()));
+                        Field::Id => {
+                            if id.is_some() {
+                                return Err(serde::de::Error::duplicate_field("id"));
+                            }
+                            id = Some(visitor.next_value()?);
                         }
-                        Some(Field::Key) => {
-                            key = try!(visitor.visit_value()); // allow null
+                        Field::Key => {
+                            if key.is_some() {
+                                return Err(serde::de::Error::duplicate_field("key"));
+                            }
+                            key = visitor.next_value()?; // allow null
                         }
-                        Some(Field::Value) => {
-                            value = Some(try!(visitor.visit_value()));
-                        }
-                        None => {
-                            break;
+                        Field::Value => {
+                            if value.is_some() {
+                                return Err(serde::de::Error::duplicate_field("value"));
+                            }
+                            value = Some(visitor.next_value()?);
                         }
                     }
                 }
 
-                try!(visitor.end());
-
                 let value = match value {
                     Some(x) => x,
-                    None => try!(visitor.missing_field("value")),
+                    None => return Err(serde::de::Error::missing_field("value")),
                 };
 
                 Ok(ViewRowJsonable {
@@ -356,7 +398,7 @@ impl ViewResponseBuilder<IsReduced> {
                 rows: vec![
                     ViewRow {
                         key: None,
-                        value: serde_json::to_value(&value),
+                        value: serde_json::to_value(&value).unwrap(),
                         doc_path: None,
                         doc: None,
                     },
@@ -394,8 +436,8 @@ impl ViewResponseBuilder<IsGrouped> {
     {
 
         self.target.rows.push(ViewRow {
-            key: Some(serde_json::to_value(&key)),
-            value: serde_json::to_value(&value),
+            key: Some(serde_json::to_value(&key).unwrap()),
+            value: serde_json::to_value(&value).unwrap(),
             doc_path: None,
             doc: None,
         });
@@ -428,8 +470,8 @@ impl ViewResponseBuilder<IsUnreduced> {
         V: serde::Serialize,
     {
         self.target.rows.push(ViewRow {
-            key: Some(serde_json::to_value(&key)),
-            value: serde_json::to_value(&value),
+            key: Some(serde_json::to_value(&key).unwrap()),
+            value: serde_json::to_value(&value).unwrap(),
             doc_path: Some(DocumentPath::from(
                 (self.db_name.as_ref().unwrap().clone(), doc_id.into()),
             )),
@@ -446,8 +488,8 @@ impl ViewResponseBuilder<IsUnreduced> {
         V: serde::Serialize,
     {
         self.target.rows.push(ViewRow {
-            key: Some(serde_json::to_value(&key)),
-            value: serde_json::to_value(&value),
+            key: Some(serde_json::to_value(&key).unwrap()),
+            value: serde_json::to_value(&value).unwrap(),
             doc_path: Some(DocumentPath::from(
                 (self.db_name.as_ref().unwrap().clone(), doc_id.into()),
             )),
@@ -487,7 +529,7 @@ mod tests {
 
         let row = ViewRow {
             key: None,
-            value: serde_json::Value::U64(42),
+            value: serde_json::Value::from(42),
             doc_path: None,
             doc: None,
         };
@@ -501,7 +543,7 @@ mod tests {
 
         let row = ViewRow {
             key: Some(serde_json::Value::String(String::from("foo"))),
-            value: serde_json::Value::U64(42),
+            value: serde_json::Value::from(42),
             doc_path: Some("/db/doc".into_document_path().unwrap()),
             doc: None,
         };
@@ -516,14 +558,14 @@ mod tests {
 
         let row = ViewRow {
             key: Some(serde_json::Value::String(String::from("foo"))),
-            value: serde_json::Value::U64(42),
+            value: serde_json::Value::from(42),
             doc_path: Some("/db/doc".into_document_path().unwrap()),
             doc: None,
         };
 
         match row.key::<u64>() {
             Err(Error::JsonDecode { .. }) => (),
-            x @ _ => unexpected_result!(x),
+            x => panic!("Got unexpected result {:?}", x),
         }
     }
 
@@ -532,7 +574,7 @@ mod tests {
 
         let row = ViewRow {
             key: None,
-            value: serde_json::Value::U64(42),
+            value: serde_json::Value::from(42),
             doc_path: None,
             doc: None,
         };
@@ -547,14 +589,14 @@ mod tests {
 
         let row = ViewRow {
             key: None,
-            value: serde_json::Value::U64(42),
+            value: serde_json::Value::from(42),
             doc_path: None,
             doc: None,
         };
 
         match row.value::<String>() {
             Err(Error::JsonDecode { .. }) => (),
-            x @ _ => unexpected_result!(x),
+            x => panic!("Got unexpected result {:?}", x),
         }
     }
 
@@ -564,7 +606,7 @@ mod tests {
         let expected = ViewRowJsonable {
             id: None,
             key: None,
-            value: serde_json::Value::U64(42),
+            value: serde_json::Value::from(42),
             doc: None,
         };
 
@@ -580,7 +622,7 @@ mod tests {
         let expected = ViewRowJsonable {
             id: Some(DocumentId::from("foo")),
             key: Some(serde_json::Value::String(String::from("bar"))),
-            value: serde_json::Value::U64(42),
+            value: serde_json::Value::from(42),
             doc: None,
         };
 
@@ -596,15 +638,13 @@ mod tests {
         let expected = ViewRowJsonable {
             id: Some(DocumentId::from("foo")),
             key: Some(serde_json::Value::String(String::from("bar"))),
-            value: serde_json::Value::U64(42),
+            value: serde_json::Value::from(42),
             doc: Some(JsonDecodableDocument {
                 doc_id: DocumentId::from("foo"),
                 revision: Revision::parse("1-1234567890abcdef1234567890abcdef").unwrap(),
                 deleted: false,
                 attachments: std::collections::HashMap::new(),
-                content: serde_json::builder::ObjectBuilder::new()
-                    .insert("doc_field", 17)
-                    .build(),
+                content: json!({"doc_field": 17}),
             }),
         };
 
@@ -617,11 +657,11 @@ mod tests {
 
     #[test]
     fn view_row_deserialize_nok_missing_value() {
-
         let json_text = r#"{"id": "foo", "key": "bar"}"#;
-
-        let got = serde_json::from_str::<ViewRowJsonable>(&json_text);
-        expect_json_error_missing_field!(got, "value");
+        match serde_json::from_str::<ViewRowJsonable>(&json_text) {
+            Err(ref e) if e.is_data() => {}
+            x => panic!("Got unexpected result {:?}", x),
+        }
     }
 
     #[test]
@@ -635,7 +675,7 @@ mod tests {
                 ViewRowJsonable {
                     id: None,
                     key: None,
-                    value: serde_json::Value::U64(42),
+                    value: serde_json::Value::from(42),
                     doc: None,
                 },
             ],
@@ -660,7 +700,7 @@ mod tests {
                 ViewRowJsonable {
                     id: None,
                     key: None,
-                    value: serde_json::Value::U64(42),
+                    value: serde_json::Value::from(42),
                     doc: None,
                 },
             ],
@@ -684,35 +724,20 @@ mod tests {
             rows: vec![
                 ViewRowJsonable {
                     id: None,
-                    key: Some(
-                        serde_json::builder::ArrayBuilder::new()
-                            .push(1)
-                            .push(2)
-                            .build()
-                    ),
-                    value: serde_json::Value::U64(42),
+                    key: Some(json!([1, 2])),
+                    value: serde_json::Value::from(42),
                     doc: None,
                 },
                 ViewRowJsonable {
                     id: None,
-                    key: Some(
-                        serde_json::builder::ArrayBuilder::new()
-                            .push(1)
-                            .push(3)
-                            .build()
-                    ),
-                    value: serde_json::Value::U64(43),
+                    key: Some(json!([1, 3])),
+                    value: serde_json::Value::from(43),
                     doc: None,
                 },
                 ViewRowJsonable {
                     id: None,
-                    key: Some(
-                        serde_json::builder::ArrayBuilder::new()
-                            .push(2)
-                            .push(3)
-                            .build()
-                    ),
-                    value: serde_json::Value::U64(44),
+                    key: Some(json!([2, 3])),
+                    value: serde_json::Value::from(44),
                     doc: None,
                 },
             ],
@@ -739,13 +764,13 @@ mod tests {
                 ViewRowJsonable {
                     id: Some(DocumentId::from("foo")),
                     key: Some(serde_json::Value::String(String::from("bar"))),
-                    value: serde_json::Value::U64(42),
+                    value: serde_json::Value::from(42),
                     doc: None,
                 },
                 ViewRowJsonable {
                     id: Some(DocumentId::from("qux")),
                     key: Some(serde_json::Value::String(String::from("baz"))),
-                    value: serde_json::Value::U64(17),
+                    value: serde_json::Value::from(17),
                     doc: None,
                 },
             ],
@@ -771,7 +796,7 @@ mod tests {
                 ViewRowJsonable {
                     id: Some(DocumentId::from("foo")),
                     key: Some(serde_json::Value::String(String::from("bar"))),
-                    value: serde_json::Value::U64(42),
+                    value: serde_json::Value::from(42),
                     doc: None,
                 },
             ],
@@ -795,7 +820,7 @@ mod tests {
             rows: vec![
                 ViewRow {
                     key: None,
-                    value: serde_json::Value::U64(42),
+                    value: serde_json::Value::from(42),
                     doc_path: None,
                     doc: None,
                 },
@@ -833,13 +858,13 @@ mod tests {
             update_seq: Some(99),
             rows: vec![
                 ViewRow {
-                    key: Some(serde_json::Value::Array(vec![serde_json::Value::U64(1)])),
+                    key: Some(serde_json::Value::Array(vec![serde_json::Value::from(1)])),
                     value: serde_json::Value::String(String::from("alpha")),
                     doc_path: None,
                     doc: None,
                 },
                 ViewRow {
-                    key: Some(serde_json::Value::Array(vec![serde_json::Value::U64(2)])),
+                    key: Some(serde_json::Value::Array(vec![serde_json::Value::from(2)])),
                     value: serde_json::Value::String(String::from("bravo")),
                     doc_path: None,
                     doc: None,
@@ -865,13 +890,13 @@ mod tests {
             update_seq: Some(99),
             rows: vec![
                 ViewRow {
-                    key: Some(serde_json::Value::U64(1)),
+                    key: Some(serde_json::Value::from(1)),
                     value: serde_json::Value::String(String::from("bravo")),
                     doc_path: Some("/db/alpha".into_document_path().unwrap()),
                     doc: None,
                 },
                 ViewRow {
-                    key: Some(serde_json::Value::U64(2)),
+                    key: Some(serde_json::Value::from(2)),
                     value: serde_json::Value::String(String::from("delta")),
                     doc_path: Some("/db/charlie".into_document_path().unwrap()),
                     doc: None,
