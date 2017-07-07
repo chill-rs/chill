@@ -1,5 +1,7 @@
 extern crate base64;
 extern crate futures;
+#[cfg(test)]
+extern crate hyper;
 extern crate mime;
 extern crate regex;
 extern crate reqwest;
@@ -12,19 +14,13 @@ extern crate tempdir;
 extern crate url;
 extern crate uuid;
 
-/*
-extern crate hyper;
-*/
-
 mod attachment;
 mod client;
 mod design;
 mod document;
 mod error;
 mod revision;
-/*
 mod transport;
-*/
 mod view;
 /*
 pub mod action;

@@ -22,4 +22,4 @@ url = "1.5"
 uuid = "0.5.1"
 
 [dev-dependencies]
-# hyper = "0.11.1"
+hyper = "0.11.1"

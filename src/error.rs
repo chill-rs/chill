@@ -1,4 +1,5 @@
-use {serde_json, std, url, uuid};
+use {reqwest, serde_json, std, url, uuid};
+use transport::StatusCode;
 
 /// Contains information for an error originating from or propagated by Chill.
 #[derive(Debug)]
@@ -50,7 +51,6 @@ pub enum Error {
     #[doc(hidden)]
     RevisionParse { kind: RevisionParseErrorKind },
 
-    /*
     #[doc(hidden)]
     ServerResponse {
         status_code: StatusCode,
@@ -60,6 +60,10 @@ pub enum Error {
     #[doc(hidden)]
     Transport { kind: TransportErrorKind },
 
+    #[doc(hidden)]
+    TransportWorker,
+
+    /*
     /// The client lacks permission to complete the action.
     Unauthorized(ErrorResponse),
 
@@ -140,15 +144,16 @@ impl std::error::Error for Error {
             &ResponseNotJson(None) => "The response content has no type",
             */
             &RevisionParse { .. } => "The revision is badly formatted",
-            /*
             &ServerResponse { ref status_code, .. } => {
-                match status_code.class() {
-                    hyper::status::StatusClass::ClientError |
-                    hyper::status::StatusClass::ServerError => "The CouchDB server responded with an error",
-                    _ => "The CouchDB server responded with an unexpected status",
+                if status_code.is_client_error() || status_code.is_server_error() {
+                    "The CouchDB server responded with an error"
+                } else {
+                    "The CouchDB server responded with an unexpected status"
                 }
             }
             &Transport { .. } => "An HTTP transport error occurred",
+            &TransportWorker => "A worker thread canceled and did not complete the HTTP request",
+            /*
             &Unauthorized(..) => "The CouchDB client has insufficient privilege",
             &UnexpectedResponse(..) => "The CouchDB server responded unexpectedly",
             &UrlNotSchemeRelative => "The URL is not scheme relative",
@@ -178,9 +183,10 @@ impl std::error::Error for Error {
             &ResponseNotJson(..) => None,
             */
             &RevisionParse { .. } => None,
-            /*
             &ServerResponse { .. } => None,
             &Transport { ref kind } => kind.cause(),
+            &TransportWorker => None,
+            /*
             &Unauthorized(..) => None,
             &UnexpectedResponse(..) => None,
             &UrlNotSchemeRelative => None,
@@ -220,7 +226,6 @@ impl std::fmt::Display for Error {
             &ResponseNotJson(None) => write!(f, "{}", description),
             */
             &RevisionParse { ref kind } => write!(f, "{}: {}", description, kind),
-            /*
             &ServerResponse {
                 ref status_code,
                 ref error_response,
@@ -236,6 +241,8 @@ impl std::fmt::Display for Error {
                 Ok(())
             }
             &Transport { ref kind } => write!(f, "{}: {}", description, kind),
+            &TransportWorker => write!(f, "{}", description),
+            /*
             &Unauthorized(ref error_response) => write!(f, "{}: {}", description, error_response),
             &UnexpectedResponse(sub_description) => write!(f, "{}: {}", description, sub_description),
             &UrlNotSchemeRelative => write!(f, "{}", description),
@@ -302,17 +309,16 @@ impl std::fmt::Display for RevisionParseErrorKind {
     }
 }
 
-/*
 #[derive(Debug)]
 pub enum TransportErrorKind {
-    Hyper(hyper::Error),
+    Reqwest(reqwest::Error),
 }
 
 impl TransportErrorKind {
     fn cause(&self) -> Option<&std::error::Error> {
         use self::TransportErrorKind::*;
         match self {
-            &Hyper(ref cause) => Some(cause),
+            &Reqwest(ref cause) => Some(cause),
         }
     }
 }
@@ -321,11 +327,10 @@ impl std::fmt::Display for TransportErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
         use self::TransportErrorKind::*;
         match self {
-            &Hyper(ref cause) => cause.fmt(f),
+            &Reqwest(ref cause) => cause.fmt(f),
         }
     }
 }
-*/
 
 /// Error information returned from the CouchDB server when an error occurs
 /// while processing the client's request.
